@@ -15,7 +15,10 @@ import {
 import type { LsarInstrument, LsarTimeframe, MarketExchange } from '@workspace/api-client-react';
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowDownUp,
   ArrowDownRight,
+  ArrowUp,
   ArrowUpRight,
   ChevronDown,
   ChevronUp,
@@ -136,6 +139,11 @@ function Home() {
     parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) && parsedMaxPrice >= 0
       ? parsedMaxPrice
       : null;
+  const sortByTimeframe = (value: LsarTimeframe) => {
+    const nextSort = value === timeframe && sortMode === 'increase' ? 'decrease' : 'increase';
+    setTimeframe(value);
+    setSortMode(nextSort);
+  };
 
   const rows = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -342,8 +350,25 @@ function Home() {
                   <th scope="col" className="price-col sticky-price">Price <span className="subhead">USD · 24h move</span></th>
                   <th scope="col" className="asset-col">Asset</th>
                   {TIMEFRAMES.map((value) => (
-                    <th scope="col" colSpan={2} key={value}>
-                      LSAR change · {value}
+                    <th
+                      scope="col"
+                      colSpan={2}
+                      key={value}
+                      aria-sort={value === timeframe && sortMode !== 'absolute' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}
+                    >
+                      <button
+                        type="button"
+                        className="timeframe-sort"
+                        onClick={() => sortByTimeframe(value)}
+                        aria-label={`Sort ${value} by ratio-relative LSAR change${value === timeframe && sortMode === 'decrease' ? ' ascending' : ' descending'}`}
+                        aria-pressed={value === timeframe && sortMode !== 'absolute'}
+                        data-testid={`button-sort-timeframe-${value}`}
+                      >
+                        <span>LSAR change · {value}</span>
+                        {value === timeframe && sortMode !== 'absolute'
+                          ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
+                          : <ArrowDownUp aria-hidden="true" />}
+                      </button>
                       <span className="subhead">ratio-relative / long-share Δ</span>
                     </th>
                   ))}

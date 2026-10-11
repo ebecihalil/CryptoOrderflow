@@ -331,6 +331,10 @@
 .market-table { border-collapse:collapse;width:100%;min-width:1180px;font:11px var(--app-font-mono); }
 .market-table thead { background:#eae8df; }
 .market-table th { height:43px;padding:0 12px;text-align:right;color:#77837e;font-size:9px;font-weight:500;letter-spacing:.075em;text-transform:uppercase;white-space:nowrap;border-bottom:1px solid #d8d4c8; }
+.timeframe-sort { display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer; }
+.timeframe-sort:hover { color:#287465; }
+.timeframe-sort:focus-visible { outline:2px solid #398373;outline-offset:2px;border-radius:2px; }
+.timeframe-sort svg { width:11px;height:11px;flex:none;color:#287465; }
 .market-table th:first-child { text-align:left;position:sticky;left:0;z-index:4;background:#eae8df; }
 .market-table th.price-col { text-align:right;position:sticky;left:0;z-index:4;min-width:126px;width:126px; }
 .market-table th.asset-col { text-align:left;position:sticky;left:126px;z-index:3;min-width:142px;background:#eae8df; }
