@@ -112,6 +112,7 @@ function Home() {
   const [sortMode, setSortMode] = useState<'increase' | 'decrease' | 'absolute'>('absolute');
   const [exchangeFilter, setExchangeFilter] = useState<'all' | MarketExchange | 'both'>('all');
   const [search, setSearch] = useState('');
+  const [maxPrice, setMaxPrice] = useState('5');
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
 
   const snapshotQuery = useGetLsarMarketSnapshot({
@@ -130,6 +131,11 @@ function Home() {
   const isFetching = snapshotQuery.isFetching || summaryQuery.isFetching;
   const sourceAvailable = (exchange: MarketExchange) =>
     snapshot?.sources.find((source) => source.exchange === exchange);
+  const parsedMaxPrice = maxPrice.trim() === '' ? null : Number(maxPrice);
+  const maxPriceLimit =
+    parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) && parsedMaxPrice >= 0
+      ? parsedMaxPrice
+      : null;
 
   const rows = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -138,7 +144,8 @@ function Home() {
       const matchesExchange =
         exchangeFilter === 'all' ||
         (exchangeFilter === 'both' ? row.exchanges.length > 1 : row.exchanges.includes(exchangeFilter));
-      return matchesAsset && matchesExchange;
+      const matchesMaxPrice = maxPriceLimit === null || row.price <= maxPriceLimit;
+      return matchesAsset && matchesExchange && matchesMaxPrice;
     });
     return filtered.sort((a, b) => {
       const aValue = rowChange(a, timeframe)?.ratioChangePct ?? null;
@@ -150,13 +157,14 @@ function Home() {
       if (sortMode === 'decrease') return aValue - bValue;
       return Math.abs(bValue) - Math.abs(aValue);
     });
-  }, [snapshot?.rows, search, exchangeFilter, timeframe, sortMode]);
+  }, [snapshot?.rows, search, exchangeFilter, maxPriceLimit, timeframe, sortMode]);
 
   const handleRefresh = () => {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
   };
 
   const sourceCount = snapshot?.sources.filter((source) => source.status === 'live').length ?? 0;
+  const hasActiveFilters = Boolean(search.trim()) || exchangeFilter !== 'all' || maxPriceLimit !== null;
   const dualCoverage = snapshot?.coverage.both ?? summary?.dualListed ?? 0;
   const latestTimestamp = snapshot?.generatedAt ?? summary?.generatedAt ?? null;
   const latestRatioTimestamp =
@@ -289,6 +297,23 @@ function Home() {
             <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as LsarTimeframe)} className="select-control" data-testid="select-timeframe">
               {TIMEFRAMES.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
+            <label className="price-filter">
+              <span className="filter-label">Max price</span>
+              <span className="price-input-wrap">
+                <span aria-hidden="true">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  value={maxPrice}
+                  onChange={(event) => setMaxPrice(event.target.value)}
+                  placeholder="No limit"
+                  aria-label="Maximum coin price in USD"
+                  data-testid="input-max-price"
+                />
+              </span>
+            </label>
           </div>
           <div className="control-right">
             <span className="filter-label">Sort</span>
@@ -301,7 +326,11 @@ function Home() {
         </section>
 
         <div className="table-meta">
-          <span><strong>{snapshot ? rows.length.toLocaleString() : '—'}</strong> assets shown · sorted by {sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in {timeframe}</span>
+          <span>
+            <strong>{snapshot ? rows.length.toLocaleString() : '—'}</strong> assets shown
+            {maxPriceLimit !== null && <> · price ≤ ${formatPrice(maxPriceLimit)}</>}
+            {' · '}sorted by {sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in {timeframe}
+          </span>
           <span data-testid="text-last-updated"><Clock3 size={12} style={{ verticalAlign: '-2px', marginRight: 5 }} />Fetched {formatTimestamp(latestTimestamp)} · latest LSAR sample {formatTimestamp(latestRatioTimestamp)}{snapshot?.isRefreshing ? ' · refresh in progress' : ''}</span>
         </div>
 
@@ -329,7 +358,7 @@ function Home() {
                   <tr><td colSpan={17}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
                 )}
                 {snapshot && rows.length === 0 && (
-                  <tr><td colSpan={17}><div className="empty-state" data-testid="state-no-markets"><h2>{search || exchangeFilter !== 'all' ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{search || exchangeFilter !== 'all' ? 'Try another asset, exchange, or clear your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
+                  <tr><td colSpan={17}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try raising the max price, changing the exchange, or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
                 )}
                 {snapshot && rows.map((row) => {
                   const expanded = expandedAsset === row.asset;
