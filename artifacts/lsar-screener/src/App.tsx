@@ -231,6 +231,11 @@ function Home() {
             <div className="summary-detail"><span>markets observed</span></div>
           </div>
           <div className="summary-cell">
+            <div className="summary-label">Bybit coverage</div>
+            <div className="summary-value" data-testid="value-bybit-coverage">{snapshot ? snapshot.coverage.bybit.toLocaleString() : '—'}</div>
+            <div className="summary-detail"><span>markets observed</span></div>
+          </div>
+          <div className="summary-cell">
             <div className="summary-label">Strongest increase · {timeframe}</div>
             {summary ? <MoveHighlight asset={summary.strongestIncrease?.asset ?? ''} value={summary.strongestIncrease?.ratioChangePct ?? null} direction="up" /> : <div className="summary-value">—</div>}
             <div className="summary-detail"><span>ratio-relative change</span></div>
