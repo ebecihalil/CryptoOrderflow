@@ -62,17 +62,18 @@ function finiteNumber(value) {
 function isoDate(timestamp) {
     return timestamp && Number.isFinite(timestamp) ? new Date(timestamp) : null;
 }
-function canonicalAsset(base) {
+export function canonicalAsset(base) {
+    base = base.trim().toUpperCase();
     const letterMultiplier = base.match(/^1([KM])([A-Z].*)$/i);
     if (letterMultiplier) {
         const multiplier = letterMultiplier[1].toUpperCase() === "M" ? 1_000_000 : 1_000;
         return { asset: letterMultiplier[2], priceDivisor: multiplier };
     }
-    const match = base.match(/^(10{3,})([A-Z].*)$/i);
+    const match = base.match(/^(10{2,})([A-Z].*)$/i);
     if (!match)
         return { asset: base, priceDivisor: 1 };
     const multiplier = Number(match[1]);
-    return Number.isFinite(multiplier) ? { asset: match[2], priceDivisor: multiplier } : { asset: base, priceDivisor: 1 };
+    return Number.isSafeInteger(multiplier) ? { asset: match[2], priceDivisor: multiplier } : { asset: base, priceDivisor: 1 };
 }
 async function fetchJson(url) {
     let lastError;
@@ -533,7 +534,7 @@ export function buildChange(timeframe, duration, readings) {
         exchanges: [...new Set(currentSamples.map((sample) => sample.exchange).filter(Boolean))],
     };
 }
-function createRows(readings) {
+export function createRows(readings) {
     const grouped = new Map();
     for (const reading of readings) {
         if (!reading.points.length || reading.openInterestUsd <= 0 || !(reading.price > 0)
