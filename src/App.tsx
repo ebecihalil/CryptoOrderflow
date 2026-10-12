@@ -298,7 +298,7 @@ function Home() {
             <strong>{snapshot ? rows.length.toLocaleString() : '—'}</strong> assets shown
             {maxPriceLimit !== null && <> · price ≤ ${formatPrice(maxPriceLimit)}</>}
             {' · '}sorted by {sortTarget === 'current'
-              ? `current LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
+              ? `current aggregated LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
               : sortTarget !== 'change'
                 ? `${EXCHANGE_LABELS[sortTarget]} LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
                 : `${sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in ${timeframe}`}
@@ -316,9 +316,9 @@ function Home() {
                   <th scope="col" className="current-lsar-col"
                     aria-sort={sortTarget === 'current' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
                     <button type="button" className="timeframe-sort" onClick={() => sortByTarget('current')}
-                      aria-label={`Sort current LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
+                      aria-label={`Sort current aggregated LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
                       aria-pressed={sortTarget === 'current'} data-testid="button-sort-current-lsar">
-                      <span>Current LSAR</span>
+                      <span>Current Aggregated LSAR</span>
                       {sortTarget === 'current'
                         ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
                         : <ArrowDownUp aria-hidden="true" />}
@@ -335,7 +335,7 @@ function Home() {
                         aria-pressed={sortTarget === 'change'}
                         data-testid={`button-sort-timeframe-${timeframe}`}
                       >
-                        <span>Aggregated · {timeframe}</span>
+                        <span>Aggregated LSAR Change(%) · {timeframe}</span>
                         {sortTarget === 'change' && sortMode !== 'absolute'
                           ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
                           : <ArrowDownUp aria-hidden="true" />}
