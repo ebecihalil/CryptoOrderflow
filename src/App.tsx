@@ -113,8 +113,8 @@ function SkeletonRows() {
         <tr className="skeleton-row" key={index} data-testid={`row-skeleton-${index}`}>
           <td><span className="skeleton" style={{ width: 78 }} /></td>
           <td><span className="skeleton" style={{ width: 54 }} /></td>
-          <td><span className="skeleton" style={{ width: 58 }} /></td>
           <td><span className="skeleton" style={{ width: 72 }} /></td>
+          <td><span className="skeleton" style={{ width: 58 }} /></td>
           {MARKET_EXCHANGES.map((exchange) => <td key={exchange}><span className="skeleton" style={{ width: 68 }} /></td>)}
         </tr>
       ))}
@@ -313,18 +313,6 @@ function Home() {
                 <tr>
                   <th scope="col" className="asset-col sticky-coin">Coin</th>
                   <th scope="col" className="price-col sticky-price">Price <span className="subhead">USD · 24h move</span></th>
-                  <th scope="col" className="current-lsar-col"
-                    aria-sort={sortTarget === 'current' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
-                    <button type="button" className="timeframe-sort" onClick={() => sortByTarget('current')}
-                      aria-label={`Sort current aggregated LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
-                      aria-pressed={sortTarget === 'current'} data-testid="button-sort-current-lsar">
-                      <span>Current Aggregated LSAR</span>
-                      {sortTarget === 'current'
-                        ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
-                        : <ArrowDownUp aria-hidden="true" />}
-                    </button>
-                    <span className="subhead">ratio / long share</span>
-                  </th>
                   <th scope="col" className="aggregate-col"
                     aria-sort={sortTarget === 'change' ? (sortMode === 'increase' ? 'descending' : sortMode === 'decrease' ? 'ascending' : 'none') : 'none'}>
                       <button
@@ -341,6 +329,18 @@ function Home() {
                           : <ArrowDownUp aria-hidden="true" />}
                       </button>
                       <span className="subhead">ratio-relative % / long-share Δpp</span>
+                  </th>
+                  <th scope="col" className="current-lsar-col"
+                    aria-sort={sortTarget === 'current' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
+                    <button type="button" className="timeframe-sort" onClick={() => sortByTarget('current')}
+                      aria-label={`Sort current aggregated LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
+                      aria-pressed={sortTarget === 'current'} data-testid="button-sort-current-lsar">
+                      <span>Current Aggregated LSAR</span>
+                      {sortTarget === 'current'
+                        ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
+                        : <ArrowDownUp aria-hidden="true" />}
+                    </button>
+                    <span className="subhead">ratio / long share</span>
                   </th>
                   {MARKET_EXCHANGES.map((exchange) => {
                     const active = sortTarget === exchange;
@@ -413,13 +413,6 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
             {formatPct(row.priceChange24hPct)}
           </span>
         </td>
-        <td data-testid={`value-current-lsar-${row.asset}`}>
-          <div className="share-context">
-            <span className="ratio-number">{row.currentRatio === null ? '—' : row.currentRatio.toFixed(3)}</span>
-            <span className="share-meter"><span style={{ width: `${Math.min(100, Math.max(0, row.longSharePct ?? 0))}%` }} /></span>
-            <span className="share-percent">{row.longSharePct === null ? '—' : `${row.longSharePct.toFixed(1)}% long`}</span>
-          </div>
-        </td>
         {(() => {
           const change = rowChange(row, selectedTimeframe);
           const ratio = change?.ratioChangePct ?? null;
@@ -429,6 +422,13 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
             <span data-testid={`value-share-change-${row.asset}-${selectedTimeframe}`} className={`aggregate-share ${share === null ? 'neutral' : share > 0 ? 'positive' : share < 0 ? 'negative' : 'neutral'}`}>{formatPp(share)}</span>
           </td>;
         })()}
+        <td data-testid={`value-current-lsar-${row.asset}`}>
+          <div className="share-context">
+            <span className="ratio-number">{row.currentRatio === null ? '—' : row.currentRatio.toFixed(3)}</span>
+            <span className="share-meter"><span style={{ width: `${Math.min(100, Math.max(0, row.longSharePct ?? 0))}%` }} /></span>
+            <span className="share-percent">{row.longSharePct === null ? '—' : `${row.longSharePct.toFixed(1)}% long`}</span>
+          </div>
+        </td>
         {MARKET_EXCHANGES.map((exchange) => {
           const ratio = exchangeAccountRatio(row.exchangeReadings, exchange);
           if (ratio === null) return <td className="exchange-ratio-cell missing" key={exchange} data-testid={`value-exchange-${row.asset}-${exchange}`}>—</td>;
