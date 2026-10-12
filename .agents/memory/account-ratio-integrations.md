@@ -9,6 +9,12 @@ Do not substitute top-trader account ratios, position ratios, or taker-buy/sell 
 
 **How to apply:** verify the exact endpoint's definition before adding any venue. HTX has not yet been confirmed to offer a compatible public market-wide account-ratio endpoint.
 
+Verify the original exchange behind a branded tool before treating it as an independent source. As checked on 2026-10-13, XT's official AI TradeKit account-ratio tool fetches OKX data, not XT account data.
+
+**Why:** counting the tool as another exchange would double-count an existing venue and distort OI-weighted aggregation.
+
+**How to apply:** inspect upstream requests, not just tool descriptions. XT's public implementation is at https://github.com/XtApis/AItradekit/blob/main/mcp/xt_tradekit/datahub.py; recheck its current upstream before relying on this finding.
+
 Use matching venues and unchanged OI weights in the current and prior candle. Do not compare one venue's stale candle against another venue's newer candle.
 
 **Why:** missing history or asynchronous updates can otherwise fabricate an aggregate change.

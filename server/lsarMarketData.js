@@ -12,6 +12,7 @@ const BYBIT_BASE = "https://api.bybit.com";
 const OKX_BASE = "https://www.okx.com";
 const GATE_BASE = "https://api.gateio.ws/api/v4";
 const BITGET_BASE = "https://api.bitget.com";
+const TOOBIT_BASE = "https://api.toobit.com";
 const REFRESH_INTERVAL_MS = 5 * 60_000;
 const REQUEST_TIMEOUT_MS = 12_000;
 const HISTORY_LIMIT = 300;
@@ -29,6 +30,7 @@ const exchangeStates = {
     okx: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
     gate: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
     bitget: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
+    toobit: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
 };
 const sourceReadings = {
     binance: [],
@@ -36,6 +38,7 @@ const sourceReadings = {
     okx: [],
     gate: [],
     bitget: [],
+    toobit: [],
 };
 const activeProviderTasks = new Map();
 const lastProviderAttempts = new Map();
@@ -47,10 +50,7 @@ let cachedSnapshot = {
     isRefreshing: false,
     totalMarkets: 0,
     coverage: { binance: 0, bybit: 0, both: 0, binanceOnly: 0, bybitOnly: 0 },
-    sources: [
-        { exchange: "binance", status: "connecting", marketCount: 0, updatedAt: null, error: null },
-        { exchange: "bybit", status: "connecting", marketCount: 0, updatedAt: null, error: null },
-    ],
+    sources: Object.keys(exchangeStates).map(makeSourceStatus),
     rows: [],
 };
 function finiteNumber(value) {
@@ -80,7 +80,8 @@ async function fetchJson(url) {
     for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
             const spacing = url.includes("bitget.com/api/v2/mix/market/account-long-short") ? 1050
-                : url.startsWith(OKX_BASE) ? 450 : url.startsWith(GATE_BASE) ? 120 : 0;
+                : url.startsWith(OKX_BASE) ? 450 : url.startsWith(GATE_BASE) ? 120
+                : url.startsWith(TOOBIT_BASE) ? 150 : 0;
             if (spacing) {
                 const key = new URL(url).hostname;
                 const scheduled = Math.max(Date.now(), nextRequestAt[key] ?? 0);
@@ -272,6 +273,51 @@ async function fetchBitget() {
                 priceChange24hPct: null, openInterestUsd: oiUsd, points: parseRatioHistory(history.data, "ts", "longShortAccountRatio"),
                 longWindowPoints: parseRatioHistory(hourly.data, "ts", "longShortAccountRatio") };
             publishReading(reading);
+            return reading;
+        } catch { errorCount += 1; return null; }
+    });
+    return { readings: readings.filter(Boolean), marketCount: contracts.length, errorCount, error: null };
+}
+export function buildToobitReading(contract, ticker, interest, history) {
+    const price = finiteNumber(ticker?.c);
+    // Toobit's openInterest.size is coin quantity, not contract count.
+    // Convert with the quoted price before normalizing multiplier aliases.
+    const quantity = finiteNumber(interest?.openInterestList?.find((item) => item.symbol === contract.symbol)?.size);
+    const openInterestUsd = quantity * price;
+    const points = Array.isArray(history) ? parseRatioHistory(history, "timeStamp", "longShortRatio") : [];
+    if (!(price > 0) || !(quantity > 0) || !Number.isFinite(openInterestUsd) || !points.length) return null;
+    const exchangeAsset = contract.symbol.split("-SWAP-")[0];
+    const normalized = canonicalAsset(exchangeAsset);
+    const change = finiteNumber(ticker.pcp);
+    return {
+        exchange: "toobit", symbol: contract.symbol, asset: normalized.asset, exchangeAsset,
+        price: price / normalized.priceDivisor,
+        priceChange24hPct: change === null ? null : change * 100,
+        openInterestUsd, points,
+    };
+}
+export async function fetchToobit({ request = fetchJson, onReading = publishReading } = {}) {
+    const [info, tickerBody] = await Promise.all([
+        request(`${TOOBIT_BASE}/api/v1/exchangeInfo`),
+        request(`${TOOBIT_BASE}/quote/v1/contract/ticker/24hr`),
+    ]);
+    if (!Array.isArray(info.contracts) || !Array.isArray(tickerBody)) throw new Error("Toobit returned invalid contract metadata or tickers.");
+    const tickers = new Map(tickerBody.map((item) => [item.s, item]));
+    const contracts = info.contracts.filter((item) => item.status === "TRADING"
+        && item.quoteAsset === "USDT" && item.inverse !== true
+        && item.symbol.endsWith("-SWAP-USDT") && tickers.has(item.symbol))
+        .sort((a, b) => (finiteNumber(tickers.get(b.symbol).qv) ?? 0) - (finiteNumber(tickers.get(a.symbol).qv) ?? 0));
+    let errorCount = 0;
+    const readings = await mapLimit(contracts, 6, async (contract) => {
+        const symbol = encodeURIComponent(contract.symbol);
+        try {
+            const [history, interest] = await Promise.all([
+                request(`${TOOBIT_BASE}/quote/v1/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=${HISTORY_LIMIT}`),
+                request(`${TOOBIT_BASE}/quote/v1/openInterest?symbol=${symbol}`),
+            ]);
+            const reading = buildToobitReading(contract, tickers.get(contract.symbol), interest, history);
+            if (!reading) { errorCount += 1; return null; }
+            onReading(reading);
             return reading;
         } catch { errorCount += 1; return null; }
     });
@@ -629,7 +675,7 @@ function makeSourceStatus(exchange) {
     };
 }
 function publishSnapshot() {
-    const exchanges = ["binance", "bybit", "okx", "gate", "bitget"];
+    const exchanges = Object.keys(exchangeStates);
     const rows = createRows(exchanges.flatMap((exchange) => sourceReadings[exchange]));
     let binance = 0;
     let bybit = 0;
@@ -660,7 +706,7 @@ function publishSnapshot() {
     };
 }
 export function getLsarMarketSnapshot() {
-    const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget };
+    const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget, toobit: fetchToobit };
     for (const [exchange, fetcher] of Object.entries(fetchers)) {
         if (activeProviderTasks.has(exchange) || Date.now() - (lastProviderAttempts.get(exchange) ?? 0) < REFRESH_INTERVAL_MS) continue;
         lastProviderAttempts.set(exchange, Date.now());

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ExchangeFilter } from '@/components/exchange-filter';
 import { FetchedDataLine } from '@/components/fetched-data-line';
-import { MARKET_EXCHANGES, matchesExchangeFilter } from '@/lib/exchange-options';
+import { MARKET_EXCHANGES, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -13,7 +13,6 @@ import type {
   LsarMarketSnapshot,
   LsarMarketSummary,
   LsarTimeframe,
-  MarketExchange,
 } from '@/types/market';
 import {
   AlertCircle,
@@ -124,8 +123,7 @@ function SkeletonRows() {
 function Home() {
   const [timeframe, setTimeframe] = useState<LsarTimeframe>('1h');
   const [sortMode, setSortMode] = useState<'increase' | 'decrease' | 'absolute'>('absolute');
-  const [selectedExchanges, setSelectedExchanges] = useState<MarketExchange[]>([...MARKET_EXCHANGES]);
-  const [multipleOnly, setMultipleOnly] = useState(false);
+  const [{ selected: selectedExchanges, multipleOnly }, setExchangeSelection] = useState(() => selectExchanges(MARKET_EXCHANGES));
   const [search, setSearch] = useState('');
   const [maxPrice, setMaxPrice] = useState('5');
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
@@ -258,8 +256,8 @@ function Home() {
               />
             </label>
             <span className="filter-label">Exchange</span>
-            <ExchangeFilter selected={selectedExchanges} onChange={setSelectedExchanges}
-              multipleOnly={multipleOnly} onMultipleOnlyChange={setMultipleOnly} />
+            <ExchangeFilter selected={selectedExchanges} onChange={(selected) => setExchangeSelection(selectExchanges(selected))}
+              multipleOnly={multipleOnly} onMultipleOnlyChange={(enabled) => setExchangeSelection(selectMultipleOnly(enabled))} />
             <span className="filter-label">Window</span>
             <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as LsarTimeframe)} className="select-control" data-testid="select-timeframe">
               {TIMEFRAMES.map((value) => <option key={value} value={value}>{value}</option>)}
@@ -361,7 +359,7 @@ function Home() {
 
         <div className="footnote" data-testid="text-ratio-disclaimer">
           <Info />
-          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical USD OI weights. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Expand a coin to see contract timestamps and the sources used for each timeframe. Binance/Bybit include linear and inverse perpetuals; Gate.io and Bitget currently add USDT perpetuals, and OKX adds swaps. Bitget loads progressively at its one-request-per-second limit; slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
+          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical USD OI weights. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Expand a coin to see contract timestamps and the sources used for each timeframe. Binance/Bybit include linear and inverse perpetuals; Gate.io, Bitget and Toobit currently add USDT perpetuals, and OKX adds swaps. Toobit fetches 5-minute history for all displayed candle comparisons. Feeds load progressively; Bitget runs at its one-request-per-second limit, and slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
         </div>
         {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable: {snapshot.sources.filter((source) => source.error).map((source) => `${source.exchange.toUpperCase()}: ${source.error}`).join(' · ')}. Only available readings contribute.</span></div>}
         <div className="footline">

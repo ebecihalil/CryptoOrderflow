@@ -13,7 +13,8 @@ interface ExchangeFilterProps {
 export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnlyChange }: ExchangeFilterProps) {
   const menu = useRef<HTMLDetailsElement>(null);
   const allSelected = MARKET_EXCHANGES.every((exchange) => selected.includes(exchange));
-  const label = allSelected ? 'All sources'
+  const label = multipleOnly ? 'Multi-exchange coins'
+    : allSelected ? 'All sources'
     : selected.length === 0 ? 'No exchanges selected'
     : selected.length === 1 ? EXCHANGE_LABELS[selected[0]]
     : `${selected.length} exchanges selected`;
@@ -40,7 +41,7 @@ export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnl
     <details className="exchange-select" ref={menu}>
       <summary className={`exchange-select-trigger ${!allSelected || multipleOnly ? 'filtered' : ''}`}
         data-testid="select-exchange" aria-label={`Filter exchanges: ${label}`}>
-        <span>{label}{multipleOnly ? ' · multi-venue' : ''}</span>
+        <span>{label}</span>
         <ChevronDown size={13} aria-hidden="true" />
       </summary>
       <div className="exchange-select-menu" role="group" aria-label="Select exchanges">
@@ -60,7 +61,7 @@ export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnl
             data-testid="checkbox-exchanges-multiple-only" />
           <span>Only multi-exchange coins</span>
         </label>
-        <p>Matches any selected exchange.</p>
+        <p>{multipleOnly ? 'Coins with data from two or more exchanges.' : 'Matches any selected exchange.'}</p>
       </div>
     </details>
   );
