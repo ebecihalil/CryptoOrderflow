@@ -4,6 +4,8 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { ExchangeFilter } from '@/components/exchange-filter';
 import { FetchedDataLine } from '@/components/fetched-data-line';
 import { MARKET_EXCHANGES, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
+import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
+import { TIMEFRAMES, orderedTimeframes } from '@/lib/table-timeframes';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -38,7 +40,7 @@ import {
 
 const queryClient = new QueryClient();
 
-const TIMEFRAMES: LsarTimeframe[] = ['5m', '15m', '30m', '1h', '4h', '24h'];
+const TABLE_COLUMN_COUNT = 3 + TIMEFRAMES.length * 2;
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
@@ -101,19 +103,18 @@ function MoveHighlight({ asset, value, direction }: { asset: string; value: numb
   );
 }
 
-function SkeletonRows() {
+function SkeletonRows({ selectedTimeframe }: { selectedTimeframe: LsarTimeframe }) {
   return (
     <>
       {Array.from({ length: 7 }, (_, index) => (
         <tr className="skeleton-row" key={index} data-testid={`row-skeleton-${index}`}>
           <td><span className="skeleton" style={{ width: 66 }} /></td>
-          <td><span className="skeleton" style={{ width: 75 }} /></td>
-          {TIMEFRAMES.flatMap((timeframe) => [
+          <td><span className="skeleton" style={{ width: 50 }} /></td>
+          {orderedTimeframes(selectedTimeframe).flatMap((timeframe, index) => [
             <td key={`${timeframe}-a`}><span className="skeleton" style={{ width: 54 }} /></td>,
             <td key={`${timeframe}-b`}><span className="skeleton" style={{ width: 48 }} /></td>,
+            ...(index === 0 ? [<td key="asset"><span className="skeleton" style={{ width: 75 }} /></td>] : []),
           ])}
-          <td><span className="skeleton" style={{ width: 50 }} /></td>
-          <td><span className="skeleton" style={{ width: 58 }} /></td>
         </tr>
       ))}
     </>
@@ -122,7 +123,8 @@ function SkeletonRows() {
 
 function Home() {
   const [timeframe, setTimeframe] = useState<LsarTimeframe>('1h');
-  const [sortMode, setSortMode] = useState<'increase' | 'decrease' | 'absolute'>('absolute');
+  const [sortMode, setSortMode] = useState<MarketSortMode>('absolute');
+  const [sortTarget, setSortTarget] = useState<MarketSortTarget>('change');
   const [{ selected: selectedExchanges, multipleOnly }, setExchangeSelection] = useState(() => selectExchanges(MARKET_EXCHANGES));
   const [search, setSearch] = useState('');
   const [maxPrice, setMaxPrice] = useState('5');
@@ -157,9 +159,18 @@ function Home() {
   const summary = summaryQuery.data;
   const isFetching = snapshotQuery.isFetching || summaryQuery.isFetching;
   const sortByTimeframe = (value: LsarTimeframe) => {
-    const nextSort = value === timeframe && sortMode === 'increase' ? 'decrease' : 'increase';
+    const nextSort = nextHeaderSortMode(sortTarget === 'change' && value === timeframe, sortMode);
+    setSortTarget('change');
     setTimeframe(value);
     setSortMode(nextSort);
+  };
+  const sortByCurrentRatio = () => {
+    setSortMode(nextHeaderSortMode(sortTarget === 'current', sortMode));
+    setSortTarget('current');
+  };
+  const sortChanges = (mode: MarketSortMode) => {
+    setSortTarget('change');
+    setSortMode(mode);
   };
 
   const rows = useMemo(() => {
@@ -171,17 +182,8 @@ function Home() {
       const matchesExchange = matchesExchangeFilter(row.exchanges, selectedExchanges, multipleOnly);
       return matchesAsset && matchesExchange;
     });
-    return filtered.sort((a, b) => {
-      const aValue = rowChange(a, timeframe)?.ratioChangePct ?? null;
-      const bValue = rowChange(b, timeframe)?.ratioChangePct ?? null;
-      if (aValue === null && bValue === null) return a.asset.localeCompare(b.asset);
-      if (aValue === null) return 1;
-      if (bValue === null) return -1;
-      if (sortMode === 'increase') return bValue - aValue;
-      if (sortMode === 'decrease') return aValue - bValue;
-      return Math.abs(bValue) - Math.abs(aValue);
-    });
-  }, [snapshot?.rows, search, selectedExchanges, multipleOnly, timeframe, sortMode]);
+    return filtered.sort((a, b) => compareMarketRows(a, b, timeframe, sortMode, sortTarget));
+  }, [snapshot?.rows, search, selectedExchanges, multipleOnly, timeframe, sortMode, sortTarget]);
 
   const handleRefresh = () => {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
@@ -258,8 +260,9 @@ function Home() {
             <span className="filter-label">Exchange</span>
             <ExchangeFilter selected={selectedExchanges} onChange={(selected) => setExchangeSelection(selectExchanges(selected))}
               multipleOnly={multipleOnly} onMultipleOnlyChange={(enabled) => setExchangeSelection(selectMultipleOnly(enabled))} />
-            <span className="filter-label">Window</span>
-            <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as LsarTimeframe)} className="select-control" data-testid="select-timeframe">
+            <span className="filter-label">TF</span>
+            <select value={timeframe} onChange={(event) => { setTimeframe(event.target.value as LsarTimeframe); setSortTarget('change'); }}
+              aria-label="TF (timeframe)" className="select-control" data-testid="select-timeframe">
               {TIMEFRAMES.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
             <label className="price-filter">
@@ -283,9 +286,9 @@ function Home() {
           <div className="control-right">
             <span className="filter-label">Sort</span>
             <div className="sort-toggle" role="group" aria-label="Sort markets" data-testid="group-sort-mode">
-              <button className={sortMode === 'increase' ? 'active' : ''} onClick={() => setSortMode('increase')} data-testid="button-sort-increase">Most increased</button>
-              <button className={sortMode === 'decrease' ? 'active' : ''} onClick={() => setSortMode('decrease')} data-testid="button-sort-decrease">Most decreased</button>
-              <button className={sortMode === 'absolute' ? 'active' : ''} onClick={() => setSortMode('absolute')} data-testid="button-sort-absolute">Largest move</button>
+              <button className={sortTarget === 'change' && sortMode === 'increase' ? 'active' : ''} onClick={() => sortChanges('increase')} data-testid="button-sort-increase">Most increased</button>
+              <button className={sortTarget === 'change' && sortMode === 'decrease' ? 'active' : ''} onClick={() => sortChanges('decrease')} data-testid="button-sort-decrease">Most decreased</button>
+              <button className={sortTarget === 'change' && sortMode === 'absolute' ? 'active' : ''} onClick={() => sortChanges('absolute')} data-testid="button-sort-absolute">Largest move</button>
             </div>
           </div>
         </section>
@@ -294,7 +297,9 @@ function Home() {
           <span>
             <strong>{snapshot ? rows.length.toLocaleString() : '—'}</strong> assets shown
             {maxPriceLimit !== null && <> · price ≤ ${formatPrice(maxPriceLimit)}</>}
-            {' · '}sorted by {sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in {timeframe}
+            {' · '}sorted by {sortTarget === 'current'
+              ? `current LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
+              : `${sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in ${timeframe}`}
           </span>
           <span data-testid="text-last-updated"><Clock3 size={12} style={{ verticalAlign: '-2px', marginRight: 5 }} />Fetched {formatTimestamp(latestTimestamp)} · latest LSAR sample {formatTimestamp(latestRatioTimestamp)}{snapshot?.isRefreshing ? ' · refresh in progress' : ''}</span>
         </div>
@@ -305,41 +310,52 @@ function Home() {
               <thead>
                 <tr>
                   <th scope="col" className="price-col sticky-price">Price <span className="subhead">USD · 24h move</span></th>
-                  <th scope="col" className="asset-col">Asset</th>
-                  {TIMEFRAMES.map((value) => (
+                  <th scope="col" className="current-lsar-col"
+                    aria-sort={sortTarget === 'current' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
+                    <button type="button" className="timeframe-sort" onClick={sortByCurrentRatio}
+                      aria-label={`Sort current LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
+                      aria-pressed={sortTarget === 'current'} data-testid="button-sort-current-lsar">
+                      <span>Current LSAR</span>
+                      {sortTarget === 'current'
+                        ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
+                        : <ArrowDownUp aria-hidden="true" />}
+                    </button>
+                    <span className="subhead">ratio / long share</span>
+                  </th>
+                  {orderedTimeframes(timeframe).map((value, index) => (
+                    <Fragment key={value}>
                     <th
                       scope="col"
                       colSpan={2}
-                      key={value}
-                      aria-sort={value === timeframe && sortMode !== 'absolute' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}
+                      aria-sort={sortTarget === 'change' && value === timeframe && sortMode !== 'absolute' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}
                     >
                       <button
                         type="button"
                         className="timeframe-sort"
                         onClick={() => sortByTimeframe(value)}
-                        aria-label={`Sort ${value} by ratio-relative LSAR change${value === timeframe && sortMode === 'decrease' ? ' ascending' : ' descending'}`}
-                        aria-pressed={value === timeframe && sortMode !== 'absolute'}
+                        aria-label={`Sort ${value} by ratio-relative LSAR change ${sortTarget === 'change' && value === timeframe && sortMode === 'increase' ? 'ascending' : 'descending'}`}
+                        aria-pressed={sortTarget === 'change' && value === timeframe && sortMode !== 'absolute'}
                         data-testid={`button-sort-timeframe-${value}`}
                       >
                         <span>LSAR change · {value}</span>
-                        {value === timeframe && sortMode !== 'absolute'
+                        {sortTarget === 'change' && value === timeframe && sortMode !== 'absolute'
                           ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
                           : <ArrowDownUp aria-hidden="true" />}
                       </button>
                       <span className="subhead">ratio-relative % / long-share Δpp</span>
                     </th>
+                    {index === 0 && <th scope="col" className="asset-col">Asset</th>}
+                    </Fragment>
                   ))}
-                  <th scope="col">Current LSAR <span className="subhead">ratio / long share</span></th>
-                  <th scope="col">Open interest <span className="subhead">USD weighted</span></th>
                 </tr>
               </thead>
               <tbody>
-                {snapshotQuery.isLoading && !snapshot && <SkeletonRows />}
+                {snapshotQuery.isLoading && !snapshot && <SkeletonRows selectedTimeframe={timeframe} />}
                 {!snapshotQuery.isLoading && !snapshot && !snapshotQuery.isError && (
-                  <tr><td colSpan={16}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
+                  <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
                 )}
                 {snapshot && rows.length === 0 && (
-                  <tr><td colSpan={16}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try raising the max price, changing the exchange, or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
+                  <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try raising the max price, changing the exchange, or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
                 )}
                 {snapshot && rows.map((row) => {
                   const expanded = expandedAsset === row.asset;
@@ -347,6 +363,7 @@ function Home() {
                     <FragmentRow
                       key={row.asset}
                       row={row}
+                      selectedTimeframe={timeframe}
                       expanded={expanded}
                       onToggle={() => setExpandedAsset(expanded ? null : row.asset)}
                     />
@@ -371,7 +388,7 @@ function Home() {
   );
 }
 
-function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expanded: boolean; onToggle: () => void }) {
+function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: LsarInstrument; selectedTimeframe: LsarTimeframe; expanded: boolean; onToggle: () => void }) {
   return (
     <>
       <tr data-testid={`row-market-${row.asset}`}>
@@ -381,13 +398,14 @@ function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expande
             {formatPct(row.priceChange24hPct)}
           </span>
         </td>
-        <td className="asset-cell">
-          <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.displayAsset ?? row.asset} exchange readings`} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, padding: 0, background: 'transparent', textAlign: 'left' }}>
-            <span style={{ width: 15, color: '#91a09a', display: 'inline-flex' }}>{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
-            <span><span className="asset-name">{row.displayAsset ?? row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
-          </button>
+        <td data-testid={`value-current-lsar-${row.asset}`}>
+          <div className="share-context">
+            <span className="ratio-number">{row.currentRatio === null ? '—' : row.currentRatio.toFixed(3)}</span>
+            <span className="share-meter"><span style={{ width: `${Math.min(100, Math.max(0, row.longSharePct ?? 0))}%` }} /></span>
+            <span className="share-percent">{row.longSharePct === null ? '—' : `${row.longSharePct.toFixed(1)}% long`}</span>
+          </div>
         </td>
-        {TIMEFRAMES.map((timeframe) => {
+        {orderedTimeframes(selectedTimeframe).map((timeframe, index) => {
           const change = rowChange(row, timeframe);
           const ratio = change?.ratioChangePct ?? null;
           const share = change?.longShareChangePp ?? null;
@@ -399,21 +417,21 @@ function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expande
               <td className="change-cell" data-testid={`value-share-change-${row.asset}-${timeframe}`}>
                 <span className={`change-value ${share === null ? 'neutral' : share > 0 ? 'positive' : share < 0 ? 'negative' : 'neutral'}`}>{formatPp(share)}</span>
               </td>
+              {index === 0 && (
+                <td className="asset-cell">
+                  <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.displayAsset ?? row.asset} exchange readings`} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, padding: 0, background: 'transparent', textAlign: 'left' }}>
+                    <span style={{ width: 15, color: '#91a09a', display: 'inline-flex' }}>{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
+                    <span><span className="asset-name">{row.displayAsset ?? row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
+                  </button>
+                </td>
+              )}
             </Fragment>
           );
         })}
-        <td data-testid={`value-current-lsar-${row.asset}`}>
-          <div className="share-context">
-            <span className="ratio-number">{row.currentRatio === null ? '—' : row.currentRatio.toFixed(3)}</span>
-            <span className="share-meter"><span style={{ width: `${Math.min(100, Math.max(0, row.longSharePct ?? 0))}%` }} /></span>
-            <span className="share-percent">{row.longSharePct === null ? '—' : `${row.longSharePct.toFixed(1)}% long`}</span>
-          </div>
-        </td>
-        <td className="oi-cell" data-testid={`value-open-interest-${row.asset}`}>{formatUsd(row.openInterestUsd)}</td>
       </tr>
       {expanded && (
         <tr data-testid={`row-details-${row.asset}`}>
-          <td colSpan={16} style={{ background: '#f0eee6', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
+          <td colSpan={TABLE_COLUMN_COUNT} style={{ background: '#f0eee6', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 28px', alignItems: 'center' }}>
               <span className="eyebrow">Exchange readings · OI-weighting inputs</span>
               {row.exchangeReadings.map((reading) => (

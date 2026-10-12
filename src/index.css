@@ -358,6 +358,7 @@
 .timeframe-sort svg { width:11px;height:11px;flex:none;color:#287465; }
 .market-table th:first-child { text-align:left;position:sticky;left:0;z-index:4;background:#eae8df; }
 .market-table th.price-col { text-align:right;position:sticky;left:0;z-index:4;min-width:126px;width:126px; }
+.market-table th.current-lsar-col { min-width:120px; }
 .market-table th.asset-col { text-align:left;position:sticky;left:126px;z-index:3;min-width:142px;background:#eae8df; }
 .market-table td { text-align:right;padding:11px 12px;border-bottom:1px solid #ece9df;color:#39494a;white-space:nowrap;vertical-align:middle; }
 .market-table tbody tr:last-child td { border-bottom:0; }
