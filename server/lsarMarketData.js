@@ -9,6 +9,9 @@ const logger = {
 const BINANCE_BASE = "https://fapi.binance.com";
 const BINANCE_COINM_BASE = "https://dapi.binance.com";
 const BYBIT_BASE = "https://api.bybit.com";
+const OKX_BASE = "https://www.okx.com";
+const GATE_BASE = "https://api.gateio.ws/api/v4";
+const BITGET_BASE = "https://api.bitget.com";
 const REFRESH_INTERVAL_MS = 5 * 60_000;
 const REQUEST_TIMEOUT_MS = 12_000;
 const HISTORY_LIMIT = 300;
@@ -23,10 +26,16 @@ const WINDOWS = [
 const exchangeStates = {
     binance: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
     bybit: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
+    okx: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
+    gate: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
+    bitget: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
 };
 const sourceReadings = {
     binance: [],
     bybit: [],
+    okx: [],
+    gate: [],
+    bitget: [],
 };
 let lastAttemptAt = 0;
 let refreshTask = null;
@@ -152,6 +161,84 @@ function parseBybitHistory(items) {
     })
         .filter((item) => item.timestamp > 0 && item.ratio > 0)
         .sort((a, b) => a.timestamp - b.timestamp);
+}
+function parseRatioHistory(items, timestampField, ratioField) {
+    return items.map((item) => ({
+        timestamp: Number(item[timestampField]),
+        ratio: finiteNumber(item[ratioField]) ?? 0,
+    })).filter((item) => item.timestamp > 0 && item.ratio > 0)
+        .sort((a, b) => a.timestamp - b.timestamp);
+}
+async function fetchOkx() {
+    const [instrumentsBody, openInterestBody, tickerBody] = await Promise.all([
+        fetchJson(`${OKX_BASE}/api/v5/public/instruments?instType=SWAP`),
+        fetchJson(`${OKX_BASE}/api/v5/public/open-interest?instType=SWAP`),
+        fetchJson(`${OKX_BASE}/api/v5/market/tickers?instType=SWAP`),
+    ]);
+    const instruments = instrumentsBody.data.filter((item) => item.state === "live");
+    const oi = new Map(openInterestBody.data.map((item) => [item.instId, finiteNumber(item.oiUsd)]));
+    const prices = new Map(tickerBody.data.map((item) => [item.instId, finiteNumber(item.last)]));
+    const assets = [...new Set(instruments.map((item) => item.ctValCcy || item.baseCcy).filter(Boolean))];
+    let errorCount = 0;
+    const readings = await mapLimit(assets, 8, async (asset) => {
+        const contracts = instruments.filter((item) => (item.ctValCcy || item.baseCcy) === asset);
+        const relevant = contracts.map((item) => ({ item, weight: oi.get(item.instId) })).filter((item) => item.weight > 0);
+        const openInterestUsd = relevant.reduce((sum, item) => sum + item.weight, 0);
+        if (!openInterestUsd) return null;
+        try {
+            const history = await fetchJson(`${OKX_BASE}/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=${encodeURIComponent(asset)}&period=5m`);
+            const price = relevant.reduce((sum, item) => sum + (prices.get(item.item.instId) ?? 0) * item.weight, 0) / openInterestUsd;
+            return { exchange: "okx", symbol: `${asset}-SWAP`, asset, price, priceChange24hPct: null, openInterestUsd,
+                points: history.data.map(([timestamp, ratio]) => ({ timestamp: Number(timestamp), ratio: finiteNumber(ratio) ?? 0 })).filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp) };
+        } catch { errorCount += 1; return null; }
+    });
+    return { readings: readings.filter(Boolean), marketCount: assets.length, errorCount, error: null };
+}
+async function fetchGate() {
+    const [contractsBody, tickersBody] = await Promise.all([
+        fetchJson(`${GATE_BASE}/futures/usdt/contracts`), fetchJson(`${GATE_BASE}/futures/usdt/tickers`),
+    ]);
+    const tickers = new Map(tickersBody.map((item) => [item.contract, item]));
+    const contracts = contractsBody.filter((item) => item.in_delisting !== true && tickers.has(item.name));
+    let errorCount = 0;
+    const readings = await mapLimit(contracts, 8, async (contract) => {
+        const ticker = tickers.get(contract.name);
+        const price = finiteNumber(ticker?.last);
+        if (!price) return null;
+        try {
+            const stats = await fetchJson(`${GATE_BASE}/futures/usdt/contract_stats?contract=${encodeURIComponent(contract.name)}&interval=5m`);
+            const points = stats.map((item) => ({ timestamp: Number(item.time) * 1000, ratio: finiteNumber(item.lsr_account) ?? 0 }))
+                .filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp);
+            const latest = stats.at(-1);
+            const openInterestUsd = finiteNumber(latest?.open_interest_usd);
+            const normalized = canonicalAsset(contract.name.split("_")[0]);
+            return openInterestUsd > 0 ? { exchange: "gate", symbol: contract.name, asset: normalized.asset, price: price / normalized.priceDivisor,
+                priceChange24hPct: null, openInterestUsd, points } : null;
+        } catch { errorCount += 1; return null; }
+    });
+    return { readings: readings.filter(Boolean), marketCount: contracts.length, errorCount, error: null };
+}
+async function fetchBitget() {
+    const [contractsBody, tickersBody] = await Promise.all([
+        fetchJson(`${BITGET_BASE}/api/v2/mix/market/contracts?productType=USDT-FUTURES`),
+        fetchJson(`${BITGET_BASE}/api/v2/mix/market/tickers?productType=USDT-FUTURES`),
+    ]);
+    const tickers = new Map(tickersBody.data.map((item) => [item.symbol, item]));
+    const contracts = contractsBody.data.filter((item) => item.symbolStatus === "normal" && tickers.has(item.symbol));
+    let errorCount = 0;
+    const readings = await mapLimit(contracts, 6, async (contract) => {
+        const ticker = tickers.get(contract.symbol);
+        const price = finiteNumber(ticker?.lastPr);
+        const oiUsd = finiteNumber(ticker?.holdVol) * finiteNumber(contract?.sizeMultiplier) * price;
+        if (!price || !oiUsd || !Number.isFinite(oiUsd)) return null;
+        try {
+            const history = await fetchJson(`${BITGET_BASE}/api/v2/mix/market/account-long-short?symbol=${encodeURIComponent(contract.symbol)}&productType=USDT-FUTURES&period=5m`);
+            const normalized = canonicalAsset(contract.baseCoin);
+            return { exchange: "bitget", symbol: contract.symbol, asset: normalized.asset, price: price / normalized.priceDivisor,
+                priceChange24hPct: null, openInterestUsd: oiUsd, points: parseRatioHistory(history.data, "ts", "longShortAccountRatio") };
+        } catch { errorCount += 1; return null; }
+    });
+    return { readings: readings.filter(Boolean), marketCount: contracts.length, errorCount, error: null };
 }
 async function fetchBinanceLinear() {
     const [info, priceTickers, dayTickers] = await Promise.all([
@@ -463,7 +550,8 @@ function makeSourceStatus(exchange) {
     };
 }
 function publishSnapshot() {
-    const rows = createRows([...sourceReadings.binance, ...sourceReadings.bybit]);
+    const exchanges = ["binance", "bybit", "okx", "gate", "bitget"];
+    const rows = createRows(exchanges.flatMap((exchange) => sourceReadings[exchange]));
     let binance = 0;
     let bybit = 0;
     let both = 0;
@@ -488,66 +576,48 @@ function publishSnapshot() {
         isRefreshing: Boolean(refreshTask),
         totalMarkets: rows.length,
         coverage: { binance, bybit, both, binanceOnly, bybitOnly },
-        sources: [makeSourceStatus("binance"), makeSourceStatus("bybit")],
+        sources: exchanges.map(makeSourceStatus),
         rows,
     };
 }
 async function runRefresh() {
     lastAttemptAt = Date.now();
     cachedSnapshot = { ...cachedSnapshot, isRefreshing: true };
-    for (const exchange of ["binance", "bybit"]) {
+    const exchanges = ["binance", "bybit", "okx", "gate", "bitget"];
+    for (const exchange of exchanges) {
         exchangeStates[exchange] = { ...exchangeStates[exchange], status: "refreshing", error: null };
     }
     cachedSnapshot = {
         ...cachedSnapshot,
         isRefreshing: true,
-        sources: [makeSourceStatus("binance"), makeSourceStatus("bybit")],
+        sources: exchanges.map(makeSourceStatus),
     };
-    const [binanceResult, bybitResult] = await Promise.allSettled([fetchBinance(), fetchBybit()]);
+    const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget };
+    const results = await Promise.allSettled(exchanges.map((exchange) => fetchers[exchange]()));
     const now = new Date();
-    if (binanceResult.status === "fulfilled") {
-        const result = binanceResult.value;
-        if (result.readings.length > 0)
-            sourceReadings.binance = result.readings;
-        exchangeStates.binance = {
-            status: result.errorCount > 0 ? "delayed" : "live",
-            marketCount: result.readings.length,
-            updatedAt: now,
-            error: result.error ??
-                (result.errorCount > 0 ? `${result.errorCount} market requests did not return complete data.` : null),
-        };
-    }
-    else {
-        exchangeStates.binance = {
-            ...exchangeStates.binance,
-            status: sourceReadings.binance.length ? "delayed" : "error",
-            error: binanceResult.reason instanceof Error ? binanceResult.reason.message : "Binance request failed.",
-        };
-    }
-    if (bybitResult.status === "fulfilled") {
-        const result = bybitResult.value;
-        if (result.readings.length > 0)
-            sourceReadings.bybit = result.readings;
-        exchangeStates.bybit = {
-            status: result.errorCount > 0 ? "delayed" : "live",
-            marketCount: result.readings.length,
-            updatedAt: now,
-            error: result.error ??
-                (result.errorCount > 0 ? `${result.errorCount} market requests did not return complete data.` : null),
-        };
-    }
-    else {
-        exchangeStates.bybit = {
-            ...exchangeStates.bybit,
-            status: sourceReadings.bybit.length ? "delayed" : "error",
-            error: bybitResult.reason instanceof Error ? bybitResult.reason.message : "Bybit request failed.",
-        };
+    results.forEach((result, index) => {
+        const exchange = exchanges[index];
+        if (result.status === "fulfilled") {
+            const value = result.value;
+            if (value.readings.length) sourceReadings[exchange] = value.readings;
+            exchangeStates[exchange] = {
+                status: value.errorCount > 0 ? "delayed" : "live",
+                marketCount: value.readings.length,
+                updatedAt: now,
+                error: value.error ?? (value.errorCount ? `${value.errorCount} market requests did not return complete data.` : null),
+            };
+        } else {
+            exchangeStates[exchange] = {
+                ...exchangeStates[exchange],
+                status: sourceReadings[exchange].length ? "delayed" : "error",
+                error: result.reason instanceof Error ? result.reason.message : `${exchange} request failed.`,
+            };
+        }
     }
     cachedSnapshot = { ...cachedSnapshot, isRefreshing: false };
     publishSnapshot();
     logger.info({
-        binanceMarkets: exchangeStates.binance.marketCount,
-        bybitMarkets: exchangeStates.bybit.marketCount,
+        exchangeMarkets: Object.fromEntries(exchanges.map((exchange) => [exchange, exchangeStates[exchange].marketCount])),
         aggregateAssets: cachedSnapshot.totalMarkets,
     }, "Perpetual LSAR market snapshot refreshed");
 }

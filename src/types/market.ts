@@ -1,5 +1,5 @@
 export type LsarTimeframe = "5m" | "15m" | "30m" | "1h" | "4h" | "24h";
-export type MarketExchange = "binance" | "bybit";
+export type MarketExchange = "binance" | "bybit" | "okx" | "gate" | "bitget";
 
 export interface MarketSourceStatus {
   exchange: MarketExchange;

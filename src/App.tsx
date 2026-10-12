@@ -214,7 +214,7 @@ function Home() {
             <span className="live-dot" />
             {healthQuery.isError ? 'API unreachable' : 'Market feed'}
           </span>
-          <span>BINANCE / BYBIT</span>
+            <span>BINANCE / BYBIT / OKX / GATE / BITGET</span>
         </div>
       </header>
 
@@ -224,8 +224,8 @@ function Home() {
         <section className="hero-line">
           <div>
             <div className="eyebrow">Cross-exchange positioning / perpetuals</div>
-            <h1 className="page-title">Account positioning, in motion.</h1>
-            <p className="page-subtitle">Scan Binance and Bybit linear and inverse perpetuals for long-short account ratio shifts.</p>
+            <h1 className="page-title">Long Short Account Ratio (LSAR)</h1>
+            <p className="page-subtitle">Compare account-ratio changes across Binance, Bybit, OKX, Gate.io, and Bitget perpetual markets.</p>
           </div>
           <button className="refresh-button" onClick={handleRefresh} disabled={isFetching} data-testid="button-refresh">
             <RefreshCw className={isFetching ? 'spin' : ''} />
@@ -245,59 +245,6 @@ function Home() {
           </div>
         )}
 
-        <section className="summary-band" aria-label="Market overview">
-          <div className="summary-cell">
-            <div className="summary-label">Assets tracked</div>
-            <div className="summary-value" data-testid="value-total-markets">
-              {snapshot ? snapshot.totalMarkets.toLocaleString() : summary?.totalMarkets.toLocaleString() ?? '—'}
-            </div>
-            <div className="summary-detail"><span>filtered universe</span></div>
-          </div>
-          <div className="summary-cell">
-            <div className="summary-label">Dual listed</div>
-            <div className="summary-value" data-testid="value-dual-listed">{snapshot ? dualCoverage.toLocaleString() : '—'}</div>
-            <div className="summary-detail"><strong>Binance + Bybit</strong></div>
-          </div>
-          <div className="summary-cell">
-            <div className="summary-label">Binance coverage</div>
-            <div className="summary-value" data-testid="value-binance-coverage">{snapshot ? snapshot.coverage.binance.toLocaleString() : '—'}</div>
-            <div className="summary-detail"><span>markets observed</span></div>
-          </div>
-          <div className="summary-cell">
-            <div className="summary-label">Bybit coverage</div>
-            <div className="summary-value" data-testid="value-bybit-coverage">{snapshot ? snapshot.coverage.bybit.toLocaleString() : '—'}</div>
-            <div className="summary-detail"><span>markets observed</span></div>
-          </div>
-          <div className="summary-cell">
-            <div className="summary-label">Strongest increase · {timeframe}</div>
-            {summary ? <MoveHighlight asset={summary.strongestIncrease?.asset ?? ''} value={summary.strongestIncrease?.ratioChangePct ?? null} direction="up" /> : <div className="summary-value">—</div>}
-            <div className="summary-detail"><span>ratio-relative change</span></div>
-          </div>
-          <div className="summary-cell">
-            <div className="summary-label">Strongest decrease · {timeframe}</div>
-            {summary ? <MoveHighlight asset={summary.strongestDecrease?.asset ?? ''} value={summary.strongestDecrease?.ratioChangePct ?? null} direction="down" /> : <div className="summary-value">—</div>}
-            <div className="summary-detail"><span>ratio-relative change</span></div>
-          </div>
-        </section>
-
-        <section className="sources-strip" aria-label="Exchange feed status">
-          <span className="sources-title">Data sources</span>
-          {(['binance', 'bybit'] as MarketExchange[]).map((exchange) => {
-            const source = sourceAvailable(exchange);
-            return (
-              <div className={`source-pill ${source?.status ?? 'connecting'}`} key={exchange} data-testid={`status-source-${exchange}`}>
-                <span className="source-dot" />
-                <span>{exchange}</span>
-                <span className="source-count">{source ? `${source.marketCount} mkts` : 'pending'}</span>
-                {source?.status && <span>{source.status}</span>}
-              </div>
-            );
-          })}
-          <span className="availability-note" data-testid="text-source-availability">
-            {snapshot ? `${sourceCount} of 2 feeds live · ${snapshot.coverage.binanceOnly} Binance only · ${snapshot.coverage.bybitOnly} Bybit only` : 'Waiting for source status'}
-          </span>
-        </section>
-
         <section className="control-panel" aria-label="Screener filters">
           <div className="control-left">
             <label className="searchbox">
@@ -316,7 +263,10 @@ function Home() {
               <option value="all">All sources</option>
               <option value="binance">Binance</option>
               <option value="bybit">Bybit</option>
-              <option value="both">Dual listed</option>
+              <option value="okx">OKX</option>
+              <option value="gate">Gate.io</option>
+              <option value="bitget">Bitget</option>
+              <option value="both">Multiple sources</option>
             </select>
             <span className="filter-label">Window</span>
             <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as LsarTimeframe)} className="select-control" data-testid="select-timeframe">
@@ -444,7 +394,7 @@ function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expande
         <td className="asset-cell">
           <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.asset} exchange readings`} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, padding: 0, background: 'transparent', textAlign: 'left' }}>
             <span style={{ width: 15, color: '#91a09a', display: 'inline-flex' }}>{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
-            <span><span className="asset-name">{row.asset}</span><span className="asset-market">{row.exchanges.length > 1 ? 'PERPETUAL · MULTI-VENUE' : 'PERPETUAL'}</span></span>
+            <span><span className="asset-name">{row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
           </button>
         </td>
         {TIMEFRAMES.map((timeframe) => {
