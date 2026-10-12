@@ -1,45 +1,27 @@
-# [Project name]
+# Perpetual LSAR Screener
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A live Binance and Bybit perpetual-futures screener for long-short account-ratio changes by timeframe.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `npm run build` — bundle the React frontend into `dist/`
+- `npm start` — run the Express server (`node server.js`) on `process.env.PORT` or port `10000`
+- No API keys or database are required; exchange market data is fetched from Binance and Bybit.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Node.js 24, Express 5, React, Vite
+- Single Express process serves both `/api/*` and the built frontend.
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `server.js` — Express API routes, server-side price filtering, and static frontend serving.
+- `server/lsarMarketData.js` — exchange fetches, previous-candle LSAR calculations, and OI-weighted aggregation.
+- `src/` — React screener and its styles.
+- `public/` — static assets copied into the production build.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
-
-## Product
-
-_Describe the high-level user-facing capabilities of this app once they exist._
-
-## User preferences
-
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Binance and Bybit readings for the same asset are aggregated using USD open interest as the weight.
+- Each timeframe compares the latest 5-minute observation in the current UTC-aligned candle with the latest observation in the immediately preceding candle.
+- The server applies the maximum-price filter before returning screener rows; the default cap is `$5`, and the UI can request all prices.
