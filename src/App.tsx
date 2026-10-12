@@ -1,11 +1,13 @@
-import { Fragment, type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ExchangeFilter } from '@/components/exchange-filter';
 import { FetchedDataLine } from '@/components/fetched-data-line';
-import { MARKET_EXCHANGES, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
+import { CoinLogo } from '@/components/coin-logo';
+import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
+import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
-import { TIMEFRAMES, orderedTimeframes } from '@/lib/table-timeframes';
+import { TIMEFRAMES } from '@/lib/table-timeframes';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -15,6 +17,7 @@ import type {
   LsarMarketSnapshot,
   LsarMarketSummary,
   LsarTimeframe,
+  MarketExchange,
 } from '@/types/market';
 import {
   AlertCircle,
@@ -40,7 +43,7 @@ import {
 
 const queryClient = new QueryClient();
 
-const TABLE_COLUMN_COUNT = 3 + TIMEFRAMES.length * 2;
+const TABLE_COLUMN_COUNT = 4 + MARKET_EXCHANGES.length;
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
@@ -103,18 +106,16 @@ function MoveHighlight({ asset, value, direction }: { asset: string; value: numb
   );
 }
 
-function SkeletonRows({ selectedTimeframe }: { selectedTimeframe: LsarTimeframe }) {
+function SkeletonRows() {
   return (
     <>
       {Array.from({ length: 7 }, (_, index) => (
         <tr className="skeleton-row" key={index} data-testid={`row-skeleton-${index}`}>
-          <td><span className="skeleton" style={{ width: 66 }} /></td>
-          <td><span className="skeleton" style={{ width: 50 }} /></td>
-          {orderedTimeframes(selectedTimeframe).flatMap((timeframe, index) => [
-            <td key={`${timeframe}-a`}><span className="skeleton" style={{ width: 54 }} /></td>,
-            <td key={`${timeframe}-b`}><span className="skeleton" style={{ width: 48 }} /></td>,
-            ...(index === 0 ? [<td key="asset"><span className="skeleton" style={{ width: 75 }} /></td>] : []),
-          ])}
+          <td><span className="skeleton" style={{ width: 78 }} /></td>
+          <td><span className="skeleton" style={{ width: 54 }} /></td>
+          <td><span className="skeleton" style={{ width: 58 }} /></td>
+          <td><span className="skeleton" style={{ width: 72 }} /></td>
+          {MARKET_EXCHANGES.map((exchange) => <td key={exchange}><span className="skeleton" style={{ width: 68 }} /></td>)}
         </tr>
       ))}
     </>
@@ -158,15 +159,14 @@ function Home() {
   const snapshot = snapshotQuery.data;
   const summary = summaryQuery.data;
   const isFetching = snapshotQuery.isFetching || summaryQuery.isFetching;
-  const sortByTimeframe = (value: LsarTimeframe) => {
-    const nextSort = nextHeaderSortMode(sortTarget === 'change' && value === timeframe, sortMode);
+  const sortByTimeframe = () => {
+    const nextSort = nextHeaderSortMode(sortTarget === 'change', sortMode);
     setSortTarget('change');
-    setTimeframe(value);
     setSortMode(nextSort);
   };
-  const sortByCurrentRatio = () => {
-    setSortMode(nextHeaderSortMode(sortTarget === 'current', sortMode));
-    setSortTarget('current');
+  const sortByTarget = (target: MarketSortTarget) => {
+    setSortMode(nextHeaderSortMode(sortTarget === target, sortMode));
+    setSortTarget(target);
   };
   const sortChanges = (mode: MarketSortMode) => {
     setSortTarget('change');
@@ -299,7 +299,9 @@ function Home() {
             {maxPriceLimit !== null && <> · price ≤ ${formatPrice(maxPriceLimit)}</>}
             {' · '}sorted by {sortTarget === 'current'
               ? `current LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
-              : `${sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in ${timeframe}`}
+              : sortTarget !== 'change'
+                ? `${EXCHANGE_LABELS[sortTarget]} LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
+                : `${sortMode === 'absolute' ? 'largest absolute move' : sortMode === 'increase' ? 'strongest increase' : 'strongest decrease'} in ${timeframe}`}
           </span>
           <span data-testid="text-last-updated"><Clock3 size={12} style={{ verticalAlign: '-2px', marginRight: 5 }} />Fetched {formatTimestamp(latestTimestamp)} · latest LSAR sample {formatTimestamp(latestRatioTimestamp)}{snapshot?.isRefreshing ? ' · refresh in progress' : ''}</span>
         </div>
@@ -309,10 +311,11 @@ function Home() {
             <table className="market-table">
               <thead>
                 <tr>
+                  <th scope="col" className="asset-col sticky-coin">Coin</th>
                   <th scope="col" className="price-col sticky-price">Price <span className="subhead">USD · 24h move</span></th>
                   <th scope="col" className="current-lsar-col"
                     aria-sort={sortTarget === 'current' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
-                    <button type="button" className="timeframe-sort" onClick={sortByCurrentRatio}
+                    <button type="button" className="timeframe-sort" onClick={() => sortByTarget('current')}
                       aria-label={`Sort current LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
                       aria-pressed={sortTarget === 'current'} data-testid="button-sort-current-lsar">
                       <span>Current LSAR</span>
@@ -322,35 +325,40 @@ function Home() {
                     </button>
                     <span className="subhead">ratio / long share</span>
                   </th>
-                  {orderedTimeframes(timeframe).map((value, index) => (
-                    <Fragment key={value}>
-                    <th
-                      scope="col"
-                      colSpan={2}
-                      aria-sort={sortTarget === 'change' && value === timeframe && sortMode !== 'absolute' ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}
-                    >
+                  <th scope="col" className="aggregate-col"
+                    aria-sort={sortTarget === 'change' ? (sortMode === 'increase' ? 'descending' : sortMode === 'decrease' ? 'ascending' : 'none') : 'none'}>
                       <button
                         type="button"
                         className="timeframe-sort"
-                        onClick={() => sortByTimeframe(value)}
-                        aria-label={`Sort ${value} by ratio-relative LSAR change ${sortTarget === 'change' && value === timeframe && sortMode === 'increase' ? 'ascending' : 'descending'}`}
-                        aria-pressed={sortTarget === 'change' && value === timeframe && sortMode !== 'absolute'}
-                        data-testid={`button-sort-timeframe-${value}`}
+                        onClick={sortByTimeframe}
+                        aria-label={`Sort ${timeframe} aggregated LSAR change ${sortTarget === 'change' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
+                        aria-pressed={sortTarget === 'change'}
+                        data-testid={`button-sort-timeframe-${timeframe}`}
                       >
-                        <span>LSAR change · {value}</span>
-                        {sortTarget === 'change' && value === timeframe && sortMode !== 'absolute'
+                        <span>Aggregated · {timeframe}</span>
+                        {sortTarget === 'change' && sortMode !== 'absolute'
                           ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
                           : <ArrowDownUp aria-hidden="true" />}
                       </button>
                       <span className="subhead">ratio-relative % / long-share Δpp</span>
-                    </th>
-                    {index === 0 && <th scope="col" className="asset-col">Asset</th>}
-                    </Fragment>
-                  ))}
+                  </th>
+                  {MARKET_EXCHANGES.map((exchange) => {
+                    const active = sortTarget === exchange;
+                    return <th key={exchange} scope="col" className="exchange-heading"
+                      aria-sort={active ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
+                      <button type="button" className="timeframe-sort" onClick={() => sortByTarget(exchange)}
+                        aria-label={`Sort by ${EXCHANGE_LABELS[exchange]} current LSAR ${active && sortMode === 'increase' ? 'ascending' : 'descending'}`}
+                        aria-pressed={active} data-testid={`button-sort-exchange-${exchange}`}>
+                        <span>{EXCHANGE_LABELS[exchange]}</span>
+                        {active ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" /> : <ArrowDownUp aria-hidden="true" />}
+                      </button>
+                      <span className="subhead">current LSAR</span>
+                    </th>;
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {snapshotQuery.isLoading && !snapshot && <SkeletonRows selectedTimeframe={timeframe} />}
+                {snapshotQuery.isLoading && !snapshot && <SkeletonRows />}
                 {!snapshotQuery.isLoading && !snapshot && !snapshotQuery.isError && (
                   <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
                 )}
@@ -376,7 +384,7 @@ function Home() {
 
         <div className="footnote" data-testid="text-ratio-disclaimer">
           <Info />
-          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical USD OI weights. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Expand a coin to see contract timestamps and the sources used for each timeframe. Binance/Bybit include linear and inverse perpetuals; Gate.io, Bitget and Toobit currently add USDT perpetuals, and OKX adds swaps. Toobit fetches 5-minute history for all displayed candle comparisons. Feeds load progressively; Bitget runs at its one-request-per-second limit, and slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
+          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical USD OI weights. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Expand a coin to see contract timestamps and the selected timeframe's contributing sources. Binance/Bybit include linear and inverse perpetuals; Gate.io, Bitget and Toobit currently add USDT perpetuals, and OKX adds swaps. Toobit fetches 5-minute history for all displayed candle comparisons. Feeds load progressively; Bitget runs at its one-request-per-second limit, and slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
         </div>
         {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable: {snapshot.sources.filter((source) => source.error).map((source) => `${source.exchange.toUpperCase()}: ${source.error}`).join(' · ')}. Only available readings contribute.</span></div>}
         <div className="footline">
@@ -392,6 +400,13 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
   return (
     <>
       <tr data-testid={`row-market-${row.asset}`}>
+        <td className="coin-cell asset-cell" data-testid={`value-coin-${row.asset}`}>
+          <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.displayAsset ?? row.asset} exchange readings`} className="coin-trigger">
+            <span className="coin-chevron">{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
+            <CoinLogo asset={row.asset} />
+            <span><span className="asset-name">{row.displayAsset ?? row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
+          </button>
+        </td>
         <td className="price-cell" data-testid={`value-price-${row.asset}`}>
           {formatPrice(row.price)}
           <span className="subhead" style={{ color: row.priceChange24hPct === null ? '#a0a7a0' : row.priceChange24hPct >= 0 ? '#38816d' : '#b75b50' }}>
@@ -405,28 +420,29 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
             <span className="share-percent">{row.longSharePct === null ? '—' : `${row.longSharePct.toFixed(1)}% long`}</span>
           </div>
         </td>
-        {orderedTimeframes(selectedTimeframe).map((timeframe, index) => {
-          const change = rowChange(row, timeframe);
+        {(() => {
+          const change = rowChange(row, selectedTimeframe);
           const ratio = change?.ratioChangePct ?? null;
           const share = change?.longShareChangePp ?? null;
-          return (
-            <Fragment key={timeframe}>
-              <td className="change-cell" data-testid={`value-ratio-change-${row.asset}-${timeframe}`}>
-                <span className={`change-value ${ratio === null ? 'neutral' : ratio > 0 ? 'positive' : ratio < 0 ? 'negative' : 'neutral'}`}>{formatPct(ratio)}</span>
-              </td>
-              <td className="change-cell" data-testid={`value-share-change-${row.asset}-${timeframe}`}>
-                <span className={`change-value ${share === null ? 'neutral' : share > 0 ? 'positive' : share < 0 ? 'negative' : 'neutral'}`}>{formatPp(share)}</span>
-              </td>
-              {index === 0 && (
-                <td className="asset-cell">
-                  <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.displayAsset ?? row.asset} exchange readings`} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, padding: 0, background: 'transparent', textAlign: 'left' }}>
-                    <span style={{ width: 15, color: '#91a09a', display: 'inline-flex' }}>{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
-                    <span><span className="asset-name">{row.displayAsset ?? row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
-                  </button>
-                </td>
-              )}
-            </Fragment>
-          );
+          return <td className="aggregate-cell" data-testid={`value-aggregate-${row.asset}-${selectedTimeframe}`}>
+            <span data-testid={`value-ratio-change-${row.asset}-${selectedTimeframe}`} className={`change-value ${ratio === null ? 'neutral' : ratio > 0 ? 'positive' : ratio < 0 ? 'negative' : 'neutral'}`}>{formatPct(ratio)}</span>
+            <span data-testid={`value-share-change-${row.asset}-${selectedTimeframe}`} className={`aggregate-share ${share === null ? 'neutral' : share > 0 ? 'positive' : share < 0 ? 'negative' : 'neutral'}`}>{formatPp(share)}</span>
+          </td>;
+        })()}
+        {MARKET_EXCHANGES.map((exchange) => {
+          const ratio = exchangeAccountRatio(row.exchangeReadings, exchange);
+          if (ratio === null) return <td className="exchange-ratio-cell missing" key={exchange} data-testid={`value-exchange-${row.asset}-${exchange}`}>—</td>;
+          const longShare = ratio / (1 + ratio) * 100;
+          const shortShare = 100 - longShare;
+          return <td className="exchange-ratio-cell" key={exchange} data-testid={`value-exchange-${row.asset}-${exchange}`}>
+            <div className="venue-reading">
+              <strong>{ratio.toFixed(3)}</strong>
+              <div className="venue-bar" aria-label={`${longShare.toFixed(1)}% long, ${shortShare.toFixed(1)}% short`}>
+                <span style={{ width: `${longShare}%` }} /><span style={{ width: `${shortShare}%` }} />
+              </div>
+              <div className="venue-shares"><span>{longShare.toFixed(1)}%</span><span>{shortShare.toFixed(1)}%</span></div>
+            </div>
+          </td>;
         })}
       </tr>
       {expanded && (
@@ -448,7 +464,7 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
               {row.exchangeReadings.length === 0 && <span style={{ color: '#89928d', fontSize: 11 }}>No exchange-level readings supplied for this instrument.</span>}
             </div>
             <div style={{ marginTop: 9, color: '#8d9690', font: '9px var(--app-font-mono)' }}>
-              {TIMEFRAMES.map((timeframe) => <span key={timeframe} style={{ marginRight: 14 }}>{timeframe}: {rowChange(row, timeframe)?.exchanges?.join(' + ') || 'no matched candle data'}</span>)}
+              <span style={{ marginRight: 14 }}>{selectedTimeframe}: {rowChange(row, selectedTimeframe)?.exchanges?.join(' + ') || 'no matched candle data'}</span>
               <div style={{ marginTop: 6 }}>Only venues with data in both compared candles enter that change. When 5-minute history does not reach the previous 4h/24h candle, OKX and Bitget use hourly history for that previous candle. The current value uses their latest 5-minute sample.</div>
             </div>
           </td>

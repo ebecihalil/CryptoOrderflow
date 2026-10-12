@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { compareMarketRows, nextHeaderSortMode } from "../src/lib/market-sort.ts";
 
-const row = (asset, currentRatio, change) => ({ asset, currentRatio, changes: [
+const row = (asset, currentRatio, change) => ({ asset, currentRatio, exchangeReadings: [], changes: [
     { timeframe: "1h", ratioChangePct: change },
     { timeframe: "4h", ratioChangePct: -change },
 ] });

@@ -1,8 +1,9 @@
-import type { LsarInstrument, LsarTimeframe } from '../types/market';
+import type { LsarInstrument, LsarTimeframe, MarketExchange } from '../types/market';
+import { exchangeAccountRatio } from './exchange-ratios.ts';
 
 export type MarketSortMode = 'increase' | 'decrease' | 'absolute';
-export type MarketSortTarget = 'change' | 'current';
-type SortableMarketRow = Pick<LsarInstrument, 'asset' | 'currentRatio' | 'changes'>;
+export type MarketSortTarget = 'change' | 'current' | MarketExchange;
+type SortableMarketRow = Pick<LsarInstrument, 'asset' | 'currentRatio' | 'changes' | 'exchangeReadings'>;
 
 export function nextHeaderSortMode(active: boolean, mode: MarketSortMode): MarketSortMode {
   return active && mode === 'increase' ? 'decrease' : 'increase';
@@ -17,7 +18,8 @@ export function compareMarketRows(
 ) {
   const value = (row: SortableMarketRow) => {
     const result = target === 'current' ? row.currentRatio
-      : row.changes.find((change) => change.timeframe === timeframe)?.ratioChangePct ?? null;
+      : target === 'change' ? row.changes.find((change) => change.timeframe === timeframe)?.ratioChangePct ?? null
+      : exchangeAccountRatio(row.exchangeReadings, target);
     return typeof result === 'number' && Number.isFinite(result) ? result : null;
   };
   const aValue = value(a);
