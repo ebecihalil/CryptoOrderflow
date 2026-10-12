@@ -1,5 +1,6 @@
 import type { MarketSourceStatus } from '@/types/market';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
+import { ExchangeLogo } from '@/components/exchange-logo';
 
 export function FetchedDataLine({ sources = [] }: { sources?: MarketSourceStatus[] }) {
   return (
@@ -17,6 +18,7 @@ export function FetchedDataLine({ sources = [] }: { sources?: MarketSourceStatus
         return (
           <span className="fetched-data-source" key={exchange} title={description} data-testid={`fetched-count-${exchange}`}>
             <span className={`fetched-data-dot ${state}`} aria-hidden="true" />
+            <ExchangeLogo exchange={exchange} />
             <span>{EXCHANGE_LABELS[exchange]} {count.toLocaleString()}</span>
             <span className="sr-only">{successful ? ' — data fetched successfully' : ' — no fresh data yet'}</span>
           </span>

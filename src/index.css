@@ -372,6 +372,8 @@
 .coin-trigger { display:flex;align-items:center;gap:9px;width:100%;border:0;padding:0;background:transparent;text-align:left;color:inherit; }
 .coin-chevron { width:13px;color:#91a09a;display:inline-flex;flex:none; }
 .coin-logo { width:23px;height:23px;object-fit:contain;flex:none;border-radius:50%;background:#eeece4; }
+.exchange-logo { display:inline-block;width:16px;height:16px;object-fit:contain;border-radius:3px;flex:none;vertical-align:middle; }
+.fetched-data-source .exchange-logo { width:13px;height:13px; }
 .coin-logo-fallback { display:grid;place-items:center;color:#5f746c;font:9px var(--app-font-mono);border:1px solid #dcd9ce; }
 .asset-name { display:block;color:#27373b;font:700 12px var(--app-font-sans);letter-spacing:-.02em; }
 .asset-market { display:block;color:#76837c;font-size:9px;margin-top:4px;white-space:normal;max-width:190px;line-height:1.5; }

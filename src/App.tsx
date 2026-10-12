@@ -4,6 +4,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { ExchangeFilter } from '@/components/exchange-filter';
 import { FetchedDataLine } from '@/components/fetched-data-line';
 import { CoinLogo } from '@/components/coin-logo';
+import { ExchangeLogo } from '@/components/exchange-logo';
 import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
 import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
@@ -349,6 +350,7 @@ function Home() {
                       <button type="button" className="timeframe-sort" onClick={() => sortByTarget(exchange)}
                         aria-label={`Sort by ${EXCHANGE_LABELS[exchange]} current LSAR ${active && sortMode === 'increase' ? 'ascending' : 'descending'}`}
                         aria-pressed={active} data-testid={`button-sort-exchange-${exchange}`}>
+                        <ExchangeLogo exchange={exchange} />
                         <span>{EXCHANGE_LABELS[exchange]}</span>
                         {active ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" /> : <ArrowDownUp aria-hidden="true" />}
                       </button>

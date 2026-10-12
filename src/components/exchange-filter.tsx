@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { MarketExchange } from '@/types/market';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
+import { ExchangeLogo } from '@/components/exchange-logo';
 
 interface ExchangeFilterProps {
   selected: MarketExchange[];
@@ -53,6 +54,7 @@ export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnl
           <label className="exchange-select-option" key={exchange}>
             <input type="checkbox" checked={selected.includes(exchange)} data-testid={`checkbox-exchange-${exchange}`}
               onChange={(event) => onChange(event.target.checked ? [...selected, exchange] : selected.filter((value) => value !== exchange))} />
+            <ExchangeLogo exchange={exchange} />
             <span>{EXCHANGE_LABELS[exchange]}</span>
           </label>
         ))}
