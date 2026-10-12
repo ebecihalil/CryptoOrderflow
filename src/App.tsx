@@ -229,7 +229,7 @@ function Home() {
           </div>
           <button className="refresh-button" onClick={handleRefresh} disabled={isFetching} data-testid="button-refresh">
             <RefreshCw className={isFetching ? 'spin' : ''} />
-            {isFetching ? 'Loading snapshot' : 'Reload snapshot'}
+            {isFetching ? 'Loading snapshot' : 'Refresh'}
           </button>
         </section>
 
