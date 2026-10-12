@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "test": "node --test server/*.test.js",
     "start": "node server.js"
   },
   "dependencies": {

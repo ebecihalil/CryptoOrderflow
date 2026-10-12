@@ -112,7 +112,6 @@ function SkeletonRows() {
           ])}
           <td><span className="skeleton" style={{ width: 50 }} /></td>
           <td><span className="skeleton" style={{ width: 58 }} /></td>
-          <td><span className="skeleton" style={{ width: 44 }} /></td>
         </tr>
       ))}
     </>
@@ -155,8 +154,6 @@ function Home() {
   const snapshot = snapshotQuery.data;
   const summary = summaryQuery.data;
   const isFetching = snapshotQuery.isFetching || summaryQuery.isFetching;
-  const sourceAvailable = (exchange: MarketExchange) =>
-    snapshot?.sources.find((source) => source.exchange === exchange);
   const sortByTimeframe = (value: LsarTimeframe) => {
     const nextSort = value === timeframe && sortMode === 'increase' ? 'decrease' : 'increase';
     setTimeframe(value);
@@ -188,9 +185,7 @@ function Home() {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
   };
 
-  const sourceCount = snapshot?.sources.filter((source) => source.status === 'live').length ?? 0;
   const hasActiveFilters = Boolean(search.trim()) || exchangeFilter !== 'all' || maxPriceLimit !== null;
-  const dualCoverage = snapshot?.coverage.both ?? summary?.dualListed ?? 0;
   const latestTimestamp = snapshot?.generatedAt ?? summary?.generatedAt ?? null;
   const latestRatioTimestamp =
     snapshot?.rows.reduce<string | null>((latest, row) => {
@@ -214,7 +209,6 @@ function Home() {
             <span className="live-dot" />
             {healthQuery.isError ? 'API unreachable' : 'Market feed'}
           </span>
-            <span>BINANCE / BYBIT / OKX / GATE / BITGET</span>
         </div>
       </header>
 
@@ -225,7 +219,7 @@ function Home() {
           <div>
             <div className="eyebrow">Cross-exchange positioning / perpetuals</div>
             <h1 className="page-title">Long Short Account Ratio (LSAR)</h1>
-            <p className="page-subtitle">Compare account-ratio changes across Binance, Bybit, OKX, Gate.io, and Bitget perpetual markets.</p>
+            <p className="page-subtitle">OI-weighted account positioning across perpetual markets. Each coin lists its contributing exchanges.</p>
           </div>
           <button className="refresh-button" onClick={handleRefresh} disabled={isFetching} data-testid="button-refresh">
             <RefreshCw className={isFetching ? 'spin' : ''} />
@@ -341,16 +335,15 @@ function Home() {
                   ))}
                   <th scope="col">Current LSAR <span className="subhead">ratio / long share</span></th>
                   <th scope="col">Open interest <span className="subhead">USD weighted</span></th>
-                  <th scope="col">Sources</th>
                 </tr>
               </thead>
               <tbody>
                 {snapshotQuery.isLoading && !snapshot && <SkeletonRows />}
                 {!snapshotQuery.isLoading && !snapshot && !snapshotQuery.isError && (
-                  <tr><td colSpan={17}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
+                  <tr><td colSpan={16}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
                 )}
                 {snapshot && rows.length === 0 && (
-                  <tr><td colSpan={17}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try raising the max price, changing the exchange, or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
+                  <tr><td colSpan={16}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try raising the max price, changing the exchange, or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
                 )}
                 {snapshot && rows.map((row) => {
                   const expanded = expandedAsset === row.asset;
@@ -370,8 +363,9 @@ function Home() {
 
         <div className="footnote" data-testid="text-ratio-disclaimer">
           <Info />
-          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available LSAR sample in the current UTC-aligned candle with the latest sample in the immediately previous candle; the current candle is still forming. The first change value is the ratio-relative percent, followed by the long-share change in percentage points. Long-short ratios count accounts, not position size. They do not identify institutions versus retail, and should not be read as a direct measure of who holds the larger notional exposure. Linear USDT/USDC and inverse USD perpetuals are included; overlapping assets are combined using USD open-interest weights, while single-exchange assets use that venue’s reading. Exchange scans run about every five minutes; account-ratio observations arrive in 5-minute bins and can lag the fetch time, so expanded rows show each contract’s observation timestamp.</span>
+          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical USD OI weights. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Expand a coin to see contract timestamps and the sources used for each timeframe. Binance/Bybit include linear and inverse perpetuals; Gate.io and Bitget currently add USDT perpetuals, and OKX adds swaps. Bitget loads progressively at its one-request-per-second limit; slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
         </div>
+        {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable: {snapshot.sources.filter((source) => source.error).map((source) => `${source.exchange.toUpperCase()}: ${source.error}`).join(' · ')}. Only available readings contribute.</span></div>}
         <div className="footline">
           <span>PERPETUAL LSAR SCREENER / ACCOUNT-BASED POSITIONING</span>
           <span data-testid="text-generated-at">SNAPSHOT {formatTimestamp(latestTimestamp)} · {snapshot?.totalMarkets ?? summary?.totalMarkets ?? '—'} ASSETS</span>
@@ -420,15 +414,10 @@ function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expande
           </div>
         </td>
         <td className="oi-cell" data-testid={`value-open-interest-${row.asset}`}>{formatUsd(row.openInterestUsd)}</td>
-        <td>
-          <div className="exchange-chips">
-            {row.exchanges.map((exchange) => <span className="exchange-chip" key={exchange}>{exchange}</span>)}
-          </div>
-        </td>
       </tr>
       {expanded && (
         <tr data-testid={`row-details-${row.asset}`}>
-          <td colSpan={17} style={{ background: '#f0eee6', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
+          <td colSpan={16} style={{ background: '#f0eee6', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 28px', alignItems: 'center' }}>
               <span className="eyebrow">Exchange readings · OI-weighting inputs</span>
               {row.exchangeReadings.map((reading) => (
@@ -445,7 +434,8 @@ function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expande
               {row.exchangeReadings.length === 0 && <span style={{ color: '#89928d', fontSize: 11 }}>No exchange-level readings supplied for this instrument.</span>}
             </div>
             <div style={{ marginTop: 9, color: '#8d9690', font: '9px var(--app-font-mono)' }}>
-              Change source count · {rowChange(row, '1h')?.sourceCount ?? 0} sources at 1h · Ratio-relative change and long-share percentage-point change are distinct measures.
+              {TIMEFRAMES.map((timeframe) => <span key={timeframe} style={{ marginRight: 14 }}>{timeframe}: {rowChange(row, timeframe)?.exchanges?.join(' + ') || 'no matched candle data'}</span>)}
+              <div style={{ marginTop: 6 }}>Only venues with data in both compared candles enter that change. When 5-minute history does not reach the previous 4h/24h candle, OKX and Bitget use hourly history for that previous candle. The current value uses their latest 5-minute sample.</div>
             </div>
           </td>
         </tr>

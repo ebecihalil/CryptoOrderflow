@@ -37,9 +37,11 @@ const sourceReadings = {
     gate: [],
     bitget: [],
 };
-let lastAttemptAt = 0;
-let refreshTask = null;
+const activeProviderTasks = new Map();
+const lastProviderAttempts = new Map();
 let nextBybitRequestAt = 0;
+const nextRequestAt = {};
+let lastPartialPublishAt = 0;
 let cachedSnapshot = {
     generatedAt: null,
     isRefreshing: false,
@@ -76,6 +78,14 @@ async function fetchJson(url) {
     let lastError;
     for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
+            const spacing = url.includes("bitget.com/api/v2/mix/market/account-long-short") ? 1050
+                : url.startsWith(OKX_BASE) ? 450 : url.startsWith(GATE_BASE) ? 120 : 0;
+            if (spacing) {
+                const key = new URL(url).hostname;
+                const scheduled = Math.max(Date.now(), nextRequestAt[key] ?? 0);
+                nextRequestAt[key] = scheduled + spacing;
+                await new Promise((resolve) => setTimeout(resolve, Math.max(0, scheduled - Date.now())));
+            }
             if (url.startsWith(BYBIT_BASE)) {
                 const now = Date.now();
                 const requestAt = Math.max(now, nextBybitRequestAt);
@@ -98,6 +108,9 @@ async function fetchJson(url) {
                 throw new Error(message);
             }
             const body = (await response.json());
+            if (body.code !== undefined && !["0", "00000"].includes(String(body.code))) {
+                throw new Error(body.msg || `Exchange error ${body.code}`);
+            }
             if (typeof body.retCode === "number" && body.retCode !== 0) {
                 const message = body.retMsg || `Exchange error ${body.retCode}`;
                 if (body.retCode === 10006 || body.retCode === 10016) {
@@ -169,6 +182,15 @@ function parseRatioHistory(items, timestampField, ratioField) {
     })).filter((item) => item.timestamp > 0 && item.ratio > 0)
         .sort((a, b) => a.timestamp - b.timestamp);
 }
+function publishReading(reading) {
+    if (!reading?.points?.length) return;
+    const retained = sourceReadings[reading.exchange].filter((item) => item.symbol !== reading.symbol);
+    sourceReadings[reading.exchange] = [...retained, reading];
+    if (Date.now() - lastPartialPublishAt >= 5000) {
+        lastPartialPublishAt = Date.now();
+        publishSnapshot();
+    }
+}
 async function fetchOkx() {
     const [instrumentsBody, openInterestBody, tickerBody] = await Promise.all([
         fetchJson(`${OKX_BASE}/api/v5/public/instruments?instType=SWAP`),
@@ -178,21 +200,25 @@ async function fetchOkx() {
     const instruments = instrumentsBody.data.filter((item) => item.state === "live");
     const oi = new Map(openInterestBody.data.map((item) => [item.instId, finiteNumber(item.oiUsd)]));
     const prices = new Map(tickerBody.data.map((item) => [item.instId, finiteNumber(item.last)]));
-    const assets = [...new Set(instruments.map((item) => item.ctValCcy || item.baseCcy).filter(Boolean))];
     let errorCount = 0;
-    const readings = await mapLimit(assets, 8, async (asset) => {
-        const contracts = instruments.filter((item) => (item.ctValCcy || item.baseCcy) === asset);
-        const relevant = contracts.map((item) => ({ item, weight: oi.get(item.instId) })).filter((item) => item.weight > 0);
-        const openInterestUsd = relevant.reduce((sum, item) => sum + item.weight, 0);
-        if (!openInterestUsd) return null;
+    const readings = await mapLimit(instruments, 6, async (instrument) => {
+        const openInterestUsd = oi.get(instrument.instId);
+        const price = prices.get(instrument.instId);
+        if (!(openInterestUsd > 0) || !(price > 0)) return null;
         try {
-            const history = await fetchJson(`${OKX_BASE}/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=${encodeURIComponent(asset)}&period=5m`);
-            const price = relevant.reduce((sum, item) => sum + (prices.get(item.item.instId) ?? 0) * item.weight, 0) / openInterestUsd;
-            return { exchange: "okx", symbol: `${asset}-SWAP`, asset, price, priceChange24hPct: null, openInterestUsd,
-                points: history.data.map(([timestamp, ratio]) => ({ timestamp: Number(timestamp), ratio: finiteNumber(ratio) ?? 0 })).filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp) };
+            const url = `${OKX_BASE}/api/v5/rubik/stat/contracts/long-short-account-ratio-contract?instId=${encodeURIComponent(instrument.instId)}`;
+            const [history, hourly] = await Promise.all([fetchJson(`${url}&period=5m`), fetchJson(`${url}&period=1H`)]);
+            const parse = (body) => body.data.map(([timestamp, ratio]) => ({ timestamp: Number(timestamp), ratio: finiteNumber(ratio) ?? 0 }))
+                .filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp);
+            const normalized = canonicalAsset(instrument.instId.split("-")[0]);
+            const reading = { exchange: "okx", symbol: instrument.instId, asset: normalized.asset,
+                price: price / normalized.priceDivisor, priceChange24hPct: null, openInterestUsd,
+                points: parse(history), longWindowPoints: parse(hourly) };
+            publishReading(reading);
+            return reading;
         } catch { errorCount += 1; return null; }
     });
-    return { readings: readings.filter(Boolean), marketCount: assets.length, errorCount, error: null };
+    return { readings: readings.filter(Boolean), marketCount: instruments.length, errorCount, error: null };
 }
 async function fetchGate() {
     const [contractsBody, tickersBody] = await Promise.all([
@@ -206,14 +232,16 @@ async function fetchGate() {
         const price = finiteNumber(ticker?.last);
         if (!price) return null;
         try {
-            const stats = await fetchJson(`${GATE_BASE}/futures/usdt/contract_stats?contract=${encodeURIComponent(contract.name)}&interval=5m`);
+            const stats = await fetchJson(`${GATE_BASE}/futures/usdt/contract_stats?contract=${encodeURIComponent(contract.name)}&interval=5m&limit=${HISTORY_LIMIT}`);
             const points = stats.map((item) => ({ timestamp: Number(item.time) * 1000, ratio: finiteNumber(item.lsr_account) ?? 0 }))
                 .filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp);
             const latest = stats.at(-1);
             const openInterestUsd = finiteNumber(latest?.open_interest_usd);
             const normalized = canonicalAsset(contract.name.split("_")[0]);
-            return openInterestUsd > 0 ? { exchange: "gate", symbol: contract.name, asset: normalized.asset, price: price / normalized.priceDivisor,
+            const reading = openInterestUsd > 0 ? { exchange: "gate", symbol: contract.name, asset: normalized.asset, price: price / normalized.priceDivisor,
                 priceChange24hPct: null, openInterestUsd, points } : null;
+            publishReading(reading);
+            return reading;
         } catch { errorCount += 1; return null; }
     });
     return { readings: readings.filter(Boolean), marketCount: contracts.length, errorCount, error: null };
@@ -224,18 +252,26 @@ async function fetchBitget() {
         fetchJson(`${BITGET_BASE}/api/v2/mix/market/tickers?productType=USDT-FUTURES`),
     ]);
     const tickers = new Map(tickersBody.data.map((item) => [item.symbol, item]));
-    const contracts = contractsBody.data.filter((item) => item.symbolStatus === "normal" && tickers.has(item.symbol));
+    const contracts = contractsBody.data.filter((item) => item.symbolStatus === "normal" && item.symbolType === "perpetual" && tickers.has(item.symbol))
+        .sort((a, b) => Number(tickers.get(b.symbol).holdingAmount) * Number(tickers.get(b.symbol).lastPr)
+            - Number(tickers.get(a.symbol).holdingAmount) * Number(tickers.get(a.symbol).lastPr));
     let errorCount = 0;
     const readings = await mapLimit(contracts, 6, async (contract) => {
         const ticker = tickers.get(contract.symbol);
         const price = finiteNumber(ticker?.lastPr);
-        const oiUsd = finiteNumber(ticker?.holdVol) * finiteNumber(contract?.sizeMultiplier) * price;
+        const oiUsd = finiteNumber(ticker?.holdingAmount) * price;
         if (!price || !oiUsd || !Number.isFinite(oiUsd)) return null;
         try {
-            const history = await fetchJson(`${BITGET_BASE}/api/v2/mix/market/account-long-short?symbol=${encodeURIComponent(contract.symbol)}&productType=USDT-FUTURES&period=5m`);
+            const historyUrl = `${BITGET_BASE}/api/v2/mix/market/account-long-short?symbol=${encodeURIComponent(contract.symbol)}&productType=USDT-FUTURES`;
+            const [history, hourly] = await Promise.all([
+                fetchJson(`${historyUrl}&period=5m`), fetchJson(`${historyUrl}&period=1h`),
+            ]);
             const normalized = canonicalAsset(contract.baseCoin);
-            return { exchange: "bitget", symbol: contract.symbol, asset: normalized.asset, price: price / normalized.priceDivisor,
-                priceChange24hPct: null, openInterestUsd: oiUsd, points: parseRatioHistory(history.data, "ts", "longShortAccountRatio") };
+            const reading = { exchange: "bitget", symbol: contract.symbol, asset: normalized.asset, price: price / normalized.priceDivisor,
+                priceChange24hPct: null, openInterestUsd: oiUsd, points: parseRatioHistory(history.data, "ts", "longShortAccountRatio"),
+                longWindowPoints: parseRatioHistory(hourly.data, "ts", "longShortAccountRatio") };
+            publishReading(reading);
+            return reading;
         } catch { errorCount += 1; return null; }
     });
     return { readings: readings.filter(Boolean), marketCount: contracts.length, errorCount, error: null };
@@ -444,15 +480,20 @@ function latestPointInBar(points, barStart, barEnd) {
     }
     return latest;
 }
-function buildChange(timeframe, duration, readings) {
+export function buildChange(timeframe, duration, readings) {
+    const latestTimestamp = Math.max(0, ...readings.map((reading) => reading.points.at(-1)?.timestamp ?? 0));
+    const currentBarStart = Math.floor(latestTimestamp / duration) * duration;
     const currentSamples = readings.flatMap((reading) => {
         const latest = reading.points[reading.points.length - 1];
         if (!latest)
             return [];
-        const currentBarStart = Math.floor(latest.timestamp / duration) * duration;
-        const current = latestPointInBar(reading.points, currentBarStart, currentBarStart + duration) ?? latest;
-        const previous = latestPointInBar(reading.points, currentBarStart - duration, currentBarStart);
+        const current = latestPointInBar(reading.points, currentBarStart, currentBarStart + duration);
+        const previous = latestPointInBar(reading.points, currentBarStart - duration, currentBarStart)
+            ?? (duration >= 4 * 60 * 60_000 && reading.longWindowPoints
+                ? latestPointInBar(reading.longWindowPoints, currentBarStart - duration, currentBarStart) : undefined);
+        if (!current || !previous) return [];
         return [{
+                exchange: reading.exchange,
                 ratio: current.ratio,
                 weight: reading.openInterestUsd,
                 timestamp: current.timestamp,
@@ -489,12 +530,14 @@ function buildChange(timeframe, duration, readings) {
         currentTimestamp: isoDate(currentTimestamp),
         previousTimestamp: isoDate(previousTimestamp),
         sourceCount: previousSamples.length,
+        exchanges: [...new Set(currentSamples.map((sample) => sample.exchange).filter(Boolean))],
     };
 }
 function createRows(readings) {
     const grouped = new Map();
     for (const reading of readings) {
-        if (!reading.points.length || reading.openInterestUsd <= 0)
+        if (!reading.points.length || reading.openInterestUsd <= 0 || !(reading.price > 0)
+            || Date.now() - reading.points.at(-1).timestamp > 15 * 60_000)
             continue;
         const group = grouped.get(reading.asset) ?? [];
         group.push(reading);
@@ -573,66 +616,37 @@ function publishSnapshot() {
     }
     cachedSnapshot = {
         generatedAt: new Date(),
-        isRefreshing: Boolean(refreshTask),
+        isRefreshing: activeProviderTasks.size > 0,
         totalMarkets: rows.length,
         coverage: { binance, bybit, both, binanceOnly, bybitOnly },
         sources: exchanges.map(makeSourceStatus),
         rows,
     };
 }
-async function runRefresh() {
-    lastAttemptAt = Date.now();
-    cachedSnapshot = { ...cachedSnapshot, isRefreshing: true };
-    const exchanges = ["binance", "bybit", "okx", "gate", "bitget"];
-    for (const exchange of exchanges) {
-        exchangeStates[exchange] = { ...exchangeStates[exchange], status: "refreshing", error: null };
-    }
-    cachedSnapshot = {
-        ...cachedSnapshot,
-        isRefreshing: true,
-        sources: exchanges.map(makeSourceStatus),
-    };
-    const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget };
-    const results = await Promise.allSettled(exchanges.map((exchange) => fetchers[exchange]()));
-    const now = new Date();
-    results.forEach((result, index) => {
-        const exchange = exchanges[index];
-        if (result.status === "fulfilled") {
-            const value = result.value;
-            if (value.readings.length) sourceReadings[exchange] = value.readings;
-            exchangeStates[exchange] = {
-                status: value.errorCount > 0 ? "delayed" : "live",
-                marketCount: value.readings.length,
-                updatedAt: now,
-                error: value.error ?? (value.errorCount ? `${value.errorCount} market requests did not return complete data.` : null),
-            };
-        } else {
-            exchangeStates[exchange] = {
-                ...exchangeStates[exchange],
-                status: sourceReadings[exchange].length ? "delayed" : "error",
-                error: result.reason instanceof Error ? result.reason.message : `${exchange} request failed.`,
-            };
-        }
-    }
-    cachedSnapshot = { ...cachedSnapshot, isRefreshing: false };
-    publishSnapshot();
-    logger.info({
-        exchangeMarkets: Object.fromEntries(exchanges.map((exchange) => [exchange, exchangeStates[exchange].marketCount])),
-        aggregateAssets: cachedSnapshot.totalMarkets,
-    }, "Perpetual LSAR market snapshot refreshed");
-}
 export function getLsarMarketSnapshot() {
-    if (!refreshTask && Date.now() - lastAttemptAt >= REFRESH_INTERVAL_MS) {
-        refreshTask = runRefresh()
-            .catch((error) => {
-            logger.error({ err: error }, "Perpetual LSAR refresh failed");
-            cachedSnapshot = { ...cachedSnapshot, isRefreshing: false };
-        })
-            .finally(() => {
-            refreshTask = null;
-            cachedSnapshot = { ...cachedSnapshot, isRefreshing: false };
+    const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget };
+    for (const [exchange, fetcher] of Object.entries(fetchers)) {
+        if (activeProviderTasks.has(exchange) || Date.now() - (lastProviderAttempts.get(exchange) ?? 0) < REFRESH_INTERVAL_MS) continue;
+        lastProviderAttempts.set(exchange, Date.now());
+        exchangeStates[exchange] = { ...exchangeStates[exchange], status: "refreshing", error: null };
+        const task = fetcher().then((result) => {
+            if (result.readings.length) sourceReadings[exchange] = result.readings;
+            exchangeStates[exchange] = {
+                status: !result.readings.length ? "error" : result.errorCount ? "delayed" : "live",
+                marketCount: result.readings.length,
+                updatedAt: new Date(),
+                error: result.error ?? (result.errorCount ? `${result.errorCount} markets did not return complete account-ratio data.` : null),
+            };
+            logger.info({ exchange, markets: result.readings.length }, "Exchange account-ratio scan completed");
+        }).catch((error) => {
+            exchangeStates[exchange] = { ...exchangeStates[exchange], status: sourceReadings[exchange].length ? "delayed" : "error", error: String(error.message ?? error) };
+        }).finally(() => {
+            activeProviderTasks.delete(exchange);
+            publishSnapshot();
         });
+        activeProviderTasks.set(exchange, task);
     }
+    publishSnapshot();
     return cachedSnapshot;
 }
 export function getLsarMarketSummary(timeframe) {

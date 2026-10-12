@@ -20,6 +20,7 @@ export interface LsarChange {
   currentTimestamp: string | null;
   previousTimestamp: string | null;
   sourceCount: number;
+  exchanges: MarketExchange[];
 }
 
 export interface LsarExchangeReading {

@@ -346,7 +346,7 @@
 .market-table td.price-cell { position:sticky;left:0;z-index:2;min-width:126px;width:126px;background:#f8f6ef; }
 .market-table tr:hover td.price-cell { background:#f0eee6; }
 .asset-name { display:block;color:#27373b;font:700 12px var(--app-font-sans);letter-spacing:-.02em; }
-.asset-market { display:block;color:#9aa19b;font-size:9px;margin-top:4px; }
+.asset-market { display:block;color:#76837c;font-size:9px;margin-top:4px;white-space:normal;max-width:190px;line-height:1.5; }
 .price-cell { font-weight:500;color:#2e4143; }
 .change-cell { min-width:88px; }
 .change-value { display:inline-flex;align-items:center;justify-content:flex-end;min-width:61px;padding:4px 6px;border-radius:2px;font-size:10px; }

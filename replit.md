@@ -1,12 +1,13 @@
 # Perpetual LSAR Screener
 
-A live Binance and Bybit perpetual-futures screener for long-short account-ratio changes by timeframe.
+A live Binance, Bybit, OKX, Gate.io, and Bitget perpetual-futures screener for long-short account-ratio changes by timeframe.
 
 ## Run & Operate
 
 - `npm run build` — bundle the React frontend into `dist/`
 - `npm start` — run the Express server (`node server.js`) on `process.env.PORT` or port `10000`
-- No API keys or database are required; exchange market data is fetched from Binance and Bybit.
+- `npm test` — test candle matching and aggregation.
+- No API keys or database are required; exchanges are queried through public market APIs.
 
 ## Stack
 
@@ -22,6 +23,7 @@ A live Binance and Bybit perpetual-futures screener for long-short account-ratio
 
 ## Architecture decisions
 
-- Binance and Bybit readings for the same asset are aggregated using USD open interest as the weight.
-- Each timeframe compares the latest 5-minute observation in the current UTC-aligned candle with the latest observation in the immediately preceding candle.
+- Readings for the same asset are aggregated using USD open interest as the weight.
+- Each timeframe compares matching venues in the current and immediately preceding UTC-aligned candle with identical OI weights. OKX/Bitget fall back to hourly history for previous 4h/24h candles when their limited 5m history does not reach the previous candle.
+- Bitget account data is limited to one request per second. It fills progressively, independently of other scans. All readings older than 15 minutes are excluded.
 - The server applies the maximum-price filter before returning screener rows; the default cap is `$5`, and the UI can request all prices.
