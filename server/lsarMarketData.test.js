@@ -65,6 +65,7 @@ test("multiplier and plain contracts aggregate with per-coin prices and unchange
         const normalized = canonicalAsset(item.base);
         return {
             asset: normalized.asset, exchange: item.exchange, symbol: `${item.base}USDT`,
+            exchangeAsset: item.base,
             price: item.price / normalized.priceDivisor, priceChange24hPct: null,
             openInterestUsd: item.weight,
             points: [{ timestamp: now - period, ratio: item.ratio / 2 }, { timestamp: now, ratio: item.ratio }],
@@ -79,4 +80,44 @@ test("multiplier and plain contracts aggregate with per-coin prices and unchange
     assert.equal(rows[0].exchanges.length, 5);
     assert.ok(Math.abs(rows[0].changes.find((change) => change.timeframe === "5m").ratioChangePct - 100) < 1e-10);
     assert.deepEqual(rows[0].exchangeReadings.map((item) => item.symbol), fixtures.map((item) => `${item.base}USDT`));
+});
+
+function namedReading(exchange, name, weight = 100, symbol = `${name}USDT`) {
+    return {
+        asset: canonicalAsset(name).asset, exchangeAsset: name, exchange, symbol,
+        price: 0.02, priceChange24hPct: null, openInterestUsd: weight,
+        points: [{ timestamp: Date.now(), ratio: 1 }],
+    };
+}
+
+test("display name follows the majority of exchanges, not the highest OI", () => {
+    const rows = createRows([
+        namedReading("binance", "1000X"),
+        namedReading("bybit", "1000X"),
+        namedReading("gate", "X", 1000000),
+    ]);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].asset, "X");
+    assert.equal(rows[0].displayAsset, "1000X");
+});
+
+test("a single-exchange coin retains that exchange's original name", () => {
+    for (const name of ["1000X", "X", "1000x", "x"]) {
+        assert.equal(createRows([namedReading("bybit", name)])[0].displayAsset, name);
+    }
+});
+
+test("multiple contracts on one exchange do not outvote two other exchanges", () => {
+    const rows = createRows([
+        namedReading("binance", "1000X", 1000, "1000XUSDT"),
+        namedReading("binance", "1000X", 1000, "1000XUSDC"),
+        namedReading("binance", "1000X", 1000, "1000XUSD"),
+        namedReading("bybit", "X"), namedReading("gate", "X"),
+    ]);
+    assert.equal(rows[0].displayAsset, "X");
+    assert.equal(rows[0].exchanges.length, 3);
+});
+
+test("tied display-name votes use USD OI as a deterministic tiebreaker", () => {
+    assert.equal(createRows([namedReading("binance", "1000X", 300), namedReading("bybit", "X", 100)])[0].displayAsset, "1000X");
 });

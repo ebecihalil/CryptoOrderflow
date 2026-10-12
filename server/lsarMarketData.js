@@ -212,7 +212,7 @@ async function fetchOkx() {
             const parse = (body) => body.data.map(([timestamp, ratio]) => ({ timestamp: Number(timestamp), ratio: finiteNumber(ratio) ?? 0 }))
                 .filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp);
             const normalized = canonicalAsset(instrument.instId.split("-")[0]);
-            const reading = { exchange: "okx", symbol: instrument.instId, asset: normalized.asset,
+            const reading = { exchange: "okx", symbol: instrument.instId, asset: normalized.asset, exchangeAsset: instrument.instId.split("-")[0],
                 price: price / normalized.priceDivisor, priceChange24hPct: null, openInterestUsd,
                 points: parse(history), longWindowPoints: parse(hourly) };
             publishReading(reading);
@@ -239,7 +239,7 @@ async function fetchGate() {
             const latest = stats.at(-1);
             const openInterestUsd = finiteNumber(latest?.open_interest_usd);
             const normalized = canonicalAsset(contract.name.split("_")[0]);
-            const reading = openInterestUsd > 0 ? { exchange: "gate", symbol: contract.name, asset: normalized.asset, price: price / normalized.priceDivisor,
+            const reading = openInterestUsd > 0 ? { exchange: "gate", symbol: contract.name, asset: normalized.asset, exchangeAsset: contract.name.split("_")[0], price: price / normalized.priceDivisor,
                 priceChange24hPct: null, openInterestUsd, points } : null;
             publishReading(reading);
             return reading;
@@ -268,7 +268,7 @@ async function fetchBitget() {
                 fetchJson(`${historyUrl}&period=5m`), fetchJson(`${historyUrl}&period=1h`),
             ]);
             const normalized = canonicalAsset(contract.baseCoin);
-            const reading = { exchange: "bitget", symbol: contract.symbol, asset: normalized.asset, price: price / normalized.priceDivisor,
+            const reading = { exchange: "bitget", symbol: contract.symbol, asset: normalized.asset, exchangeAsset: contract.baseCoin, price: price / normalized.priceDivisor,
                 priceChange24hPct: null, openInterestUsd: oiUsd, points: parseRatioHistory(history.data, "ts", "longShortAccountRatio"),
                 longWindowPoints: parseRatioHistory(hourly.data, "ts", "longShortAccountRatio") };
             publishReading(reading);
@@ -308,6 +308,7 @@ async function fetchBinanceLinear() {
                 exchange: "binance",
                 symbol: contract.symbol,
                 asset: normalized.asset,
+                exchangeAsset: contract.baseAsset,
                 price: price / normalized.priceDivisor,
                 priceChange24hPct: changes.get(contract.symbol) ?? null,
                 openInterestUsd: openInterest * price,
@@ -359,6 +360,7 @@ async function fetchBinanceCoinM() {
                 exchange: "binance",
                 symbol: contract.symbol,
                 asset: normalized.asset,
+                exchangeAsset: contract.baseAsset,
                 price: price / normalized.priceDivisor,
                 priceChange24hPct: changes.get(contract.symbol) ?? null,
                 openInterestUsd: openInterest * contractSize,
@@ -440,6 +442,7 @@ async function fetchBybitCategory(category) {
                 exchange: "bybit",
                 symbol: contract.symbol,
                 asset: normalized.asset,
+                exchangeAsset: contract.baseCoin,
                 price: priceValue / normalized.priceDivisor,
                 priceChange24hPct: change === null ? null : change * 100,
                 openInterestUsd: category === "inverse" ? oiUsd * priceValue : oiUsd,
@@ -534,6 +537,28 @@ export function buildChange(timeframe, duration, readings) {
         exchanges: [...new Set(currentSamples.map((sample) => sample.exchange).filter(Boolean))],
     };
 }
+function selectDisplayAsset(contracts, fallback) {
+    const venueNames = new Map();
+    for (const reading of contracts) {
+        const name = reading.exchangeAsset || fallback;
+        const key = name.toUpperCase();
+        const names = venueNames.get(reading.exchange) ?? new Map();
+        const existing = names.get(key) ?? { key, name, weight: 0 };
+        existing.weight += reading.openInterestUsd;
+        names.set(key, existing);
+        venueNames.set(reading.exchange, names);
+    }
+    const votes = new Map();
+    for (const names of venueNames.values()) {
+        // Multiple contracts from one venue still count as just one exchange.
+        const candidate = [...names.values()].sort((a, b) => b.weight - a.weight || a.key.localeCompare(b.key))[0];
+        const vote = votes.get(candidate.key) ?? { name: candidate.name, key: candidate.key, count: 0, weight: 0 };
+        vote.count += 1;
+        vote.weight += candidate.weight;
+        votes.set(candidate.key, vote);
+    }
+    return [...votes.values()].sort((a, b) => b.count - a.count || b.weight - a.weight || a.key.localeCompare(b.key))[0]?.name ?? fallback;
+}
 export function createRows(readings) {
     const grouped = new Map();
     for (const reading of readings) {
@@ -563,6 +588,7 @@ export function createRows(readings) {
         const exchanges = [...new Set(contracts.map((reading) => reading.exchange))];
         return {
             asset,
+            displayAsset: selectDisplayAsset(contracts, asset),
             price,
             priceChange24hPct,
             openInterestUsd,

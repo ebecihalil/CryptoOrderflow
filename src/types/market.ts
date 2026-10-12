@@ -35,6 +35,7 @@ export interface LsarExchangeReading {
 
 export interface LsarInstrument {
   asset: string;
+  displayAsset: string;
   price: number;
   priceChange24hPct: number | null;
   openInterestUsd: number;

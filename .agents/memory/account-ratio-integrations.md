@@ -20,3 +20,9 @@ Combine exchange contract names such as `100X`, `1000X`, `10000X`, and `100000X`
 **Why:** the user explicitly wants contracts whose exchanges multiply coin units to reduce displayed zeros aggregated together, not treated as separate coins.
 
 **How to apply:** normalize the name and per-coin price before grouping or price filtering; preserve USD OI and account ratios, and retain original contract symbols in expanded details.
+
+The list's display name follows the majority of contributing exchanges' original coin names: two venues using `1000X` versus one using `X` must display `1000X`. A single-venue coin keeps that venue's original name.
+
+**Why:** the user explicitly requested this naming rule while still aggregating multiplier aliases as one coin.
+
+**How to apply:** count each venue once, not each contract. Keep canonical grouping separate from the displayed name. Tied votes use USD OI, then alphabetical order, to remain deterministic.

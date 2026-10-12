@@ -163,7 +163,9 @@ function Home() {
   const rows = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
     const filtered = (snapshot?.rows ?? []).filter((row) => {
-      const matchesAsset = !searchTerm || row.asset.toLowerCase().includes(searchTerm);
+      const matchesAsset = !searchTerm || row.asset.toLowerCase().includes(searchTerm)
+        || (row.displayAsset ?? row.asset).toLowerCase().includes(searchTerm)
+        || row.exchangeReadings.some((reading) => reading.symbol.toLowerCase().includes(searchTerm));
       const matchesExchange =
         exchangeFilter === 'all' ||
         (exchangeFilter === 'both' ? row.exchanges.length > 1 : row.exchanges.includes(exchangeFilter));
@@ -386,9 +388,9 @@ function FragmentRow({ row, expanded, onToggle }: { row: LsarInstrument; expande
           </span>
         </td>
         <td className="asset-cell">
-          <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.asset} exchange readings`} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, padding: 0, background: 'transparent', textAlign: 'left' }}>
+          <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.displayAsset ?? row.asset} exchange readings`} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, padding: 0, background: 'transparent', textAlign: 'left' }}>
             <span style={{ width: 15, color: '#91a09a', display: 'inline-flex' }}>{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
-            <span><span className="asset-name">{row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
+            <span><span className="asset-name">{row.displayAsset ?? row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
           </button>
         </td>
         {TIMEFRAMES.map((timeframe) => {
