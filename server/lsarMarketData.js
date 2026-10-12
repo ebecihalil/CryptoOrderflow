@@ -537,6 +537,16 @@ export function buildChange(timeframe, duration, readings) {
         exchanges: [...new Set(currentSamples.map((sample) => sample.exchange).filter(Boolean))],
     };
 }
+function isUsableReading(reading, now = Date.now()) {
+    const latest = reading.points?.at(-1);
+    return Number.isFinite(reading.openInterestUsd) && reading.openInterestUsd > 0
+        && Number.isFinite(reading.price) && reading.price > 0
+        && latest?.timestamp > 0 && Number.isFinite(latest.ratio) && latest.ratio > 0
+        && now - latest.timestamp <= 15 * 60_000;
+}
+export function countFetchedReadings(readings, now = Date.now()) {
+    return readings.filter((reading) => isUsableReading(reading, now)).length;
+}
 function selectDisplayAsset(contracts, fallback) {
     const venueNames = new Map();
     for (const reading of contracts) {
@@ -562,8 +572,7 @@ function selectDisplayAsset(contracts, fallback) {
 export function createRows(readings) {
     const grouped = new Map();
     for (const reading of readings) {
-        if (!reading.points.length || reading.openInterestUsd <= 0 || !(reading.price > 0)
-            || Date.now() - reading.points.at(-1).timestamp > 15 * 60_000)
+        if (!isUsableReading(reading))
             continue;
         const group = grouped.get(reading.asset) ?? [];
         group.push(reading);
@@ -614,7 +623,7 @@ function makeSourceStatus(exchange) {
     return {
         exchange,
         status: state.status,
-        marketCount: state.marketCount,
+        marketCount: countFetchedReadings(sourceReadings[exchange]),
         updatedAt: state.updatedAt,
         error: state.error,
     };

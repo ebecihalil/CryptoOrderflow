@@ -26,3 +26,9 @@ The list's display name follows the majority of contributing exchanges' original
 **Why:** the user explicitly requested this naming rule while still aggregating multiplier aliases as one coin.
 
 **How to apply:** count each venue once, not each contract. Keep canonical grouping separate from the displayed name. Tied votes use USD OI, then alphabetical order, to remain deterministic.
+
+Show fetched exchange counts as a single line immediately below the OI-weighted positioning subtitle, with green indicators for successfully fetched data; do not restore coverage boxes.
+
+**Why:** the user requested compact fetch visibility after removing the coverage boxes.
+
+**How to apply:** count fresh, complete contracts independently of the screener's price/exchange filters. Support multi-select exchange filtering rather than a single-choice dropdown.

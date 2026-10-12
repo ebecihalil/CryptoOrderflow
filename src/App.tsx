@@ -1,6 +1,9 @@
 import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { ExchangeFilter } from '@/components/exchange-filter';
+import { FetchedDataLine } from '@/components/fetched-data-line';
+import { MARKET_EXCHANGES, matchesExchangeFilter } from '@/lib/exchange-options';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -121,7 +124,8 @@ function SkeletonRows() {
 function Home() {
   const [timeframe, setTimeframe] = useState<LsarTimeframe>('1h');
   const [sortMode, setSortMode] = useState<'increase' | 'decrease' | 'absolute'>('absolute');
-  const [exchangeFilter, setExchangeFilter] = useState<'all' | MarketExchange | 'both'>('all');
+  const [selectedExchanges, setSelectedExchanges] = useState<MarketExchange[]>([...MARKET_EXCHANGES]);
+  const [multipleOnly, setMultipleOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [maxPrice, setMaxPrice] = useState('5');
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
@@ -166,9 +170,7 @@ function Home() {
       const matchesAsset = !searchTerm || row.asset.toLowerCase().includes(searchTerm)
         || (row.displayAsset ?? row.asset).toLowerCase().includes(searchTerm)
         || row.exchangeReadings.some((reading) => reading.symbol.toLowerCase().includes(searchTerm));
-      const matchesExchange =
-        exchangeFilter === 'all' ||
-        (exchangeFilter === 'both' ? row.exchanges.length > 1 : row.exchanges.includes(exchangeFilter));
+      const matchesExchange = matchesExchangeFilter(row.exchanges, selectedExchanges, multipleOnly);
       return matchesAsset && matchesExchange;
     });
     return filtered.sort((a, b) => {
@@ -181,13 +183,13 @@ function Home() {
       if (sortMode === 'decrease') return aValue - bValue;
       return Math.abs(bValue) - Math.abs(aValue);
     });
-  }, [snapshot?.rows, search, exchangeFilter, timeframe, sortMode]);
+  }, [snapshot?.rows, search, selectedExchanges, multipleOnly, timeframe, sortMode]);
 
   const handleRefresh = () => {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
   };
 
-  const hasActiveFilters = Boolean(search.trim()) || exchangeFilter !== 'all' || maxPriceLimit !== null;
+  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== MARKET_EXCHANGES.length || multipleOnly || maxPriceLimit !== null;
   const latestTimestamp = snapshot?.generatedAt ?? summary?.generatedAt ?? null;
   const latestRatioTimestamp =
     snapshot?.rows.reduce<string | null>((latest, row) => {
@@ -222,6 +224,7 @@ function Home() {
             <div className="eyebrow">Cross-exchange positioning / perpetuals</div>
             <h1 className="page-title">Long Short Account Ratio (LSAR)</h1>
             <p className="page-subtitle">OI-weighted account positioning across perpetual markets. Each coin lists its contributing exchanges.</p>
+            <FetchedDataLine sources={snapshot?.sources} />
           </div>
           <button className="refresh-button" onClick={handleRefresh} disabled={isFetching} data-testid="button-refresh">
             <RefreshCw className={isFetching ? 'spin' : ''} />
@@ -255,15 +258,8 @@ function Home() {
               />
             </label>
             <span className="filter-label">Exchange</span>
-            <select value={exchangeFilter} onChange={(event) => setExchangeFilter(event.target.value as typeof exchangeFilter)} className="select-control" data-testid="select-exchange">
-              <option value="all">All sources</option>
-              <option value="binance">Binance</option>
-              <option value="bybit">Bybit</option>
-              <option value="okx">OKX</option>
-              <option value="gate">Gate.io</option>
-              <option value="bitget">Bitget</option>
-              <option value="both">Multiple sources</option>
-            </select>
+            <ExchangeFilter selected={selectedExchanges} onChange={setSelectedExchanges}
+              multipleOnly={multipleOnly} onMultipleOnlyChange={setMultipleOnly} />
             <span className="filter-label">Window</span>
             <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as LsarTimeframe)} className="select-control" data-testid="select-timeframe">
               {TIMEFRAMES.map((value) => <option key={value} value={value}>{value}</option>)}
