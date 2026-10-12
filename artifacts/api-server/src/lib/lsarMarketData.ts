@@ -518,6 +518,19 @@ function ratioToLongPct(ratio: number | null): number | null {
   return ratio === null ? null : (ratio / (1 + ratio)) * 100;
 }
 
+function latestPointInBar(
+  points: RatioPoint[],
+  barStart: number,
+  barEnd: number,
+): RatioPoint | undefined {
+  let latest: RatioPoint | undefined;
+  for (const point of points) {
+    if (point.timestamp >= barEnd) break;
+    if (point.timestamp >= barStart) latest = point;
+  }
+  return latest;
+}
+
 function buildChange(
   timeframe: LsarTimeframe,
   duration: number,
@@ -525,16 +538,28 @@ function buildChange(
 ): LsarInstrument["changes"][number] {
   const currentSamples = readings.flatMap((reading) => {
     const latest = reading.points[reading.points.length - 1];
-    return latest ? [{ ratio: latest.ratio, weight: reading.openInterestUsd, timestamp: latest.timestamp, reading }] : [];
+    if (!latest) return [];
+    const currentBarStart = Math.floor(latest.timestamp / duration) * duration;
+    const current = latestPointInBar(
+      reading.points,
+      currentBarStart,
+      currentBarStart + duration,
+    ) ?? latest;
+    const previous = latestPointInBar(
+      reading.points,
+      currentBarStart - duration,
+      currentBarStart,
+    );
+    return [{
+      ratio: current.ratio,
+      weight: reading.openInterestUsd,
+      timestamp: current.timestamp,
+      previous,
+    }];
   });
   const currentRatio = weightedRatio(currentSamples);
   const previousSamples = currentSamples.flatMap((sample) => {
-    const target = sample.timestamp - duration;
-    let previous: RatioPoint | undefined;
-    for (const point of sample.reading.points) {
-      if (point.timestamp <= target) previous = point;
-      else break;
-    }
+    const previous = sample.previous;
     return previous ? [{ ratio: previous.ratio, weight: sample.weight, timestamp: previous.timestamp }] : [];
   });
   const previousRatio = weightedRatio(previousSamples);

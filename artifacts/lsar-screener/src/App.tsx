@@ -369,7 +369,7 @@ function Home() {
                           ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
                           : <ArrowDownUp aria-hidden="true" />}
                       </button>
-                      <span className="subhead">ratio-relative / long-share Δ</span>
+                      <span className="subhead">ratio-relative % / long-share Δpp</span>
                     </th>
                   ))}
                   <th scope="col">Current LSAR <span className="subhead">ratio / long share</span></th>
@@ -403,7 +403,7 @@ function Home() {
 
         <div className="footnote" data-testid="text-ratio-disclaimer">
           <Info />
-          <span><strong>Read this correctly.</strong> Long-short ratios count accounts, not position size. They do not identify institutions versus retail, and should not be read as a direct measure of who holds the larger notional exposure. Linear USDT/USDC and inverse USD perpetuals are included; overlapping assets are combined using USD open-interest weights, while single-exchange assets use that venue’s reading. Exchange scans run about every five minutes; account-ratio observations arrive in 5-minute bins and can lag the fetch time, so expanded rows show each contract’s observation timestamp.</span>
+          <span><strong>Read this correctly.</strong> Each timeframe compares the latest available LSAR sample in the current UTC-aligned candle with the latest sample in the immediately previous candle; the current candle is still forming. The first change value is the ratio-relative percent, followed by the long-share change in percentage points. Long-short ratios count accounts, not position size. They do not identify institutions versus retail, and should not be read as a direct measure of who holds the larger notional exposure. Linear USDT/USDC and inverse USD perpetuals are included; overlapping assets are combined using USD open-interest weights, while single-exchange assets use that venue’s reading. Exchange scans run about every five minutes; account-ratio observations arrive in 5-minute bins and can lag the fetch time, so expanded rows show each contract’s observation timestamp.</span>
         </div>
         <div className="footline">
           <span>PERPETUAL LSAR SCREENER / ACCOUNT-BASED POSITIONING</span>
