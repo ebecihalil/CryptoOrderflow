@@ -46,11 +46,6 @@ function exchangeLabel(exchange: string) {
   return isKnownExchange(exchange) ? EXCHANGE_LABELS[exchange] : brandLabels[exchange.toLowerCase()] ?? exchange;
 }
 
-function ExchangeMark({ exchange }: { exchange: string }) {
-  if (isKnownExchange(exchange)) return <ExchangeLogo exchange={exchange} />;
-  return <span className="funding-exchange-fallback" aria-hidden="true">{exchange.slice(0, 2).toUpperCase()}</span>;
-}
-
 function formatPct(value: number | null | undefined, digits = 4) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: digits }).format(Math.abs(value));
@@ -167,7 +162,7 @@ function FundingExchangeFilter({
                   onChange(next.length === exchanges.length ? null : next);
                 }}
               />
-              <ExchangeMark exchange={exchange} /><span>{exchangeLabel(exchange)}</span>
+              <ExchangeLogo exchange={exchange} /><span>{exchangeLabel(exchange)}</span>
             </label>
           ))}
         </fieldset>
@@ -184,12 +179,14 @@ function sortValue(row: FundingRow, field: SortField): number | null {
 function SortButton({
   field,
   label,
+  exchange,
   sortField,
   direction,
   onSort,
 }: {
   field: SortField;
   label: string;
+  exchange?: string;
   sortField: SortField;
   direction: SortDirection;
   onSort: (field: SortField) => void;
@@ -199,7 +196,9 @@ function SortButton({
     <button type="button" className="funding-sort-button" onClick={() => onSort(field)}
       aria-label={`Sort by ${label} funding rate ${active && direction === 'desc' ? 'ascending' : 'descending'}`}
       aria-pressed={active}>
-      <span>{label}</span>
+      {exchange
+        ? <span className="funding-exchange-title"><ExchangeLogo exchange={exchange} /><span>{label}</span></span>
+        : <span>{label}</span>}
       {active ? direction === 'asc' ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" /> : <ArrowDownUp aria-hidden="true" />}
     </button>
   );
@@ -371,7 +370,7 @@ export function FundingPage() {
                     <small>{timeframe === 'current' ? 'normalized 8h' : `${periodLabel(timeframe)} settled sum`}</small>
                   </th>
                   {exchanges.map((exchange) => <th key={exchange} scope="col" aria-sort={sortField === exchange ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
-                    <SortButton field={exchange} label={exchangeLabel(exchange)} sortField={sortField} direction={sortDirection} onSort={handleSort} />
+                    <SortButton field={exchange} exchange={exchange} label={exchangeLabel(exchange)} sortField={sortField} direction={sortDirection} onSort={handleSort} />
                     <small>{timeframe === 'current' ? 'normalized 8h' : 'settled sum'}</small>
                   </th>)}
                 </tr>
@@ -449,7 +448,7 @@ function FundingExtremeList({
           <li key={`${item.asset}-${item.exchange}-${index}`}>
             <span className="funding-extreme-rank">{String(index + 1).padStart(2, '0')}</span>
             <CoinLogo asset={item.asset} />
-            <span className="funding-extreme-name"><strong>{item.asset}</strong><small><ExchangeMark exchange={item.exchange} />{exchangeLabel(item.exchange)}</small></span>
+            <span className="funding-extreme-name"><strong>{item.asset}</strong><small><ExchangeLogo exchange={item.exchange} />{exchangeLabel(item.exchange)}</small></span>
             <span className={`funding-extreme-value ${item.valuePct > 0 ? 'is-positive' : item.valuePct < 0 ? 'is-negative' : ''}`}>
               {formatPct(item.valuePct)}
               <small>{item.nativeRatePct === null ? 'native unavailable' : `${formatPct(item.nativeRatePct)} (${item.intervalHours === null ? 'interval unknown / mixed' : `${item.intervalHours}h`})`}</small>

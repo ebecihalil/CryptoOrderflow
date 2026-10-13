@@ -87,16 +87,18 @@
 .funding-table-meta > span:last-child { display:inline-flex;align-items:center;gap:5px;white-space:nowrap; }
 .funding-table-shell { overflow:hidden;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
 .funding-table-scroll { max-width:100%;overflow-x:auto;overscroll-behavior-x:contain; }
-.funding-table { width:100%;min-width:980px;border-collapse:collapse;table-layout:fixed;font:12px/1.45 var(--app-font-mono); }
+.funding-table { width:100%;min-width:1280px;border-collapse:collapse;table-layout:fixed;font:12px/1.45 var(--app-font-mono); }
 .funding-table th { padding:10px 4px;background:var(--lsar-table-head);border-bottom:1px solid var(--lsar-border);color:var(--lsar-muted);text-align:center;font-size:12px;font-weight:600;vertical-align:bottom; }
-.funding-table th:first-child { width:150px;text-align:left; }
-.funding-table th:nth-child(2) { width:165px; }
+.funding-table th:first-child { width:120px;text-align:left; }
+.funding-table th:nth-child(2) { width:150px; }
 .funding-table th small { display:block;margin-top:4px;color:var(--lsar-muted);font:11px var(--app-font-mono);text-transform:none; }
-.funding-sort-button { display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:uppercase;line-height:1.35;cursor:pointer; }
+.funding-sort-button { display:inline-flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;max-width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:uppercase;line-height:1.35;cursor:pointer; }
 .funding-sort-button:hover { color:var(--lsar-accent); }
 .funding-sort-button:focus-visible,.funding-timeframes button:focus-visible,.funding-table-scroll:focus-visible { outline:2px solid var(--lsar-accent);outline-offset:2px; }
 .funding-sort-button svg { width:11px;height:11px;flex:none;color:var(--lsar-accent); }
+.funding-sort-button .exchange-logo { width:14px;height:14px;flex:none;object-fit:contain;border-radius:3px; }
 .funding-sort-button > span { min-width:0;overflow-wrap:anywhere; }
+.funding-sort-button > .funding-exchange-title { display:inline-flex;align-items:center;gap:4px;flex-shrink:0;white-space:nowrap;overflow-wrap:normal;font-family:var(--app-font-sans);text-transform:none; }
 .funding-table td { display:table-cell;padding:9px 4px;border-bottom:0;text-align:center;vertical-align:middle;color:var(--lsar-body-ink); }
 .funding-table tbody tr { border-bottom:1px solid var(--lsar-rule); }
 .funding-table tbody tr:last-child { border-bottom:0; }

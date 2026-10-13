@@ -5,5 +5,17 @@
   "okx": "https://coin-images.coingecko.com/markets/images/96/small/WeChat_Image_20220117220452.png?1706864283",
   "gate": "https://coin-images.coingecko.com/markets/images/60/small/Frame_1.png?1747795534",
   "bitget": "https://coin-images.coingecko.com/markets/images/540/small/2023-07-25_21.47.43.jpg?1706864507",
-  "toobit": "https://coin-images.coingecko.com/markets/images/1139/small/Toobit_logo400X400.png?1706865157"
+  "toobit": "https://coin-images.coingecko.com/markets/images/1139/small/Toobit_logo400X400.png?1706865157",
+  "fundingCatalogs": [
+    "https://api.coingecko.com/api/v3/derivatives/exchanges",
+    "https://api.coingecko.com/api/v3/exchanges?per_page=250"
+  ],
+  "mexc": "https://coin-images.coingecko.com/markets/images/409/small/164286be-32a5-4b58-978c-d072eea00eb9.jpeg?1775619316",
+  "kucoin": "https://coin-images.coingecko.com/markets/images/61/small/kucoin.png?1706864282",
+  "kraken": "https://coin-images.coingecko.com/markets/images/29/small/kraken.jpg?1706864265",
+  "bingx": "https://coin-images.coingecko.com/markets/images/812/small/YtFwQwJr_400x400.jpg?1706864837",
+  "hyperliquid": "https://coin-images.coingecko.com/markets/images/1208/small/Hyperliquid_logo.png?1706865217",
+  "htx": "https://coin-images.coingecko.com/markets/images/25/small/htx.png?1721712842",
+  "deribit": "https://coin-images.coingecko.com/markets/images/1144/small/deribit-spot.jpg?1756737820",
+  "aster": "https://coin-images.coingecko.com/markets/images/22084/small/aster-profile-200.png?1756966162"
 }
