@@ -149,7 +149,7 @@ test("OI collection shares Funding inventory, persists real observations and has
     const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
     assert.match(read("server/openInterestMarketData.js"), /getPerpetualInventory\(\)/);
     assert.match(read("server/openInterestMarketData.js"), /points\.at\(-1\)\?\.timestamp === item\.fetchedAt/);
-    assert.match(read("server/openInterestMarketData.js"), /setInterval\(\(\) => inventoryAndSamples\(Date\.now\(\)\), 30_000\)/);
+    assert.match(read("server/openInterestMarketData.js"), /setInterval\(backgroundTick, 30_000\)/);
     assert.match(read("server/openInterestVolume.js"), /requestJson/);
     assert.match(read("server.js"), /app\.get\("\/api\/market\/open-interest"/);
     assert.doesNotMatch(read("src/hooks/use-open-interest-snapshot.ts"), /force|localhost/);

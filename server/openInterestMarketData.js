@@ -1,25 +1,31 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { getPerpetualInventory } from "./fundingMarketData.js";
 import { requestJson, requestGates } from "./exchangeRequests.js";
-import { OI_WINDOWS, buildOiSnapshot, coinSize } from "./openInterestMath.js";
+import { OI_WINDOWS, buildOiSnapshot, coinSize, candlePair, rollingPair } from "./openInterestMath.js";
 import { getCmeState } from "./cmeOpenInterest.js";
-import { fetchOiHistory, hasOiBackfill } from "./openInterestHistory.js";
+import { fetchOiHistoryWindow, hasOiBackfill, mergeOiPoints } from "./openInterestHistory.js";
 import { volumeSupplement } from "./openInterestVolume.js";
+import { createOiHistoryQueue } from "./oiHistoryQueue.js";
+import { isCryptoAsset } from "./cryptoAssets.js";
 
-const directory = fileURLToPath(new URL("../.cache/open-interest/", import.meta.url));
-const histories = new Map(), nativeHistories = new Map(), loaded = new Set(), pending = new Set(), attempts = new Map(), active = new Map();
-let timer = null;
+const directory = process.env.OI_HISTORY_DIR ? resolve(process.env.OI_HISTORY_DIR)
+    : fileURLToPath(new URL("../.cache/open-interest/", import.meta.url));
+const histories = new Map(), loaded = new Set(), dirty = new Set(), requestedFrames = new Set(["1h"]);
+const nativeHistories = new Map();
+let timer = null, saveTimer = null;
 const retention = 30 * 3600_000;
+function mergePoints(key, incoming, now) {
+    histories.set(key, mergeOiPoints(histories.get(key) ?? [], incoming, now));
+}
 function load(exchange) {
     if (loaded.has(exchange)) return;
     loaded.add(exchange);
     try {
         const saved = JSON.parse(readFileSync(join(directory, `${exchange}.json`), "utf8"));
         for (const [key, points] of Object.entries(saved))
-            if (Array.isArray(points)) histories.set(key, points.filter(point => Number.isFinite(point.timestamp) &&
-                Date.now() - point.timestamp <= retention && Number.isFinite(point.oiCoin) && point.oiCoin >= 0).slice(-384));
+            if (Array.isArray(points) && key.startsWith(`${exchange}:`)) mergePoints(key, points, Date.now());
     } catch (error) { if (error.code !== "ENOENT") console.warn("OI history cache could not be read:", error.message); }
 }
 function persist(exchange) {
@@ -27,6 +33,18 @@ function persist(exchange) {
     const file = join(directory, `${exchange}.json`);
     const data = Object.fromEntries([...histories].filter(([key]) => key.startsWith(`${exchange}:`)));
     writeFileSync(`${file}.tmp`, JSON.stringify(data)); renameSync(`${file}.tmp`, file);
+}
+function markDirty(exchange) {
+    dirty.add(exchange);
+    if (saveTimer) return;
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        for (const exchange of dirty) {
+            try { persist(exchange); } catch (error) { console.warn("OI history cache could not be saved:", error.message); }
+        }
+        dirty.clear();
+    }, 2000);
+    saveTimer.unref();
 }
 function inventoryAndSamples(now) {
     const raw = getPerpetualInventory(), states = {};
@@ -42,53 +60,62 @@ function inventoryAndSamples(now) {
         let changed = false;
         for (const item of readings) {
             const quantity = coinSize(item);
-            if (quantity === null || now - item.fetchedAt > 900_000) continue;
+            if (!Number.isFinite(quantity) || !Number.isFinite(item.fetchedAt) ||
+                item.fetchedAt > now || now - item.fetchedAt > 900_000) continue;
             const key = `${exchange}:${item.symbol}`, points = histories.get(key) ?? [];
             // Only record an actually new provider observation, never a browser refresh.
-            if (points.at(-1)?.timestamp === item.fetchedAt) continue;
-            points.push({ timestamp: item.fetchedAt, oiCoin: quantity });
-            histories.set(key, points.filter(point => now - point.timestamp <= retention).slice(-384));
+            if (points.at(-1)?.timestamp === item.fetchedAt || points.some(point => point.timestamp === item.fetchedAt)) continue;
+            mergePoints(key, [{ timestamp: item.fetchedAt, oiCoin: quantity }], now);
             changed = true;
         }
         for (const [key, points] of histories)
             if (key.startsWith(`${exchange}:`) && points.at(-1)?.timestamp < now - retention) histories.delete(key);
-        if (changed) { try { persist(exchange); } catch (error) { console.warn("OI history cache could not be saved:", error.message); } }
+        if (changed) markDirty(exchange);
     }
     states.cme = getCmeState(states, now);
     return states;
 }
-function queueHistory(item, timeframe, now) {
-    if (!hasOiBackfill(item) || requestGates[item.exchange].isCoolingDown) return;
-    const key = `${item.exchange}:${item.symbol}:${timeframe}`, bucket = Math.floor(now / OI_WINDOWS[timeframe]);
-    const previous = attempts.get(key);
-    if (pending.has(key) || (active.get(item.exchange) ?? 0) >= 2 ||
-        (previous?.bucket === bucket && (previous.ok || now - previous.time < 300_000))) return;
-    attempts.set(key, { bucket, time: now, ok: false });
-    pending.add(key); active.set(item.exchange, (active.get(item.exchange) ?? 0) + 1);
-    fetchOiHistory(requestJson, item, timeframe, now).then(points => {
-        nativeHistories.set(key, points); attempts.set(key, { bucket, time: now, ok: points.length > 0 });
-    }).catch(() => { /* Unavailable history is excluded from changes, not given a synthetic zero. */ })
-        .finally(() => { pending.delete(key); active.set(item.exchange, active.get(item.exchange) - 1); });
+const queue = createOiHistoryQueue({
+    supported: hasOiBackfill,
+    isCoolingDown: exchange => requestGates[exchange]?.isCoolingDown,
+    needed(item) {
+        const now = Date.now(), points = histories.get(`${item.exchange}:${item.symbol}`) ?? [];
+        return !rollingPair(points, now) || [...requestedFrames].some(frame => !candlePair(points, frame, now));
+    },
+    fetchHistory: (item, now) => fetchOiHistoryWindow(requestJson, item, now),
+    onPoints(item, points) {
+        mergePoints(`${item.exchange}:${item.symbol}`, points, Date.now());
+        markDirty(item.exchange);
+    },
+});
+function schedule(states, now) {
+    const readings = Object.values(states).flatMap(state => state.readings)
+        .filter(item => item.exchange !== "cme" && now - item.fetchedAt <= 900_000)
+        .sort((a, b) => Number(isCryptoAsset(b.asset)) - Number(isCryptoAsset(a.asset)) || b.oiUsd - a.oiUsd);
+    queue.schedule(readings);
 }
-export function getOpenInterestSnapshot(timeframe = "1h", selection = []) {
+function backgroundTick() {
+    try { const now = Date.now(); schedule(inventoryAndSamples(now), now); }
+    catch (error) { console.warn("OI background collection failed:", error.message); }
+}
+export function getOpenInterestSnapshot(timeframe = "1h", selection = [], comparison = "candle") {
     if (!Object.hasOwn(OI_WINDOWS, timeframe)) throw new Error("Invalid OI timeframe");
+    if (comparison === "candle") requestedFrames.add(timeframe);
     const now = Date.now(), states = inventoryAndSamples(now);
     if (!timer) {
         // Sampling continues while the service runs, even when users close the page.
-        timer = setInterval(() => inventoryAndSamples(Date.now()), 30_000);
+        timer = setInterval(backgroundTick, 30_000);
         timer.unref();
+        setTimeout(backgroundTick, 2000).unref();
     }
-    const readings = Object.values(states).flatMap(state => state.readings)
-        .filter(item => item.exchange !== "cme" && now - item.fetchedAt <= 900_000 &&
-            (!selection.length || selection.includes(item.exchange)))
-        .sort((a, b) => b.oiUsd - a.oiUsd);
-    for (const item of readings) queueHistory(item, timeframe, now);
-    const snapshot = buildOiSnapshot(states, histories, nativeHistories, timeframe, now, selection);
-    return { ...snapshot, isRefreshing: snapshot.isRefreshing || pending.size > 0,
+    schedule(states, now);
+    const snapshot = buildOiSnapshot(states, histories, nativeHistories, timeframe, now, selection, { comparison });
+    return { ...snapshot, isRefreshing: snapshot.isRefreshing || queue.pendingCount > 0,
         notes: [
             "OI contract size is expressed in equivalent underlying-coin units, not a sum of incompatible exchange contract counts. OI is summed, not OI-weighted.",
-            "TF change compares the latest available observations in the current and previous candle, using the same contracts on both sides. Contracts without a prior observation are excluded from change rankings, not shown as zero.",
-            "Binance, Bybit and Gate linear contracts backfill verified five-minute OI history. Other contracts build history from collected snapshots; shorter TF changes appear first, with longer TFs available as history accumulates.",
+            "Table TF change compares the latest available observations in the current and previous candle, using the same contracts on both sides. Missing baselines are unavailable, not zero.",
+            "Top gainers/losers use rolling 24-hour coin-equivalent OI changes, independently of table TF. A baseline must be at or up to five minutes before each venue's latest observation minus 24 hours. Only verified crypto identities qualify; stocks, ETFs, commodities and unverified identities are excluded from rankings. Coverage counts show coins with at least one matched venue, not complete coverage of all venues.",
+            "Binance, Bybit and Gate linear contracts backfill shared five-minute history in a fair background queue. Other contracts build history from genuine collected snapshots; longer TFs require time to accumulate. Shared exchange limits/cooldowns apply to all requests.",
             "OI / 24H Volume uses the same venues with verified rolling 24-hour volume. CME trading-day volume is excluded. Base-denominated volumes are valued at the latest quote.",
             snapshot.cmeReportDates.length
                 ? `CME daily reports included in total OI: ${snapshot.cmeReportDates.join(", ")}. Standard and Micro contracts are converted to underlying-coin units and marked using current crypto-exchange prices. CME is excluded from intraday changes.`

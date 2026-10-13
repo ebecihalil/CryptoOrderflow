@@ -1,5 +1,8 @@
 import { requestGates, requestJson as fetchJson } from "./exchangeRequests.js";
 import { BinanceCooldownError } from "./binanceRequestGate.js";
+import { canonicalAsset } from "./assetIdentity.js";
+import { isNonCryptoAsset, isCryptoAsset } from "./cryptoAssets.js";
+export { canonicalAsset };
 
 const logger = {
     info(details, message) {
@@ -61,19 +64,6 @@ function finiteNumber(value) {
 }
 function isoDate(timestamp) {
     return timestamp && Number.isFinite(timestamp) ? new Date(timestamp) : null;
-}
-export function canonicalAsset(base) {
-    base = base.trim().toUpperCase();
-    const letterMultiplier = base.match(/^1([KM])([A-Z].*)$/i);
-    if (letterMultiplier) {
-        const multiplier = letterMultiplier[1].toUpperCase() === "M" ? 1_000_000 : 1_000;
-        return { asset: letterMultiplier[2], priceDivisor: multiplier };
-    }
-    const match = base.match(/^(10{2,})([A-Z].*)$/i);
-    if (!match)
-        return { asset: base, priceDivisor: 1 };
-    const multiplier = Number(match[1]);
-    return Number.isSafeInteger(multiplier) ? { asset: match[2], priceDivisor: multiplier } : { asset: base, priceDivisor: 1 };
 }
 async function mapLimit(values, limit, work) {
     const results = new Array(values.length);
@@ -562,7 +552,7 @@ export function selectDisplayAsset(contracts, fallback) {
 export function createRows(readings) {
     const grouped = new Map();
     for (const reading of readings) {
-        if (!isUsableReading(reading))
+        if (!isUsableReading(reading) || isNonCryptoAsset(reading.asset))
             continue;
         const group = grouped.get(reading.asset) ?? [];
         group.push(reading);
@@ -620,7 +610,8 @@ function makeSourceStatus(exchange) {
 }
 function publishSnapshot() {
     const exchanges = Object.keys(exchangeStates);
-    const rows = createRows(exchanges.flatMap((exchange) => sourceReadings[exchange]));
+    const rows = createRows(exchanges.flatMap((exchange) => sourceReadings[exchange])
+        .filter(reading => isCryptoAsset(reading.asset)));
     let binance = 0;
     let bybit = 0;
     let both = 0;

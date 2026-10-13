@@ -8,6 +8,14 @@ export function hasOiBackfill(item) {
         (item.exchange === "bybit" && /(?:USDT|USDC)$/.test(item.symbol)) ||
         (item.exchange === "gate" && item.symbol.endsWith("_USDT") && item.contractSizeCoin > 0);
 }
+export function mergeOiPoints(existing, incoming, now) {
+    // Keep native 5m observations AND real sampled quotes. A 384-point cap
+    // would truncate a 24h baseline once both streams filled the same window.
+    return [...new Map([...existing, ...incoming]
+        .filter(point => Number.isFinite(point.timestamp) && point.timestamp <= now &&
+            now - point.timestamp <= 30 * 3600_000 && Number.isFinite(point.oiCoin) && point.oiCoin >= 0)
+        .map(point => [point.timestamp, point])).values()].sort((a, b) => a.timestamp - b.timestamp).slice(-768);
+}
 export async function fetchOiHistory(request, item, timeframe, now) {
     const boundary = Math.floor(now / OI_WINDOWS[timeframe]) * OI_WINDOWS[timeframe];
     const start = boundary - 300_000, divisor = canonicalAsset(item.exchangeAsset).priceDivisor;
@@ -57,7 +65,7 @@ export async function fetchOiHistoryWindow(request, item, now, hours = 30) {
     } else {
         // Conservative chunk sizes: <=180 Bybit points, <=84 Gate points.
         const span = (item.exchange === "bybit" ? 15 : 7) * 3600_000;
-        for (let from = start; from <= now; from += span) {
+        for (let from = start; from < now; from += span) {
             const to = Math.min(now, from + span - 1);
             if (item.exchange === "bybit") {
                 const result = await request(`https://api.bybit.com/v5/market/open-interest?category=linear&symbol=${encodeURIComponent(item.symbol)}&intervalTime=5min&startTime=${from}&endTime=${to}&limit=200`);
@@ -66,7 +74,7 @@ export async function fetchOiHistoryWindow(request, item, now, hours = 30) {
                     oiCoin: scaled(number(point.singleOpenInterest) ??
                         (number(point.openInterest) !== null ? number(point.openInterest) / 2 : null), divisor) })));
             } else if (item.exchange === "gate" && item.contractSizeCoin > 0) {
-                const result = await request(`https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract=${encodeURIComponent(item.symbol)}&from=${Math.floor(from / 1000)}&to=${Math.floor(to / 1000)}&interval=5m&limit=100`);
+                const result = await request(`https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract=${encodeURIComponent(item.symbol)}&from=${Math.floor(from / 1000)}&interval=5m&limit=100`);
                 if (!Array.isArray(result)) throw new Error("Invalid Gate OI history");
                 raw.push(...result.map(point => ({ timestamp: number(point.time) === null ? null : number(point.time) * 1000,
                     oiCoin: scaled(point.open_interest, item.contractSizeCoin * divisor / 2) })));

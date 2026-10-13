@@ -15,12 +15,12 @@ function snapshot(readings, timeframe = 'current', histories = new Map()) {
 }
 
 test('all requested multipliers and plain contracts combine into one OI-weighted funding row', () => {
-  const readings = ['100X', '1000X', '10000X', '100000X', 'X'].map((asset, index) =>
+  const readings = ['100PEPE', '1000PEPE', '10000PEPE', '100000PEPE', 'PEPE'].map((asset, index) =>
     reading(['binance', 'bybit', 'okx', 'gate', 'bitget'][index], asset, (index + 1) * 100, (index + 1) * 0.001));
   const result = snapshot(readings);
   assert.equal(result.rows.length, 1);
   const row = result.rows[0];
-  assert.equal(row.asset, 'X');
+  assert.equal(row.asset, 'PEPE');
   assert.equal(row.sourceCount, 5);
   assert.equal(row.aggregateOpenInterestUsd, 1500);
   assert.ok(Math.abs(row.aggregatePct - 550 / 1500) < 1e-12);
@@ -32,29 +32,29 @@ test('all requested multipliers and plain contracts combine into one OI-weighted
 });
 
 test('majority naming counts exchanges, and single-exchange names remain unchanged', () => {
-  const rows = snapshot([reading('binance', '1000X', 50), reading('bybit', '1000X', 50), reading('gate', 'X', 900)]).rows;
-  assert.equal(rows[0].displayAsset, '1000X');
-  for (const asset of ['100X', '1000X', '10000X', '100000X', 'X']) {
+  const rows = snapshot([reading('binance', '1000PEPE', 50), reading('bybit', '1000PEPE', 50), reading('gate', 'PEPE', 900)]).rows;
+  assert.equal(rows[0].displayAsset, '1000PEPE');
+  for (const asset of ['100PEPE', '1000PEPE', '10000PEPE', '100000PEPE', 'PEPE']) {
     assert.equal(snapshot([reading('bybit', asset, 100)]).rows[0].displayAsset, asset);
   }
 });
 
 test('multiple contracts do not get extra name votes and OI breaks name ties exactly like LSAR', () => {
-  assert.equal(snapshot([reading('binance', '1000X', 100), reading('bybit', 'X', 400)]).rows[0].displayAsset, 'X');
+  assert.equal(snapshot([reading('binance', '1000PEPE', 100), reading('bybit', 'PEPE', 400)]).rows[0].displayAsset, 'PEPE');
   const rows = snapshot([
-    reading('binance', '1000X', 20, 0.001, '1000XUSDT'),
-    reading('binance', '1000X', 20, 0.001, '1000XUSDC'),
-    reading('binance', 'X', 30),
-    reading('bybit', '1000X', 10),
-    reading('gate', 'X', 10),
+    reading('binance', '1000PEPE', 20, 0.001, '1000PEPEUSDT'),
+    reading('binance', '1000PEPE', 20, 0.001, '1000PEPEUSDC'),
+    reading('binance', 'PEPE', 30),
+    reading('bybit', '1000PEPE', 10),
+    reading('gate', 'PEPE', 10),
   ]).rows;
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].displayAsset, '1000X');
+  assert.equal(rows[0].displayAsset, '1000PEPE');
   assert.equal(rows[0].sourceCount, 3);
 });
 
 test('historical funding keeps original contract history keys while combining multiplier aliases', () => {
-  const readings = [reading('binance', '1000X', 100), reading('bybit', 'X', 300)];
+  const readings = [reading('binance', '1000PEPE', 100), reading('bybit', 'PEPE', 300)];
   const histories = new Map(readings.map((item, index) => [`${item.exchange}:${item.symbol}`, {
     from: end - 86400_000, to: end, complete: true,
     points: [{ timestamp: end - 3600_000, ratePct: index === 0 ? 0.1 : 0.3 }],

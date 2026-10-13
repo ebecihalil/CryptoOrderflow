@@ -1,4 +1,5 @@
 import { canonicalAsset, selectDisplayAsset } from "./lsarMarketData.js";
+import { isCryptoAsset } from "./cryptoAssets.js";
 
 export const FUNDING_WINDOWS = { current: 0, "1d": 86400_000, "7d": 7 * 86400_000, "30d": 30 * 86400_000, "1y": 365 * 86400_000 };
 export const FUNDING_LABELS = {
@@ -59,7 +60,7 @@ export function compactHistory(entry) {
 export function buildFundingSnapshot(states, histories, timeframe = "current", now = Date.now()) {
     const end = Math.floor(now / 3600_000) * 3600_000;
     const fresh = Object.values(states).flatMap(state => state.readings)
-        .filter(item => now - item.fetchedAt <= 15 * 60_000 && item.oiUsd > 0);
+        .filter(item => now - item.fetchedAt <= 15 * 60_000 && item.oiUsd > 0 && isCryptoAsset(item.asset));
     const oiByExchange = Object.fromEntries(Object.keys(states).map(exchange => [exchange,
         fresh.filter(item => item.exchange === exchange).reduce((sum, item) => sum + item.oiUsd, 0)]));
     const totalOpenInterestUsd = Object.values(oiByExchange).reduce((sum, value) => sum + value, 0);

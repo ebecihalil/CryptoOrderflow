@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { requestJson } from '../server/exchangeRequests.js';
 import overrides from '../src/data/coin-logo-overrides.json' with { type: 'json' };
+import { buildFinancialIdentityIndex } from '../server/assetClasses.js';
 
 // Explicit identities for major assets whose symbols are also used by unrelated tokens.
 export const VERIFIED_IDS = Object.fromEntries(
@@ -104,6 +105,7 @@ async function main() {
   await mkdir(path.dirname(fileURLToPath(output)), { recursive: true });
   await writeFile(output, JSON.stringify(catalog));
   await writeFile(new URL('../src/data/coin-logo-index.json', import.meta.url), JSON.stringify(buildLogoIndex(catalog)));
+  await writeFile(new URL('../src/data/financial-asset-identities.json', import.meta.url), JSON.stringify(buildFinancialIdentityIndex(coins)));
   console.log(`Saved ${Object.keys(catalog.logos).length} coin logo identities; ${catalog.ambiguous.length} ambiguous tickers withheld.`);
 }
 

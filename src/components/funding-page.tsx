@@ -333,7 +333,7 @@ export function FundingPage() {
             {snapshot
               ? <>OI-weighted aggregate across qualifying venues. Global cutoff: each venue must hold at least {snapshot.oiThresholdPct.toFixed(2)}% of fetched USD open interest; applied globally, not per coin. Fetched denominator: {formatUsd(snapshot.totalOpenInterestUsd)}. Coverage may be incomplete while sources are connecting, delayed, or failed.</>
               : 'OI-weighted aggregate across qualifying venues. Global venue eligibility is based on share of fetched USD open interest, not per-coin share.'}
-            {' '}Current aggregates use current OI weights. Historical settled sums use only venues with complete history, so historical coverage can be narrower; windows end at the latest full UTC hour. Incomplete history is unavailable, not estimated.
+            {' '}Current aggregates use current OI weights. Historical settled sums use only venues with complete history, so historical coverage can be narrower; windows end at the latest full UTC hour. Incomplete history is unavailable, not estimated. Only verified crypto identities are included; stocks/ETFs and unverified tickers are excluded.
           </p>
           {snapshot && !snapshot.universeReady && <strong className="funding-universe-note">Exchange universe still loading; eligibility may change.</strong>}
         </section>

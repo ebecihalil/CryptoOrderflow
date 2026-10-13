@@ -36,12 +36,26 @@ prefer explicitly single-sided fields, and test that unchanged exposure stays
 unchanged after conversion. Reference:
 https://bybit-exchange.github.io/docs/v5/market/open-interest
 
-Top OI gainers and losers always use the 24-hour timeframe, independent of the
-table's selected TF. Keep the table TF controls below these ranking panels and
+Top OI gainers and losers use rolling 24-hour coin-equivalent quantity changes,
+not daily candle changes, and include verified crypto only (no stocks/ETFs).
+They remain independent of the table's candle-based TF. Keep TF controls below ranking panels and
 all methodology/explanation notes below the rest of the page.
 
-**Why:** the user explicitly requested fixed 24-hour rankings and explanations
-out of the middle of the screen.
+**Why:** the user requested fixed 24-hour rankings and explanations out of the
+middle of the screen, then approved rolling crypto-only rankings after incomplete
+coverage and stock/ETF leaders made the earlier rankings misleading.
 
 **How to apply:** changing the table TF must not recalculate, relabel or hide
 the daily rankings. Retain exchange selection and shared rate-limit protection.
+Show matched-history coverage; do not imply partially matched coins represent
+complete cross-exchange coverage or reproduce another site's USD OI metric.
+
+Background history collection must drain fairly without depending on an open
+browser. Do not claim local disk is durable on an ephemeral host.
+
+**Why:** a page-poll-driven, largest-first backfill repeatedly left small assets
+without baselines. Local history cannot survive an external host discarding disk.
+
+**How to apply:** deduplicate shared history across TFs, let bounded workers
+continue queued jobs, and retain rate gates. Preserve real baselines in available
+storage; explain any separately required persistent host storage.

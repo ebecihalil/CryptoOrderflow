@@ -8,3 +8,4 @@
 - [Section navigation](section-navigation.md) — share the complete header, including Home placement and Market Feed, across LSAR, Funding and other sections.
 - [Funding display](funding-display.md) — positive funding is red; negative funding is green, without reversing LSAR or source-status colours.
 - [Open Interest conventions](open-interest-conventions.md) — include authorized daily CME OI in totals, not intraday changes; sum comparable underlying-coin units.
+- [Crypto-only screener scope](crypto-only-market-scope.md) — exclude stocks/ETFs from LSAR and Funding; OI rankings stay crypto-only.

@@ -45,7 +45,7 @@ app.get("/api/market/open-interest", (req, res) => {
   if (selection !== undefined && (typeof selection !== "string" || selection.split(",").some(exchange => !allowed.has(exchange)))) {
     res.status(400).json({ error: "exchanges must be a comma-separated list of supported exchange names." }); return;
   }
-  res.set("Cache-Control", "no-store").json(getOpenInterestSnapshot(timeframe, selection ? [...new Set(selection.split(","))] : []));
+  res.set("Cache-Control", "no-store").json(getOpenInterestSnapshot(timeframe, selection ? [...new Set(selection.split(","))] : [], comparison));
 });
 
 app.get("/api/market/lsar", (req, res) => {

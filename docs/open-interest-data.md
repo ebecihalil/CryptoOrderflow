@@ -10,14 +10,30 @@
   the same matched contracts; unpaired sources are excluded, not assigned zero.
   Percentage change is in coin-equivalent quantity, so a price rise alone does
   not create an increase in linear OI size.
-- Top gainers and losers always use the 24h candle comparison, independently of
-  the table's selected timeframe. Both views reuse the same cached inventory and
-  request gates. Contract sizes display K/M/B abbreviations without changing the
-  underlying quantities used in calculations or sorting.
+- Top gainers and losers use **rolling 24h coin-equivalent quantity change**,
+  independently of the table's selected candle TF. For each contract, compare
+  its latest fresh observation with a baseline at or up to five minutes before
+  that observation minus 24h. No later baseline or interpolated value is used.
+  Both views reuse cached inventory and request gates. Contract sizes display
+  K/M/B without changing calculation or sorting quantities.
+- Rankings require a verified crypto identity from the app's local catalogue.
+  Stocks, ETFs, commodities and unknown identities do not enter rankings.
+  Coverage counts represent crypto coins with at least one paired venue, not
+  complete venue coverage; partially matched coins may differ from other sites.
+  LSAR/Funding likewise include only verified crypto identities, with known
+  financial-contract overrides and stock suffix exclusions. Unclassified new
+  symbols are withheld until identified, not assumed to be crypto.
+- Financial identity exclusions use local provider security metadata (explicit
+  stock/ETF categories and tokenized-security names), not just a few ticker
+  blacklist entries. Crypto catalogues also contain tokenized equities and ETFs:
+  those identity IDs override a crypto-logo match. Metadata is maintained by
+  `npm run update:coin-logos`, reusing that command's listing responses; it is
+  never fetched by market polling, browser reload, or server startup.
 - Binance USD-M, Bybit linear and Gate USDT backfill five-minute OI observations.
-  Other venues/contracts accumulate real observations in a persistent local
-  cache. Missing history is shown as a dash. Longer TFs need a previous-candle
-  observation; their rankings are incomplete until those observations exist.
+  A shared 30h native history serves all TFs and rolling rankings.
+  Other venues/contracts accumulate real observations in a local cache.
+  Missing history is a dash. Longer candle TFs need a previous-candle observation;
+  rolling rankings need a genuine 24h baseline. They remain incomplete until then.
 - Historical counts use the same single-sided basis as current inventory:
   Bybit's `singleOpenInterest` is preferred; documented both-sided
   `openInterest` is halved when that field is absent. Gate's historical
@@ -31,14 +47,26 @@
 ## Requests and caching
 Funding and OI reuse the same current OI inventory, refreshed no more often than
 five minutes per exchange. Extra bulk volume endpoints use the same per-exchange
-request gates. History backfills run with at most two workers per venue, honour
-cooldowns, and cache their prior-candle results for the selected TF's current
-bucket. Refresh and browser reload read shared state rather than forcing scans.
-Sampling continues while the Node process runs after the OI page is first opened.
+request gates. Fair FIFO history queues drain continuously with at most two
+workers per venue, honour cooldowns and deduplicate jobs across TFs and callers.
+Failed attempts wait five minutes; successful but insufficient responses wait
+30 minutes before retrying. Once required baselines exist, new genuine snapshots
+fill history forward without another full backfill.
+Refresh/browser reload reads shared state instead of forcing inventory scans.
+Sampling and backfill scheduling continue while the Node process runs after the
+OI page is first opened, without requiring browser polling. Bybit backfill uses
+two bounded 15h chunks; Gate uses documented `from`/`interval`/`limit` chunks.
 Only new provider observations are saved; repeated reads cannot create history.
-The local `.cache` directory is not deployed/committed. Hosts with ephemeral
-filesystems lose locally sampled history on a rebuild; API backfills reload
-supported venues. Persistent storage is needed to preserve other venue histories.
+Native and sampled observations are merged, deduplicated, pruned after 30h and
+saved atomically with batched writes. Both streams fit the retained point budget.
+
+Default history storage is `.cache/open-interest`, not deployed/committed.
+An optional `OI_HISTORY_DIR` environment setting points to an operator-provided
+persistent directory (for example a mounted host disk outside the repository).
+This setting does **not** provision storage. Ephemeral hosting still loses local
+history on rebuild; supported native backfills reload, while other venues need
+time to collect history again. To retain it across Render deployments, the
+operator must supply persistent storage and set that directory in the host.
 
 ## CME: authorized daily reports
 CME's website explicitly returned HTTP 403 prohibiting automated scraping during
