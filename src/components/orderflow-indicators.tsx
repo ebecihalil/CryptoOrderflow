@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { LiquidityZoneChart } from '@/components/liquidity-zone-chart';
-import { useLiquidityCandles, type LiquidityExchange, type LiquidityTimeframe } from '@/hooks/use-liquidity-candles';
+import { useLiquidityCandles, type LiquidityExchange, type LiquidityTimeframe, type LiquidityVolumeMode } from '@/hooks/use-liquidity-candles';
 import { calculateLiquidityZones, type LiquiditySettings } from '@/lib/liquidity-zones';
 import '@/styles/liquidity-zones.css';
 
@@ -23,12 +23,15 @@ export function OrderflowIndicators() {
   const [tickerDraft, setTickerDraft] = useState('BTCUSDT');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeframe, setTimeframe] = useState<LiquidityTimeframe>('1h');
+  const [volumeMode, setVolumeMode] = useState<LiquidityVolumeMode>('aggregated');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [colors, setColors] = useState(DEFAULT_COLORS);
   const [showVolume, setShowVolume] = useState(true);
-  const feed = useLiquidityCandles(exchange, symbol, timeframe);
+  const feed = useLiquidityCandles(exchange, symbol, timeframe, volumeMode);
+  const payloadModeMatches = feed.payload?.volumeMode === volumeMode ||
+    (volumeMode === 'single' && feed.payload?.volumeMode === undefined);
   const candles = feed.payload && feed.payload.exchange === exchange &&
-    feed.payload.symbol === symbol && feed.payload.timeframe === timeframe ? feed.payload.candles : [];
+    feed.payload.symbol === symbol && feed.payload.timeframe === timeframe && payloadModeMatches ? feed.payload.candles : [];
   const calculated = useMemo(() => calculateLiquidityZones(candles, settings), [candles, settings]);
   const latestSignals = [...calculated.signals].sort((a, b) => b.time - a.time).slice(0, 5);
   const applyTicker = (event: React.FormEvent<HTMLFormElement>) => {
@@ -38,9 +41,20 @@ export function OrderflowIndicators() {
   };
   const setSetting = (key: keyof LiquiditySettings, value: number) => setSettings((current) => ({ ...current, [key]: value }));
   const isCurrentFeed = !!feed.payload && feed.payload.exchange === exchange &&
-    feed.payload.symbol === symbol && feed.payload.timeframe === timeframe;
+    feed.payload.symbol === symbol && feed.payload.timeframe === timeframe && payloadModeMatches;
   const fetchedLabel = isCurrentFeed ? formatTimestamp(Math.floor(new Date(feed.payload!.fetchedAt).getTime() / 1000)) : null;
   const feedWarning = feed.error || (isCurrentFeed ? feed.payload?.error : undefined);
+  const orderedSources = ['binance', 'okx', 'gate', 'bybit'] as const;
+  const sourceLabels: Record<(typeof orderedSources)[number], string> = {
+    binance: 'Binance', okx: 'OKX', gate: 'Gate.io', bybit: 'Bybit',
+  };
+  const volumeSources = volumeMode === 'aggregated' && isCurrentFeed ? feed.payload?.volumeSources ?? [] : [];
+  const availableSourceCount = volumeSources.filter((source) => source.status === 'ok').length;
+  const availableAlignedBars = isCurrentFeed && volumeMode === 'aggregated'
+    ? feed.payload?.matchedCandleCount ?? 0
+    : candles.length;
+  const historyShort = candles.length > 0 && availableAlignedBars < settings.backBars + 30;
+  const latestAlignedTime = candles.length ? formatTimestamp(candles[candles.length - 1].time) : null;
 
   return (
     <section className="super-chart-panel orderflow-panel" aria-label="Liquidity Zones indicator">
@@ -61,6 +75,14 @@ export function OrderflowIndicators() {
             <button type="submit" className="super-chart-apply">Apply</button>
           </form>
         </div>
+        <label className="super-chart-control liquidity-volume-basis">
+          <span>Volume basis</span>
+          <select value={volumeMode} onChange={(event) => setVolumeMode(event.target.value as LiquidityVolumeMode)}
+            aria-label="Volume basis">
+            <option value="aggregated">Aggregated (4 exchanges)</option>
+            <option value="single">Selected exchange</option>
+          </select>
+        </label>
         <div className="liquidity-feed-tools">
           <span className="liquidity-feed-stamp">{feed.loading && !isCurrentFeed ? 'Loading market candles' : fetchedLabel ? `Feed · ${fetchedLabel}` : 'Feed unavailable'}</span>
           <button type="button" className="liquidity-refresh" onClick={feed.refresh} disabled={feed.loading} aria-label="Refresh market candles">
@@ -79,6 +101,38 @@ export function OrderflowIndicators() {
         <span className="liquidity-zone-count">{calculated.zones.length} qualified zones</span>
       </div>
 
+      {volumeMode === 'aggregated' && (
+        <div className="liquidity-volume-summary" aria-label="Aggregated volume source status">
+          <span className="liquidity-volume-unit">
+            {isCurrentFeed && feed.payload?.volumeAsset ? `${feed.payload.volumeAsset} traded` : 'Underlying coin traded'}
+          </span>
+          <span className="liquidity-source-list">
+            {orderedSources.map((exchangeName) => {
+              const source = volumeSources.find((item) => item.exchange === exchangeName);
+              const ok = source?.status === 'ok' && !feed.payload?.stale;
+              return <span key={exchangeName} className={`liquidity-source${ok ? ' is-ok' : ' is-unavailable'}`}
+                title={ok ? `${sourceLabels[exchangeName]} volume included` : `${sourceLabels[exchangeName]} volume unavailable, cached or not listed`}>
+                <i aria-hidden="true" />{sourceLabels[exchangeName]}
+              </span>;
+            })}
+          </span>
+          <span className="liquidity-source-count">
+            {isCurrentFeed ? `${availableSourceCount}/4 contributing` : feed.loading ? 'Aligning sources…' : 'Source status unavailable'}
+            {isCurrentFeed && feed.payload?.stale ? ' · cached' : feed.payload?.partialVolume ? ' · partial' : ''}
+          </span>
+          {isCurrentFeed && feed.payload?.matchedCandleCount !== undefined && (
+            <span className="liquidity-alignment">
+              {feed.payload.matchedCandleCount} aligned / {settings.backBars} scan + 30 warmup
+              {latestAlignedTime ? ` · latest ${latestAlignedTime}` : ''}
+            </span>
+          )}
+        </div>
+      )}
+      {historyShort && (
+        <div className="liquidity-history-warning" role="status">
+          Available aligned history ({availableAlignedBars} candles) is shorter than the {settings.backBars}-bar scan plus 30-bar warmup; zones may be incomplete.
+        </div>
+      )}
       {feedWarning && (
         <div className={`liquidity-feed-warning${feed.payload?.stale ? ' is-stale' : ''}`} role="status">
           <span>{feed.payload?.stale ? 'Cached market data · ' : 'Market feed · '}{feedWarning}</span>
@@ -151,7 +205,11 @@ export function OrderflowIndicators() {
       </div>
       <div className="liquidity-method-note">
         <span className="liquidity-note-mark">i</span>
-        <p>These zones are inferred from price and volume, not the exchange order book. Pivots confirm after 10 bars, so displayed left boundaries are back-painted. Initial feed history warmup can differ from TradingView.
+        <p>
+          {volumeMode === 'aggregated'
+            ? 'Aggregated volume sums matched underlying-coin trade volume; it is not open interest weighted. Price and OHLC remain from the selected exchange. Candle timestamps are matched exactly; unavailable or unmatched exchange data is excluded, never treated as zero.'
+            : 'Volume and OHLC use the selected exchange only.'}
+          {' '}The selected volume basis feeds both chart bars and indicator volume qualification. Pivots confirm after 10 bars, so displayed left boundaries are back-painted. Initial feed history warmup can differ from TradingView.
           {' '}<a href="/api/indicators/liquidity-zones/source" target="_blank" rel="noreferrer">Indicator source</a> · <a href="https://mozilla.org/MPL/2.0/" target="_blank" rel="noreferrer">MPL 2.0</a>
         </p>
       </div>

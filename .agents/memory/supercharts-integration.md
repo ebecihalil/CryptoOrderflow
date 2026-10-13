@@ -13,6 +13,16 @@ Liquidity Zones and approved adding it with its existing rules.
 
 **How to apply:** preserve supplied indicator semantics rather than silently
 "improving" them. Do not invent additional formulas or fake orderflow charts.
+
+Liquidity Zones volume may aggregate Binance, OKX, Gate.io and Bybit, but prices
+remain from the selected chart exchange. Do not replace the traded-volume sum
+with OI weighting or silently zero-fill missing venue candles.
+
+**Why:** the user explicitly requested these four exchanges' combined volume
+for the volume-dependent indicator.
+
+**How to apply:** align candle times and underlying-coin units, including
+multiplier contracts, and disclose participating venues/partial coverage.
 The hosted widget cannot consume our custom exchange data; use a separate chart
 library or approved Advanced Charts access for that future work. Do not treat
 TradingView's chart-control APIs as downloadable market-data APIs.

@@ -1,7 +1,7 @@
 import express from "express";
 import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
-import { candleService } from "./server/chartCandles.js";
+import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -25,7 +25,7 @@ app.get("/api/healthz", (_req, res) => {
 app.get("/api/market/candles", async (req, res) => {
   res.set("Cache-Control", "no-store");
   try {
-    res.json(await candleService.get(req.query));
+    res.json(await aggregatedCandleService.get(req.query));
   } catch (error) {
     res.status(error.status ?? 503).json({ error: error.message, retryAt: error.retryAt });
   }
