@@ -442,7 +442,7 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
             <span data-testid={`value-share-change-${row.asset}-${selectedTimeframe}`} className={`aggregate-share ${share === null ? 'neutral' : share > 0 ? 'positive' : share < 0 ? 'negative' : 'neutral'}`}>{formatPp(share)}</span>
           </td>;
         })()}
-        <td data-testid={`value-current-lsar-${row.asset}`}>
+        <td className="current-lsar-cell" data-testid={`value-current-lsar-${row.asset}`}>
           <div className="share-context">
             <span className="ratio-number">{row.currentRatio === null ? '—' : row.currentRatio.toFixed(3)}</span>
             <span className="share-meter"><span style={{ width: `${Math.min(100, Math.max(0, row.longSharePct ?? 0))}%` }} /></span>

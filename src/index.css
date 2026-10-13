@@ -457,6 +457,11 @@
 .share-percent { color:#85918c;font-size:11px; }
 .aggregate-cell { min-width:160px; }
 .aggregate-cell .change-value { display:block;margin-left:auto;width:max-content; }
+.market-table td.aggregate-cell { text-align:center; }
+.market-table td.aggregate-cell .change-value { margin-left:auto;margin-right:auto; }
+.market-table td.aggregate-cell .aggregate-share { text-align:center; }
+.market-table td.current-lsar-cell { text-align:center; }
+.market-table td.current-lsar-cell .share-context { align-items:center;margin-left:auto;margin-right:auto;text-align:center; }
 .aggregate-share { display:block;margin-top:3px;color:#84908a;font-size:11px; }
 .aggregate-share.positive { color:#18745f; }.aggregate-share.negative { color:#b44e48; }.aggregate-share.neutral { color:#9ba39e; }
 .exchange-ratio-cell { min-width:145px; }
