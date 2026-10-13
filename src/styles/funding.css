@@ -41,6 +41,7 @@
 .funding-source-list { display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;min-width:0; }
 .funding-source-item { display:inline-flex;align-items:center;gap:5px;color:var(--lsar-muted);font:12px var(--app-font-mono);white-space:nowrap; }
 .funding-source-item .exchange-logo { width:14px;height:14px; }
+.funding-source-count { color:var(--lsar-strong);font-weight:600;font-variant-numeric:tabular-nums; }
 .funding-source-dot { width:7px;height:7px;flex:none;border-radius:50%;background:#bd554d;box-shadow:0 0 0 3px #bd554d1b; }
 .funding-source-item.live .funding-source-dot { background:#259775;box-shadow:0 0 0 3px #25977522; }
 .funding-source-item.error .funding-source-dot,

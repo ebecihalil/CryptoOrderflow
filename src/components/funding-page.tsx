@@ -119,6 +119,7 @@ function FundingSourceLine({ sources }: { sources?: FundingSource[] }) {
               <span key={source.exchange} className={`funding-source-item ${state}`} title={title}>
                 <span className="funding-source-dot" aria-hidden="true" />
                 <span>{exchangeLabel(source.exchange)}</span>
+                <span className="funding-source-count">{source.marketCount.toLocaleString()}</span>
                 <span className="sr-only"> — {sourceStatusLabel(source.status)}{source.error ? `: ${source.error}` : ''}</span>
               </span>
             );
