@@ -8,13 +8,14 @@
   .terminal .market-table {
     --market-coin-width:clamp(130px,10vw,160px);
     --market-price-width:110px;
+    --market-current-width:132px;
     table-layout:fixed;width:100%;min-width:0;
   }
   .terminal .market-table col.market-coin { width:var(--market-coin-width); }
   .terminal .market-table col.market-price { width:var(--market-price-width); }
   .terminal .market-table col.market-aggregate { width:13%; }
-  .terminal .market-table col.market-current { width:13%; }
-  .terminal .market-table col.market-venue { width:calc((74% - var(--market-coin-width) - var(--market-price-width)) / 6); }
+  .terminal .market-table col.market-current { width:var(--market-current-width); }
+  .terminal .market-table col.market-venue { width:calc((87% - var(--market-coin-width) - var(--market-price-width) - var(--market-current-width)) / 6); }
   .terminal .market-table th,
   .terminal .market-table td { min-width:0;padding-left:4px;padding-right:4px;white-space:normal;overflow-wrap:anywhere; }
   .terminal .market-table th { height:auto;padding-top:10px;padding-bottom:10px;letter-spacing:0; }
@@ -26,6 +27,7 @@
   .terminal .market-table .exchange-heading .timeframe-sort { gap:2px;flex-wrap:wrap; }
   .terminal .market-table .exchange-heading .timeframe-sort > span { flex-shrink:0;white-space:nowrap;overflow-wrap:normal; }
   .terminal .market-table .subhead { white-space:normal;line-height:1.35; }
+  .terminal .market-table .current-lsar-col .subhead { letter-spacing:0; }
 
   .terminal .market-table .coin-trigger { gap:6px; }
   .terminal .market-table .coin-trigger > span:last-child { min-width:0;flex:1; }

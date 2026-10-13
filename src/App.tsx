@@ -211,9 +211,11 @@ function Home() {
           <span className="brand-sub">market scanner</span>
         </div>
         <div className="topbar-right">
-          <span className={`live-indicator ${healthQuery.isError ? 'api-down' : ''}`} data-testid="status-api-health">
+          <span className={`live-indicator ${healthQuery.isError ? 'api-down' : ''}`} data-testid="status-api-health"
+            aria-label={healthQuery.isError ? 'API unreachable' : 'Market feed'}
+            title={healthQuery.isError ? 'API unreachable' : 'Market feed'}>
             <span className="live-dot" />
-            {healthQuery.isError ? 'API unreachable' : 'Market feed'}
+            <span className="feed-status-label">{healthQuery.isError ? 'API unreachable' : 'Market feed'}</span>
           </span>
           <ThemeToggle />
         </div>
@@ -345,7 +347,7 @@ function Home() {
                     <button type="button" className="timeframe-sort" onClick={() => sortByTarget('current')}
                       aria-label={`Sort current aggregated LSAR ${sortTarget === 'current' && sortMode === 'increase' ? 'ascending' : 'descending'}`}
                       aria-pressed={sortTarget === 'current'} data-testid="button-sort-current-lsar">
-                      <span>Current Aggregated LSAR</span>
+                      <span className="current-lsar-label"><span>Current</span><span>Aggregated LSAR</span></span>
                       {sortTarget === 'current'
                         ? sortMode === 'increase' ? <ArrowDown aria-hidden="true" /> : <ArrowUp aria-hidden="true" />
                         : <ArrowDownUp aria-hidden="true" />}
