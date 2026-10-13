@@ -17,6 +17,7 @@ import NotFound from '@/pages/not-found';
 import { ModuleComingSoon, ModuleHome } from '@/components/module-pages';
 import { FundingPage } from '@/components/funding-page';
 import { OpenInterestPage } from '@/components/open-interest-page';
+import { SuperChartsPage } from '@/pages/super-charts-page';
 import { MODULES } from '@/lib/modules';
 import './styles/modules.css';
 import type {
@@ -453,7 +454,8 @@ function Router() {
         <Route path="/lsar" component={LsarAlias} />
         <Route path="/funding-rate" component={FundingPage} />
         <Route path="/open-interest" component={OpenInterestPage} />
-        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest').map((module) => (
+        <Route path="/super-charts" component={SuperChartsPage} />
+        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />
           </Route>
