@@ -5,6 +5,18 @@ description: Metric compatibility and rate-limit tradeoffs for adding exchange d
 
 Do not substitute top-trader account ratios, position ratios, or taker-buy/sell ratios for market-wide account ratios.
 
+Distinguish OI-weighted raw L/S ratios from ratios reconstructed from OI-weighted
+long/short account shares. Do not silently change the aggregation definition.
+
+**Why:** a venue's extreme raw ratio can dominate the numeric average even with
+modest OI weight. Converting that average to a long percentage does not produce
+the OI-weighted long-account percentage. The user questioned this outlier effect.
+
+**How to apply:** explain the two definitions before changing current or TF
+calculations. Neither method reconstructs a pooled account-count ratio without
+venue account counts, and source OI shares describe contributing venues rather
+than automatically representing the entire market.
+
 **Why:** the user specifically trades changes in Long Short Account Ratio; mixing different populations would change the meaning of the screener.
 
 **How to apply:** verify the exact endpoint's definition before adding any venue. HTX has not yet been confirmed to offer a compatible public market-wide account-ratio endpoint.
