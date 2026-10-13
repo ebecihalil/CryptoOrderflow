@@ -1,0 +1,173 @@
+//@version=6
+indicator("Multi-Exchange Aggregated Funding Rate", overlay=false, precision=4)
+
+base     = syminfo.basecurrency
+exch     = syminfo.prefix
+inv_base = base == "BTC" ? "XBT" : base
+
+// --- INPUTS ---
+hard_limit = input.float(0.08, "Neutral Threshold %", step=0.01)
+agg_mode   = input.string("Simple Mean", "Aggregation Method", options=["Simple Mean", "OI-Weighted", "Median"])
+
+// --- COLOR / FORMATTING HELPERS ---
+get_bg_color(val_pct) =>
+    float p = nz(val_pct)
+    p >= hard_limit ? color.new(color.red, 40) : (p <= -hard_limit ? color.new(color.green, 40) : color.new(color.black, 20))
+
+fmt_pct(p) =>
+    na(p) ? "N/A" : (p >= 0 ? "+" : "") + str.tostring(p, "0.0000") + "%"
+
+
+// --- 1. PREFIX NORMALIZATION ---
+// Strips numbers from the coin name so we can build search variants
+string clean_coin = base
+if str.startswith(base, "1000000")
+    clean_coin := str.substring(base, 7)
+else if str.startswith(base, "100000")
+    clean_coin := str.substring(base, 6)
+else if str.startswith(base, "10000")
+    clean_coin := str.substring(base, 5)
+else if str.startswith(base, "1000")
+    clean_coin := str.substring(base, 4)
+
+// Generate the 4 primary naming variations
+v0 = clean_coin
+v1 = "1000"   + clean_coin
+v2 = "10000"  + clean_coin
+v3 = "100000" + clean_coin
+
+
+// --- 2. FETCH HELPERS ---
+safe_sec(simple string sym) =>
+    request.security(sym, timeframe.period, close, ignore_invalid_symbol=true)
+
+// Scans all 4 naming variations on the specified exchange and returns the valid one
+fetch_majors(simple string prefix) =>
+    t0 = prefix + v0 + "USDT.P"
+    t1 = prefix + v1 + "USDT.P"
+    t2 = prefix + v2 + "USDT.P"
+    t3 = prefix + v3 + "USDT.P"
+    
+    fr0 = safe_sec(t0 + "_FR")
+    fr1 = safe_sec(t1 + "_FR")
+    fr2 = safe_sec(t2 + "_FR")
+    fr3 = safe_sec(t3 + "_FR")
+    
+    oi0 = safe_sec(t0 + "_OI")
+    oi1 = safe_sec(t1 + "_OI")
+    oi2 = safe_sec(t2 + "_OI")
+    oi3 = safe_sec(t3 + "_OI")
+    
+    fr_v = not na(fr0) ? fr0 : (not na(fr1) ? fr1 : (not na(fr2) ? fr2 : fr3))
+    oi_v = not na(oi0) ? oi0 : (not na(oi1) ? oi1 : (not na(oi2) ? oi2 : oi3))
+    
+    [not na(fr_v) ? fr_v * 100 : na, oi_v]
+
+
+// --- 3. FETCH DATA ---
+// Top 4 Altcoin Exchanges (Requires 8 calls each -> 32 requests)
+[fr_binU, oi_binU] = fetch_majors("BINANCE:")
+[fr_bybU, oi_bybU] = fetch_majors("BYBIT:")
+[fr_okxU_raw, oi_okxU_raw] = fetch_majors("OKX:")
+[fr_bgtU, oi_bgtU] = fetch_majors("BITGET:")
+
+// OKX returns USD notional, others return coins, so we divide OKX by close
+fr_okxU = fr_okxU_raw
+oi_okxU = na(oi_okxU_raw) or close == 0 ? na : oi_okxU_raw / close
+
+// BitMEX (Requires 4 requests) - Using fallback formats due to legacy ticker strings
+bmx_t0 = "BITMEX:" + inv_base + "USD.P"
+bmx_t1 = "BITMEX:" + inv_base + "USD"
+
+fr_bmx_0 = safe_sec(bmx_t0 + "_FR")
+fr_bmx_1 = safe_sec(bmx_t1 + "_FR")
+oi_bmx_0 = safe_sec(bmx_t0 + "_OI")
+oi_bmx_1 = safe_sec(bmx_t1 + "_OI")
+
+fr_bmx_raw = not na(fr_bmx_0) ? fr_bmx_0 : fr_bmx_1
+oi_bmx     = not na(oi_bmx_0) ? oi_bmx_0 : oi_bmx_1
+fr_bmx     = not na(fr_bmx_raw) ? fr_bmx_raw * 100 : na
+
+// Kraken (Requires 2 requests) - Does not use standard 1000x prefixes
+krk_t = "KRAKEN:PI_" + inv_base + "USD"
+fr_krk_raw = safe_sec(krk_t + "_FR")
+oi_krk     = safe_sec(krk_t + "_OI")
+fr_krk     = not na(fr_krk_raw) ? fr_krk_raw * 100 : na
+
+
+// --- 4. AGGREGATION ---
+var float[] frs = array.new<float>()
+var float[] ois = array.new<float>()
+array.clear(frs)
+array.clear(ois)
+
+push_if(frv, oiv) =>
+    if not na(frv)
+        array.push(frs, frv)
+        array.push(ois, nz(oiv))
+
+push_if(fr_binU, oi_binU)
+push_if(fr_bybU, oi_bybU)
+push_if(fr_okxU, oi_okxU)
+push_if(fr_bgtU, oi_bgtU)
+push_if(fr_bmx,  oi_bmx)
+push_if(fr_krk,  oi_krk)
+
+float agg_fr_pct = na
+
+if array.size(frs) > 0
+    if agg_mode == "Simple Mean"
+        agg_fr_pct := array.avg(frs)
+    else if agg_mode == "Median"
+        agg_fr_pct := array.median(frs)
+    else
+        float num = 0.0
+        float den = 0.0
+        for i = 0 to array.size(frs) - 1
+            float w = math.max(array.get(ois, i), 0.0)
+            num := num + array.get(frs, i) * w
+            den := den + w
+        agg_fr_pct := den > 0 ? num / den : array.avg(frs)
+
+
+// --- 5. PLOT ---
+line_color = agg_fr_pct >= 0 ? color.red : color.green
+plot(agg_fr_pct, title="Aggregated FR %", color=line_color, linewidth=2, style=plot.style_line)
+hline(0,           "Zero",        color=color.new(color.gray,  50), linestyle=hline.style_dotted)
+hline( hard_limit, "Upper Limit", color=color.new(color.red,   70), linestyle=hline.style_dashed)
+hline(-hard_limit, "Lower Limit", color=color.new(color.green, 70), linestyle=hline.style_dashed)
+
+
+// --- 6. TABLE ---
+tbl_name(tbl, row, txt, bg, t_size) =>
+    table.cell(tbl, 0, row, txt, bgcolor=bg, text_color=color.white, text_size=t_size)
+
+tbl_val(tbl, row, fr_p, color override_bg, t_size) =>
+    color bg = not na(override_bg) ? override_bg : (na(fr_p) ? color.new(color.black, 60) : get_bg_color(fr_p))
+    table.cell(tbl, 1, row, fmt_pct(fr_p), bgcolor=bg, text_color=color.white, text_size=t_size)
+
+var table t = table.new(position.bottom_right, 2, 8, frame_color=color.gray, border_width=1)
+
+if barstate.islast
+    // Header
+    table.cell(t, 0, 0, "Exchange",       bgcolor=color.gray, text_color=color.white, text_size=size.small)
+    table.cell(t, 1, 0, base + " Rate %", bgcolor=color.gray, text_color=color.white, text_size=size.small)
+
+    // Exchanges
+    tbl_name(t, 1, "Binance", color.new(color.black, 20), size.small)
+    tbl_val(t,  1, fr_binU,   color(na), size.small)
+    tbl_name(t, 2, "Bybit",   color.new(color.black, 20), size.small)
+    tbl_val(t,  2, fr_bybU,   color(na), size.small)
+    tbl_name(t, 3, "OKX",     color.new(color.black, 20), size.small)
+    tbl_val(t,  3, fr_okxU,   color(na), size.small)
+    tbl_name(t, 4, "Bitget",  color.new(color.black, 20), size.small)
+    tbl_val(t,  4, fr_bgtU,   color(na), size.small)
+    tbl_name(t, 5, "BITMEX",  color.new(color.black, 20), size.small)
+    tbl_val(t,  5, fr_bmx,    color(na), size.small)
+    tbl_name(t, 6, "KRAKEN",  color.new(color.black, 20), size.small)
+    tbl_val(t,  6, fr_krk,    color(na), size.small)
+
+    // Aggregated
+    color agg_bg = agg_fr_pct > 0 ? color.new(color.red, 40) : (agg_fr_pct < 0 ? color.new(color.green, 40) : color.new(color.black, 20))
+    tbl_name(t, 7, "AGGREGATED", color.orange, size.normal)
+    tbl_val(t,  7, agg_fr_pct,   agg_bg, size.normal)
