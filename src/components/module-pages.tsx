@@ -25,10 +25,10 @@ export function ModuleHome() {
   return (
     <div className="terminal module-app">
       <ProductHeader />
-      <main className="module-main">
-        <div className="module-kicker"><span className="module-kicker-rule" /> MARKET MECHANICS <span className="module-kicker-rule" /></div>
-        <h1 className="module-page-title">Crypto Order Flow</h1>
-        <p className="module-home-intro">A clear read on positioning, participation, and pressure across perpetual markets.</p>
+      <main className="module-main module-home-main">
+        <div className="module-kicker module-home-kicker"><span className="module-kicker-rule" /> MARKET MECHANICS</div>
+        <h1 className="module-page-title module-home-title">Crypto Order Flow</h1>
+        <p className="module-home-intro module-home-lede">A clear read on positioning, participation, and pressure across perpetual markets.</p>
 
         <section className="module-directory" aria-label="Market modules">
           <div className="directory-heading">
@@ -78,7 +78,6 @@ export function ModuleHome() {
             })}
           </div>
         </section>
-        <footer className="module-home-foot"><span>CRYPTO ORDER FLOW</span><span>POSITIONING · PARTICIPATION · PRESSURE</span></footer>
       </main>
     </div>
   );
