@@ -17,6 +17,18 @@ calculations. Neither method reconstructs a pooled account-count ratio without
 venue account counts, and source OI shares describe contributing venues rather
 than automatically representing the entire market.
 
+Use account-percentage-first OI weighting for the LSAR aggregation.
+
+**Why:** after seeing how Toobit's extreme raw ratio amplified its influence,
+the user explicitly selected “Weight account percentages first (recommended)”.
+
+**How to apply:** apply the same definition to current aggregated LSAR and both
+TF candles: OI-weight long/short account shares, then reconstruct L/S. Retain
+matching contracts and identical USD OI weights on both sides, the ratio-relative
+change definition, and long-share percentage-point changes. Do not change
+individual exchange ratios or cap/remove a venue solely for having an extreme
+ratio. Genuine OI concentration should still be visible.
+
 **Why:** the user specifically trades changes in Long Short Account Ratio; mixing different populations would change the meaning of the screener.
 
 **How to apply:** verify the exact endpoint's definition before adding any venue. HTX has not yet been confirmed to offer a compatible public market-wide account-ratio endpoint.

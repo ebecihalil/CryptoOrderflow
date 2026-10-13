@@ -2,6 +2,7 @@ import { requestGates, requestJson as fetchJson } from "./exchangeRequests.js";
 import { BinanceCooldownError } from "./binanceRequestGate.js";
 import { canonicalAsset } from "./assetIdentity.js";
 import { isNonCryptoAsset, isCryptoAsset } from "./cryptoAssets.js";
+import { weightedAccountRatio } from "./lsarAggregation.js";
 export { canonicalAsset };
 
 const logger = {
@@ -444,13 +445,6 @@ async function fetchBybitCategory(category) {
 async function fetchBybit() {
     return combineExchangeFetches([fetchBybitCategory("linear"), fetchBybitCategory("inverse")], "bybit");
 }
-function weightedRatio(items) {
-    const usable = items.filter((item) => Number.isFinite(item.ratio) && item.ratio > 0 && Number.isFinite(item.weight) && item.weight > 0);
-    const totalWeight = usable.reduce((total, item) => total + item.weight, 0);
-    return totalWeight > 0
-        ? usable.reduce((total, item) => total + item.ratio * item.weight, 0) / totalWeight
-        : null;
-}
 function ratioToLongPct(ratio) {
     return ratio === null ? null : (ratio / (1 + ratio)) * 100;
 }
@@ -475,7 +469,9 @@ export function buildChange(timeframe, duration, readings) {
         const previous = latestPointInBar(reading.points, currentBarStart - duration, currentBarStart)
             ?? (duration >= 4 * 60 * 60_000 && reading.longWindowPoints
                 ? latestPointInBar(reading.longWindowPoints, currentBarStart - duration, currentBarStart) : undefined);
-        if (!current || !previous) return [];
+        if (!current || !previous || !Number.isFinite(current.ratio) || current.ratio <= 0 ||
+            !Number.isFinite(previous.ratio) || previous.ratio <= 0 ||
+            !Number.isFinite(reading.openInterestUsd) || reading.openInterestUsd <= 0) return [];
         return [{
                 exchange: reading.exchange,
                 ratio: current.ratio,
@@ -484,12 +480,12 @@ export function buildChange(timeframe, duration, readings) {
                 previous,
             }];
     });
-    const currentRatio = weightedRatio(currentSamples);
+    const currentRatio = weightedAccountRatio(currentSamples);
     const previousSamples = currentSamples.flatMap((sample) => {
         const previous = sample.previous;
         return previous ? [{ ratio: previous.ratio, weight: sample.weight, timestamp: previous.timestamp }] : [];
     });
-    const previousRatio = weightedRatio(previousSamples);
+    const previousRatio = weightedAccountRatio(previousSamples);
     const ratioChangePct = currentRatio !== null && previousRatio !== null && previousRatio !== 0
         ? ((currentRatio - previousRatio) / previousRatio) * 100
         : null;
@@ -570,7 +566,7 @@ export function createRows(readings) {
         const priceChange24hPct = priceChangeWeight > 0
             ? priceChanges.reduce((sum, reading) => sum + (reading.priceChange24hPct ?? 0) * reading.openInterestUsd, 0) / priceChangeWeight
             : null;
-        const currentRatio = weightedRatio(contracts.flatMap((reading) => {
+        const currentRatio = weightedAccountRatio(contracts.flatMap((reading) => {
             const latest = reading.points[reading.points.length - 1];
             return latest ? [{ ratio: latest.ratio, weight: reading.openInterestUsd }] : [];
         }));

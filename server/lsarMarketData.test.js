@@ -17,8 +17,8 @@ test("ratio change uses current candle versus previous candle", () => {
 test("both candle aggregates use matching venues and identical OI weights", () => {
     const missing = { exchange: "gate", openInterestUsd: 10000, points: [{ timestamp: start, ratio: 10 }] };
     const change = buildChange("5m", period, [reading("binance", 100, 1, 2), reading("bybit", 300, 2, 3), missing]);
-    assert.equal(change.previousRatio, 1.75);
-    assert.equal(change.currentRatio, 2.75);
+    assert.ok(Math.abs(change.previousRatio - 5 / 3) < 1e-12);
+    assert.ok(Math.abs(change.currentRatio - 35 / 13) < 1e-12);
     assert.deepEqual(change.exchanges, ["binance", "bybit"]);
 });
 
@@ -76,9 +76,17 @@ test("multiplier and plain contracts aggregate with per-coin prices and unchange
     assert.equal(rows[0].asset, "X");
     assert.ok(Math.abs(rows[0].price - 0.02) < 1e-12);
     assert.equal(rows[0].openInterestUsd, 1500);
-    assert.ok(Math.abs(rows[0].currentRatio - 5500 / 1500) < 1e-12);
+    const aggregate = ratioOf => {
+        const long = fixtures.reduce((total, item) => total + item.weight * ratioOf(item) / (1 + ratioOf(item)), 0);
+        const short = fixtures.reduce((total, item) => total + item.weight / (1 + ratioOf(item)), 0);
+        return long / short;
+    };
+    const currentRatio = aggregate(item => item.ratio);
+    const previousRatio = aggregate(item => item.ratio / 2);
+    assert.ok(Math.abs(rows[0].currentRatio - currentRatio) < 1e-12);
     assert.equal(rows[0].exchanges.length, 5);
-    assert.ok(Math.abs(rows[0].changes.find((change) => change.timeframe === "5m").ratioChangePct - 100) < 1e-10);
+    assert.ok(Math.abs(rows[0].changes.find((change) => change.timeframe === "5m").ratioChangePct -
+        (currentRatio / previousRatio - 1) * 100) < 1e-10);
     assert.deepEqual(rows[0].exchangeReadings.map((item) => item.symbol), fixtures.map((item) => `${item.base}USDT`));
 });
 

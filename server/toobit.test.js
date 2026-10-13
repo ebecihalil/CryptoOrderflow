@@ -41,12 +41,12 @@ test("Toobit aggregates with existing sources and supports multi-select filterin
     const row = createRows([reading, binance])[0];
     assert.deepEqual(new Set(row.exchanges), new Set(["binance", "toobit"]));
     assert.equal(row.openInterestUsd, 4000);
-    assert.equal(row.currentRatio, 2.75);
+    assert.ok(Math.abs(row.currentRatio - 35 / 13) < 1e-12);
     assert.equal(row.price, 0.02);
     const change = row.changes.find((item) => item.timeframe === "5m");
-    assert.equal(change.previousRatio, 1.75);
-    assert.equal(change.currentRatio, 2.75);
-    assert.ok(Math.abs(change.ratioChangePct - (2.75 / 1.75 - 1) * 100) < 1e-10);
+    assert.ok(Math.abs(change.previousRatio - 5 / 3) < 1e-12);
+    assert.ok(Math.abs(change.currentRatio - 35 / 13) < 1e-12);
+    assert.ok(Math.abs(change.ratioChangePct - ((35 / 13) / (5 / 3) - 1) * 100) < 1e-10);
     assert.ok(MARKET_EXCHANGES.includes("toobit"));
     assert.equal(EXCHANGE_LABELS.toobit, "Toobit");
     assert.equal(matchesExchangeFilter(["toobit"], ["toobit", "bybit"]), true);
