@@ -4,9 +4,9 @@ import { ExchangeCooldownError } from "./exchangeRequestGate.js";
 const wait = delay => new Promise(resolve => setTimeout(resolve, delay));
 const HOSTS = {
     "fapi.binance.com": "binance", "dapi.binance.com": "binance",
-    "api.bybit.com": "bybit", "www.okx.com": "okx",
+    "api.bybit.com": "bybit", "api2.bybit.com": "bybit", "www.okx.com": "okx",
     "api.gateio.ws": "gate", "api.bitget.com": "bitget", "api.toobit.com": "toobit",
-    "contract.mexc.com": "mexc", "api-futures.kucoin.com": "kucoin",
+    "contract.mexc.com": "mexc", "api.mexc.com": "mexc", "api-futures.kucoin.com": "kucoin",
     "futures.kraken.com": "kraken", "open-api.bingx.com": "bingx",
     "api.hyperliquid.xyz": "hyperliquid", "api.hbdm.com": "htx",
     "www.deribit.com": "deribit", "fapi.asterdex.com": "aster",

@@ -211,10 +211,12 @@ function Home() {
   return (
     <div className="terminal">
       <header className="topbar">
-        <div className="brand">
+        <div className="brand lsar-brand">
           <div className="brand-mark">LS</div>
-          <span>Perpetual LSAR</span>
-          <span className="brand-sub">market scanner</span>
+          <span className="lsar-brand-copy">
+            <strong>Long Short Account Ratio</strong>
+            <small>Perpetual Markets</small>
+          </span>
         </div>
         <div className="topbar-right">
           <Link className="lsar-home-link" href="/" aria-label="Back to Crypto Order Flow home">CO <span>Home</span></Link>

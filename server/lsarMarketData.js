@@ -537,7 +537,7 @@ function isUsableReading(reading, now = Date.now()) {
 export function countFetchedReadings(readings, now = Date.now()) {
     return readings.filter((reading) => isUsableReading(reading, now)).length;
 }
-function selectDisplayAsset(contracts, fallback) {
+export function selectDisplayAsset(contracts, fallback) {
     const venueNames = new Map();
     for (const reading of contracts) {
         const name = reading.exchangeAsset || fallback;

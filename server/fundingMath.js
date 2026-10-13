@@ -1,4 +1,4 @@
-import { canonicalAsset } from "./lsarMarketData.js";
+import { canonicalAsset, selectDisplayAsset } from "./lsarMarketData.js";
 
 export const FUNDING_WINDOWS = { current: 0, "1d": 86400_000, "7d": 7 * 86400_000, "30d": 30 * 86400_000, "1y": 365 * 86400_000 };
 export const FUNDING_LABELS = {
@@ -17,7 +17,8 @@ export function normalizedRate(ratePct, hours) {
 }
 export function fundingReading(exchange, symbol, base, oiUsd, rate, hours, listedAt = null) {
     const aliases = { XBT: "BTC", XDG: "DOGE" };
-    const original = aliases[String(base).toUpperCase()] ?? String(base).toUpperCase();
+    const name = String(base).trim().toUpperCase();
+    const original = aliases[name] ?? name;
     if (!(number(oiUsd) > 0) || !original || original === "UNDEFINED") return null;
     return {
         exchange, symbol, asset: canonicalAsset(original).asset, exchangeAsset: original,
@@ -92,12 +93,10 @@ export function buildFundingSnapshot(states, histories, timeframe = "current", n
                 contracts: contracts.map(item => ({ symbol: item.symbol, nativeRatePct: item.ratePct, intervalHours: item.intervalHours, openInterestUsd: item.oiUsd })) };
         }
         const contributing = Object.values(venues).filter(venue => venue.valuePct !== null);
-        const names = new Map();
-        for (const exchange of eligible) {
-            const contract = readings.filter(item => item.exchange === exchange).sort((a,b) => b.oiUsd-a.oiUsd)[0];
-            if (contract) names.set(contract.exchangeAsset, (names.get(contract.exchangeAsset) ?? 0) + 1);
-        }
-        return { asset, displayAsset: [...names].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0]?.[0] ?? asset,
+        const displayAsset = selectDisplayAsset(readings.map(item => ({
+            exchange: item.exchange, exchangeAsset: item.exchangeAsset, openInterestUsd: item.oiUsd,
+        })), asset);
+        return { asset, displayAsset,
             aggregatePct: weighted(contributing.map(venue => ({ value: venue.valuePct, weight: venue.openInterestUsd }))),
             aggregateOpenInterestUsd: contributing.reduce((sum, venue) => sum + venue.openInterestUsd, 0),
             sourceCount: contributing.length, venues };

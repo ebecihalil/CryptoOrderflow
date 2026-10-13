@@ -119,3 +119,18 @@ the same IP allowance.
 All modules import one `exchangeRequests` runtime; never instantiate independent
 budgets for new order-flow sections. Multi-process deployment requires a shared
 atomic limiter and persistent cooldown storage before horizontal scaling.
+
+## Multiplier contract grouping
+
+Funding uses LSAR's shared canonical asset and display-name rules. Prefixes such
+as 100, 1000, 10000 and 100000 identify multiplier contracts for the same
+underlying coin, so 1000PEPE and PEPE share one row across venues. USD OI is
+converted by the provider before grouping and must not be divided again.
+Funding percentages are unaffected by the contract multiplier. Original contract
+symbols remain intact for historical API requests and history cache keys.
+
+Display names get one vote per exchange; the most common exchange name wins.
+Within an exchange, OI is summed by name before choosing its vote. Tied votes use
+USD OI, then a deterministic ticker comparison, just like LSAR. Single-exchange
+coins retain their exchange's name. Ordinary numbered tickers such as 1INCH and
+2Z are not treated as multiplier contracts.

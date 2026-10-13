@@ -36,8 +36,8 @@ test("exchange columns sort numerically in both directions, leaving absent venue
 });
 
 test("coin logo requests use canonical tickers and reject invalid paths", () => {
-    assert.equal(coinLogoUrl("FLOKI"), "https://assets.coincap.io/assets/icons/floki@2x.png");
-    assert.equal(coinLogoUrl(" btc "), "https://assets.coincap.io/assets/icons/btc@2x.png");
+    assert.equal(coinLogoUrl("FLOKI"), "https://s2.coinmarketcap.com/static/img/coins/64x64/10804.png");
+    assert.equal(coinLogoUrl(" btc "), "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png");
     assert.equal(coinLogoUrl("../btc"), null);
     assert.equal(coinLogoUrl(""), null);
 });

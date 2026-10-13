@@ -16,3 +16,12 @@ its newer single-sided fields must also be distinguished from both-sided fields.
 largest OI contributors in a live snapshot before trusting global cutoff results.
 Funding quote interval and actual settlement frequency can differ (continuous
 funding); an unverified basis must not contribute a normalized funding value.
+
+Funding must follow the same multiplier-contract grouping and naming policy as LSAR.
+
+**Why:** the user explicitly wants 100X, 1000X, 10000X, 100000X and plain X
+treated as the same coin when aggregating, rather than fragmented exchange rows.
+
+**How to apply:** share the canonical identity/naming policy across the two
+sections; provider-converted USD OI and funding percentages must not be rescaled
+again merely because the contract name has a multiplier prefix.

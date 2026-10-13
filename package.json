@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "update:coin-logos": "node scripts/update-coin-logos.js",
+    "update:gate-logos": "node scripts/update-gate-logos.js",
     "test": "node --test server/*.test.js",
     "start": "node server.js"
   },
