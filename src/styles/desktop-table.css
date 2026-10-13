@@ -1,0 +1,30 @@
+/* Fit all ten columns on desktop; retain the scrollable mobile/tablet table. */
+@media (min-width:1024px) {
+  .terminal .main-wrap { padding-left:2.2vw;padding-right:2.2vw; }
+  .terminal .control-panel { flex-wrap:wrap; }
+  .terminal .control-left { flex-wrap:wrap;min-width:0; }
+  .terminal .control-right { margin-left:auto; }
+
+  .terminal .market-table { table-layout:fixed;width:100%;min-width:0; }
+  .terminal .market-table col.market-coin { width:15%; }
+  .terminal .market-table col.market-price { width:9%; }
+  .terminal .market-table col.market-aggregate { width:13%; }
+  .terminal .market-table col.market-current { width:13%; }
+  .terminal .market-table col.market-venue { width:calc(50% / 6); }
+  .terminal .market-table th,
+  .terminal .market-table td { min-width:0;padding-left:4px;padding-right:4px;white-space:normal;overflow-wrap:anywhere; }
+  .terminal .market-table th { height:auto;padding-top:10px;padding-bottom:10px;letter-spacing:0; }
+  .terminal .market-table :is(th.asset-col,td.asset-cell,th.price-col,td.price-cell) { position:static;left:auto;width:auto;min-width:0; }
+  .terminal .market-table :is(th.current-lsar-col,th.aggregate-col,th.exchange-heading,.aggregate-cell,.exchange-ratio-cell) { min-width:0; }
+  .terminal .market-table .timeframe-sort { min-width:0;gap:3px;white-space:normal;line-height:1.35;text-align:right; }
+  .terminal .market-table .timeframe-sort > span { min-width:0;overflow-wrap:anywhere; }
+  .terminal .market-table .exchange-heading .timeframe-sort { gap:2px; }
+  .terminal .market-table .subhead { white-space:normal;line-height:1.35; }
+
+  .terminal .market-table .coin-trigger { gap:6px; }
+  .terminal .market-table .coin-trigger > span:last-child { min-width:0;flex:1; }
+  .terminal .market-table :is(.asset-name,.asset-market) { max-width:100%;white-space:normal;overflow-wrap:anywhere; }
+  .terminal .market-table :is(.share-context,.venue-reading) { min-width:0;width:100%; }
+  .terminal .market-table .share-meter { max-width:100%; }
+  .terminal .market-table :is(.ratio-number,.venue-reading strong,.change-value) { min-width:0;max-width:100%;overflow-wrap:anywhere; }
+}

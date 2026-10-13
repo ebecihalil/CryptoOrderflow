@@ -5,6 +5,7 @@ import { ExchangeFilter } from '@/components/exchange-filter';
 import { FetchedDataLine } from '@/components/fetched-data-line';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
 import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
@@ -214,6 +215,7 @@ function Home() {
             <span className="live-dot" />
             {healthQuery.isError ? 'API unreachable' : 'Market feed'}
           </span>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -310,6 +312,13 @@ function Home() {
         <div className="table-shell">
           <div className="table-scroll">
             <table className="market-table">
+              <colgroup>
+                <col className="market-coin" />
+                <col className="market-price" />
+                <col className="market-aggregate" />
+                <col className="market-current" />
+                {MARKET_EXCHANGES.map((exchange) => <col className="market-venue" key={exchange} />)}
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col" className="asset-col sticky-coin">Coin</th>
@@ -411,7 +420,7 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
         </td>
         <td className="price-cell" data-testid={`value-price-${row.asset}`}>
           {formatPrice(row.price)}
-          <span className="subhead" style={{ color: row.priceChange24hPct === null ? '#a0a7a0' : row.priceChange24hPct >= 0 ? '#38816d' : '#b75b50' }}>
+          <span className="subhead" style={{ color: row.priceChange24hPct === null ? 'var(--lsar-muted)' : row.priceChange24hPct >= 0 ? 'var(--lsar-positive)' : 'var(--lsar-negative)' }}>
             {formatPct(row.priceChange24hPct)}
           </span>
         </td>
@@ -449,12 +458,12 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
       </tr>
       {expanded && (
         <tr data-testid={`row-details-${row.asset}`}>
-          <td colSpan={TABLE_COLUMN_COUNT} style={{ background: '#f0eee6', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
+          <td colSpan={TABLE_COLUMN_COUNT} style={{ background: 'var(--lsar-row-hover)', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 28px', alignItems: 'center' }}>
               <span className="eyebrow">Exchange readings · OI-weighting inputs</span>
               {row.exchangeReadings.map((reading) => (
-                <span key={`${reading.exchange}-${reading.symbol}`} data-testid={`text-reading-${row.asset}-${reading.exchange}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', color: '#65736e', font: '10px var(--app-font-mono)' }}>
-                  <strong style={{ color: '#34534c', fontWeight: 500 }}>{reading.exchange.toUpperCase()}</strong>
+                <span key={`${reading.exchange}-${reading.symbol}`} data-testid={`text-reading-${row.asset}-${reading.exchange}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', color: 'var(--lsar-muted)', font: 'var(--lsar-detail-size, 10px) var(--app-font-mono)' }}>
+                  <strong style={{ color: 'var(--lsar-strong)', fontWeight: 500 }}>{reading.exchange.toUpperCase()}</strong>
                   <span>{reading.symbol}</span>
                   <span>${formatPrice(reading.price)}</span>
                   <span>OI {formatUsd(reading.openInterestUsd)}</span>
@@ -463,9 +472,9 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
                   <span>Updated {formatTimestamp(reading.updatedAt)}</span>
                 </span>
               ))}
-              {row.exchangeReadings.length === 0 && <span style={{ color: '#89928d', fontSize: 11 }}>No exchange-level readings supplied for this instrument.</span>}
+              {row.exchangeReadings.length === 0 && <span style={{ color: 'var(--lsar-muted)', fontSize: 11 }}>No exchange-level readings supplied for this instrument.</span>}
             </div>
-            <div style={{ marginTop: 9, color: '#8d9690', font: '9px var(--app-font-mono)' }}>
+            <div style={{ marginTop: 9, color: 'var(--lsar-muted)', font: 'var(--lsar-detail-note-size, 9px) var(--app-font-mono)' }}>
               <span style={{ marginRight: 14 }}>{selectedTimeframe}: {rowChange(row, selectedTimeframe)?.exchanges?.join(' + ') || 'no matched candle data'}</span>
               <div style={{ marginTop: 6 }}>Only venues with data in both compared candles enter that change. When 5-minute history does not reach the previous 4h/24h candle, OKX and Bitget use hourly history for that previous candle. The current value uses their latest 5-minute sample.</div>
             </div>
