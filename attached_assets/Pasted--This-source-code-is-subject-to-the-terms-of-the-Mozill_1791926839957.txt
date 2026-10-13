@@ -1,0 +1,142 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// ©ebecihalil
+
+//@version=6
+indicator("Liquidity Zones", overlay = true, max_boxes_count = 500)
+
+// ─────────────────────────────
+// SETTINGS
+// ─────────────────────────────
+grp_logic = "Logic Settings"
+backBars       = input.int(300, "Bars to Apply", minval = 50, group = grp_logic, 
+     tooltip = "The total number of historical bars the script scans to identify Liquidity levels.")
+
+grp_vol = "Volume Qualification"
+volMult       = input.float(1.2, "Sensitivity", minval = 0.1, group = grp_vol, 
+     tooltip = "Controls the volume requirement for levels.")
+
+grp_style = "Styling"
+resColor      = input.color(color.red, "Resistance Color", group = grp_style)
+supColor      = input.color(color.green, "Support Color", group = grp_style)
+midColor      = input.color(color.gray, "In-Zone Color", group = grp_style)
+transpSR      = input.int(35, "Fill Transparency", minval = 0, maxval = 100, group = grp_style)
+
+// ─────────────────────────────
+// CALCULATIONS
+// ─────────────────────────────
+minTouches    = 2
+volLength     = 20
+pivotStrength = 10
+
+float atr       = ta.atr(14) 
+float threshold = atr * 1.0
+volSma = ta.sma(volume, volLength)
+
+startBarIndex = last_bar_index - backBars
+inRange = bar_index >= startBarIndex
+
+phValue = ta.pivothigh(high, pivotStrength, pivotStrength)
+plValue = ta.pivotlow(low, pivotStrength, pivotStrength)
+
+float ph = (not na(phValue) and (volume[pivotStrength] > volSma[pivotStrength] * volMult)) ? phValue : na
+float pl = (not na(plValue) and (volume[pivotStrength] > volSma[pivotStrength] * volMult)) ? plValue : na
+
+// ARRAYS
+var float[] c_tops     = array.new_float(0) 
+var float[] c_bots     = array.new_float(0) 
+var int[]   c_lefts    = array.new_int(0)   
+var int[]   c_counts   = array.new_int(0)   
+var box[]   c_boxes    = array.new_box(0)   
+var int[]   c_sideState = array.new_int(0) // 1 = Above, -1 = Below, 0 = Unknown/Inside
+
+processPivot(float pPrice, int pBar) =>
+    if not na(pPrice)
+        bool foundMatch = false
+        if array.size(c_tops) > 0
+            for i = 0 to array.size(c_tops) - 1
+                float potentialTop = math.max(array.get(c_tops, i), pPrice)
+                float potentialBot = math.min(array.get(c_bots, i), pPrice)
+                
+                if (potentialTop - potentialBot) <= threshold
+                    foundMatch := true
+                    int currentCount = array.get(c_counts, i) + 1
+                    array.set(c_counts, i, currentCount)
+                    array.set(c_tops, i, potentialTop)
+                    array.set(c_bots, i, potentialBot)
+                    
+                    if currentCount >= minTouches
+                        box b = array.get(c_boxes, i)
+                        if na(b)
+                            newBox = box.new(array.get(c_lefts, i), potentialTop, bar_index, potentialBot, 
+                                     border_color=na, bgcolor=color.new(midColor, transpSR), extend=extend.right)
+                            array.set(c_boxes, i, newBox)
+                            // Initial state check when box is first created
+                            array.set(c_sideState, i, close > potentialTop ? 1 : close < potentialBot ? -1 : 0)
+                        else
+                            box.set_top(b, potentialTop)
+                            box.set_bottom(b, potentialBot)
+                    break 
+
+        if not foundMatch
+            array.push(c_tops, pPrice)
+            array.push(c_bots, pPrice)
+            array.push(c_lefts, pBar)
+            array.push(c_counts, 1)
+            array.push(c_boxes, box(na))
+            array.push(c_sideState, 0)
+
+if inRange
+    if not na(ph)
+        processPivot(ph, bar_index - pivotStrength)
+    if not na(pl)
+        processPivot(pl, bar_index - pivotStrength)
+
+// ─────────────────────────────
+//  ALERT & COLORING LOGIC
+// ─────────────────────────────
+bool alertBreakout = false
+bool alertTouch    = false
+
+if array.size(c_boxes) > 0
+    for i = 0 to array.size(c_boxes) - 1
+        box b = array.get(c_boxes, i)
+        if not na(b)
+            float top = box.get_top(b)
+            float bot = box.get_bottom(b)
+            int prevState = array.get(c_sideState, i)
+
+            // Logic: Only trigger if price crosses from one side to the other.
+            // Entering/Staying in the zone does NOT reset the state.
+            
+            if close > top
+                // Trigger alert ONLY if we were previously Below (-1)
+                if prevState == -1
+                    alertBreakout := true
+                
+                // Update state to Above (1)
+                array.set(c_sideState, i, 1)
+                box.set_bgcolor(b, color.new(supColor, transpSR))
+            
+            else if close < bot
+                // Trigger alert ONLY if we were previously Above (1)
+                if prevState == 1
+                    alertBreakout := true
+                
+                // Update state to Below (-1)
+                array.set(c_sideState, i, -1)
+                box.set_bgcolor(b, color.new(resColor, transpSR))
+            
+            else 
+                // Price is INSIDE the zone. 
+                // We change color but KEEP the prevState (1 or -1) to remember entry side.
+                box.set_bgcolor(b, color.new(midColor, transpSR))
+
+            // Zone touches (Price high or low enters the zone area)
+            if (high >= bot and high <= top) or (low <= top and low >= bot)
+                alertTouch := true
+
+// ─────────────────────────────
+// ALERT DEFINITIONS
+// ─────────────────────────────
+alertcondition(alertBreakout, "Liquidity Zone Breakout", "Liquidity Zone Breakout")
+alertcondition(alertTouch,  "Liquidity Zone Touches", "Liquidity Zone Touches")
