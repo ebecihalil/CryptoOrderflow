@@ -1,4 +1,5 @@
 const LOGOS: Record<string, string> = {
+  cme: '/exchanges/cme.png',
   binance: '/exchanges/binance.jpg',
   bybit: '/exchanges/bybit.png',
   okx: '/exchanges/okx.png',

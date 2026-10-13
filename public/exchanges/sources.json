@@ -19,6 +19,7 @@
   "deribit": "https://coin-images.coingecko.com/markets/images/1144/small/deribit-spot.jpg?1756737820",
   "aster": "https://coin-images.coingecko.com/markets/images/22084/small/aster-profile-200.png?1756966162",
   "officialSites": {
+    "cme": "https://www.cmegroup.com/",
     "lighter": "https://lighter.xyz/",
     "paradex": "https://www.paradex.trade/",
     "coinex": "https://www.coinex.com/",
@@ -27,5 +28,6 @@
   "lighter": "https://framerusercontent.com/images/uTdLWjhUvfSiBaN37kYNLsUu4.png",
   "paradex": "https://cdn.prod.website-files.com/632b1650d518e93de132751a/6925a8200edc68bffd32afa6_fav-icon-32px.png",
   "coinex": "https://www.coinex.com/favicon-48x48.png",
-  "bitmex": "https://www.bitmex.com/favicon.ico"
+  "bitmex": "https://www.bitmex.com/favicon.ico",
+  "cme": "https://companieslogo.com/img/orig/CME_BIG-6a1c3d30.png?t=1720244491"
 }

@@ -47,6 +47,11 @@ function collect(exchange){
         .finally(()=>{state.running=false;});
 }
 function stateLabel(exchange){return exchange[0].toUpperCase()+exchange.slice(1);}
+// Shared inventory: Open Interest must not launch a second OI scan for the same venues.
+export function getPerpetualInventory() {
+    for (const exchange of Object.keys(providers)) collect(exchange);
+    return states;
+}
 function queueHistory(item,timeframe,end){
     const key=`${item.exchange}:${item.symbol}`;
     loadHistory(key);

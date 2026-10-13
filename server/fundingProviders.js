@@ -15,7 +15,7 @@ export async function binance(request, update) {
             const q=quotes.get(x.symbol);
             // Binance fundingInfo lists adjusted contracts; 8h is its documented default.
             const usd=market==="dapi"?n(oi.openInterest)*n(x.contractSize):n(oi.openInterest)*n(q?.markPrice);
-            const item=reading("binance",x.symbol,x.baseAsset,usd,q?.lastFundingRate,intervals.get(x.symbol)??8,x.onboardDate);
+            const item=reading("binance",x.symbol,x.baseAsset,usd,q?.lastFundingRate,intervals.get(x.symbol)??8,x.onboardDate,{markPrice:q?.markPrice});
             if(item){records.push(item);publish(records,update);}
         }catch(error){if(paused(error))throw error;}
     },4);
@@ -32,7 +32,8 @@ export async function bybit(request, update) {
             const oi=category==="inverse"
                 ? n(q.singleOpenInterest)??(n(q.openInterest)!==null?n(q.openInterest)/2:null)
                 : n(q.singleOpenInterestValue)??(n(q.openInterestValue)!==null?n(q.openInterestValue)/2:null);
-            records.push(reading("bybit",q.symbol,q.symbol.replace(/(USDT|USDC|USD)$/,""),oi,q.fundingRate,q.fundingIntervalHour));
+            records.push(reading("bybit",q.symbol,q.symbol.replace(/(USDT|USDC|USD)$/,""),oi,q.fundingRate,q.fundingIntervalHour,null,
+                {markPrice:q.markPrice,volume24hUsd:category==="inverse"?q.volume24h:q.turnover24h}));
         }
     }
     publish(records,update);return records.filter(Boolean);
@@ -40,7 +41,8 @@ export async function bybit(request, update) {
 export async function okx(request, update) {
     const [info,oi]=await Promise.all([request("https://www.okx.com/api/v5/public/instruments?instType=SWAP"),request("https://www.okx.com/api/v5/public/open-interest?instType=SWAP")]);
     const interests=new Map(array(oi.data,"OKX OI").map(x=>[x.instId,x]));
-    const records=array(info.data,"OKX swaps").filter(x=>x.state==="live"&&stableQuote(x.settleCcy)).map(x=>reading("okx",x.instId,x.ctValCcy,n(interests.get(x.instId)?.oiUsd),null,null,x.listTime)).filter(Boolean);
+    const records=array(info.data,"OKX swaps").filter(x=>x.state==="live"&&stableQuote(x.settleCcy)).map(x=>reading("okx",x.instId,x.ctValCcy,n(interests.get(x.instId)?.oiUsd),null,null,x.listTime,
+        {markPrice:n(interests.get(x.instId)?.oiCcy)>0?n(interests.get(x.instId)?.oiUsd)/n(interests.get(x.instId)?.oiCcy):null})).filter(Boolean);
     publish(records,update);
     await mapConcurrent(records,async item=>{
         try{const q=(await request(`https://www.okx.com/api/v5/public/funding-rate?instId=${encodeURIComponent(item.symbol)}`)).data?.[0];
@@ -56,7 +58,8 @@ export async function gate(request, update) {
         const contracts=await request(`https://api.gateio.ws/api/v4/futures/${settle}/contracts`);
         for(const x of array(contracts,"Gate contracts").filter(x=>!x.in_delisting&&x.status!=="delisted")){
             const oi=settle==="btc"?n(x.position_size)*n(x.quanto_multiplier):n(x.position_size)*n(x.quanto_multiplier)*n(x.mark_price);
-            records.push(reading("gate",x.name,x.name.split("_")[0],oi,x.funding_rate,n(x.funding_interval)/3600,n(x.create_time)*1000));
+            records.push(reading("gate",x.name,x.name.split("_")[0],oi,x.funding_rate,n(x.funding_interval)/3600,n(x.create_time)*1000,
+                {markPrice:x.mark_price,contractSizeCoin:settle==="usdt"?x.quanto_multiplier:null}));
         }
         publish(records,update);
     }
@@ -71,7 +74,7 @@ export async function bitget(request, update) {
         ]);
         const periods=new Map(array(settings.data,"Bitget funding intervals").map(x=>[x.symbol,n(x.fundingRateInterval)]));
         for(const x of array(tickers.data,"Bitget tickers"))records.push(reading("bitget",x.symbol,x.symbol.replace(/(USDT|USDC|USD)$/,""),
-            n(x.holdingAmount)*n(x.markPrice),x.fundingRate,periods.get(x.symbol)));
+            n(x.holdingAmount)*n(x.markPrice),x.fundingRate,periods.get(x.symbol),null,{markPrice:x.markPrice,volume24hUsd:x.usdtVolume??x.quoteVolume}));
     }
     publish(records,update);return records.filter(Boolean);
 }
@@ -81,7 +84,7 @@ export async function mexc(request, update) {
     const records=array(tickers.data,"MEXC tickers").filter(x=>metadata.has(x.symbol)).map(x=>{
         const m=metadata.get(x.symbol);
         const oi=m.quoteCoin==="USD"?n(x.holdVol)*n(m.contractSize):n(x.holdVol)*n(m.contractSize)*n(x.fairPrice);
-        return reading("mexc",x.symbol,m.baseCoin,oi,x.fundingRate,null,m.createTime);
+        return reading("mexc",x.symbol,m.baseCoin,oi,x.fundingRate,null,m.createTime,{markPrice:x.fairPrice,volume24hUsd:m.quoteCoin==="USD"?null:x.amount24});
     }).filter(Boolean);
     publish(records,update);
     await mapConcurrent(records,async item=>{
@@ -95,14 +98,15 @@ export async function kucoin(request, update) {
     const body=await request("https://api-futures.kucoin.com/api/v1/contracts/active");
     const records=array(body.data,"KuCoin contracts").filter(x=>x.status==="Open"&&x.expireDate===null&&stableQuote(x.quoteCurrency)).map(x=>
         reading("kucoin",x.symbol,x.baseCurrency,x.isInverse?n(x.openInterest)*Math.abs(n(x.multiplier)):n(x.openInterest)*Math.abs(n(x.multiplier))*n(x.markPrice),
-            x.fundingFeeRate,n(x.currentFundingRateGranularity??x.fundingRateGranularity)/3600_000,x.firstOpenDate)).filter(Boolean);
+            x.fundingFeeRate,n(x.currentFundingRateGranularity??x.fundingRateGranularity)/3600_000,x.firstOpenDate,
+            {markPrice:x.markPrice,volume24hUsd:x.isInverse?null:x.turnoverOf24h})).filter(Boolean);
     publish(records,update);return records;
 }
 export async function kraken(request, update) {
     const body=await request("https://futures.kraken.com/derivatives/api/v3/tickers");
     const records=array(body.tickers,"Kraken tickers").filter(x=>x.tag==="perpetual"&&!x.suspended).map(x=>
         reading("kraken",x.symbol,x.pair.split(":")[0],x.symbol.startsWith("PI_")?n(x.openInterest):n(x.openInterest)*n(x.markPrice),
-            x.relativeFundingRate,1)).filter(Boolean);
+            x.relativeFundingRate,1,null,{markPrice:x.markPrice,volume24hUsd:n(x.volumeQuote)??(n(x.volume24h)!==null?(x.symbol.startsWith("PI_")?n(x.volume24h):n(x.volume24h)*n(x.markPrice)):null)})).filter(Boolean);
     publish(records,update);return records;
 }
 export async function bingx(request, update) {
@@ -111,7 +115,7 @@ export async function bingx(request, update) {
     await mapConcurrent(array(body.data,"BingX quotes"),async q=>{
         try{const oi=await request(`https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol=${encodeURIComponent(q.symbol)}`);
             // BingX documents this field as the contract's open-interest USD value.
-            const item=reading("bingx",q.symbol,q.symbol.split("-")[0],oi.data?.openInterest,q.lastFundingRate,q.fundingIntervalHours);
+            const item=reading("bingx",q.symbol,q.symbol.split("-")[0],oi.data?.openInterest,q.lastFundingRate,q.fundingIntervalHours,null,{markPrice:q.markPrice});
             if(item){records.push(item);publish(records,update);}
         }catch(error){if(paused(error))throw error;}
     },3);return records;
@@ -125,7 +129,7 @@ export async function aster(request, update) {
     const records=[];
     await mapConcurrent(array(info.symbols,"Aster contracts").filter(x=>x.status==="TRADING"&&x.contractType==="PERPETUAL"&&stableQuote(x.quoteAsset)),async x=>{
         try{const oi=await request(`https://fapi.asterdex.com/fapi/v1/openInterest?symbol=${encodeURIComponent(x.symbol)}`);
-            const q=rates.get(x.symbol);const item=reading("aster",x.symbol,x.baseAsset,n(oi.openInterest)*n(q?.markPrice),q?.lastFundingRate,periods.get(x.symbol),x.onboardDate);
+            const q=rates.get(x.symbol);const item=reading("aster",x.symbol,x.baseAsset,n(oi.openInterest)*n(q?.markPrice),q?.lastFundingRate,periods.get(x.symbol),x.onboardDate,{markPrice:q?.markPrice});
             if(item){records.push(item);publish(records,update);}
         }catch(error){if(paused(error))throw error;}
     },3);return records;

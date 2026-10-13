@@ -7,3 +7,4 @@
 - [Coin logo identity](coin-logo-identity.md) — duplicate tickers and non-crypto contracts need verified identities; logo maintenance must not add market-data traffic.
 - [Section navigation](section-navigation.md) — share the complete header, including Home placement and Market Feed, across LSAR, Funding and other sections.
 - [Funding display](funding-display.md) — positive funding is red; negative funding is green, without reversing LSAR or source-status colours.
+- [Open Interest conventions](open-interest-conventions.md) — include authorized daily CME OI in totals, not intraday changes; sum comparable underlying-coin units.

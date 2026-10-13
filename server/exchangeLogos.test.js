@@ -6,10 +6,10 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'
 const component = read('src/components/exchange-logo.tsx');
 const sources = JSON.parse(read('public/exchanges/sources.json'));
 
-test('all supported Funding and LSAR exchanges have real local logo images', () => {
+test('all supported Funding, LSAR and OI exchanges have real local logo images', () => {
   const exchanges = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'toobit',
     'mexc', 'kucoin', 'kraken', 'bingx', 'hyperliquid', 'htx', 'deribit', 'aster',
-    'lighter', 'paradex', 'coinex', 'bitmex'];
+    'lighter', 'paradex', 'coinex', 'bitmex', 'cme'];
   for (const exchange of exchanges) {
     const match = component.match(new RegExp(`${exchange}: '(\\/exchanges\\/[^']+)'`));
     assert.ok(match, `Missing logo for ${exchange}`);

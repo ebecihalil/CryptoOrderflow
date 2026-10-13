@@ -1,5 +1,6 @@
 import express from "express";
 import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
+import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -26,6 +27,20 @@ app.get("/api/market/funding", (req, res) => {
     res.status(400).json({error:"timeframe must be current, 1d, 7d, 30d, or 1y."});return;
   }
   res.set("Cache-Control","no-store").json(getFundingMarketSnapshot(timeframe));
+});
+
+app.get("/api/market/open-interest", (req, res) => {
+  const timeframe = req.query.timeframe ?? "1h";
+  if (typeof timeframe !== "string" || !timeframes.has(timeframe)) {
+    res.status(400).json({ error: "timeframe must be one of 5m, 15m, 30m, 1h, 4h, or 24h." }); return;
+  }
+  const selection = req.query.exchanges;
+  const allowed = new Set(["binance", "bybit", "okx", "gate", "bitget", "mexc", "kucoin", "kraken",
+    "bingx", "aster", "hyperliquid", "htx", "deribit", "lighter", "paradex", "coinex", "bitmex", "cme"]);
+  if (selection !== undefined && (typeof selection !== "string" || selection.split(",").some(exchange => !allowed.has(exchange)))) {
+    res.status(400).json({ error: "exchanges must be a comma-separated list of supported exchange names." }); return;
+  }
+  res.set("Cache-Control", "no-store").json(getOpenInterestSnapshot(timeframe, selection ? [...new Set(selection.split(","))] : []));
 });
 
 app.get("/api/market/lsar", (req, res) => {

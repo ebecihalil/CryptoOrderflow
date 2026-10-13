@@ -15,7 +15,7 @@ export function number(value) {
 export function normalizedRate(ratePct, hours) {
     return number(ratePct) !== null && number(hours) > 0 ? ratePct * 8 / hours : null;
 }
-export function fundingReading(exchange, symbol, base, oiUsd, rate, hours, listedAt = null) {
+export function fundingReading(exchange, symbol, base, oiUsd, rate, hours, listedAt = null, market = {}) {
     const aliases = { XBT: "BTC", XDG: "DOGE" };
     const name = String(base).trim().toUpperCase();
     const original = aliases[name] ?? name;
@@ -25,6 +25,9 @@ export function fundingReading(exchange, symbol, base, oiUsd, rate, hours, liste
         oiUsd: Number(oiUsd), ratePct: number(rate) === null ? null : Number(rate) * 100,
         intervalHours: number(hours) > 0 ? Number(hours) : null,
         fetchedAt: Date.now(), listedAt: number(listedAt),
+        markPrice: number(market.markPrice) > 0 ? Number(market.markPrice) : null,
+        volume24hUsd: number(market.volume24hUsd) >= 0 ? number(market.volume24hUsd) : null,
+        contractSizeCoin: number(market.contractSizeCoin) > 0 ? Number(market.contractSizeCoin) : null,
     };
 }
 export const weighted = values => {
