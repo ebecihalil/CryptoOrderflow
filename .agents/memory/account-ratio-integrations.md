@@ -44,3 +44,9 @@ Distinguish time to first usable Binance data from the time to finish every cont
 **Why:** Binance's market-wide USD-M account-ratio endpoint advertises request weight zero but has a separate IP limit of 1,000 requests per five minutes (official docs checked 2026-10-13). Zero weight does not mean unlimited throughput; buffered results and slow UI polling can make successful requests look slow.
 
 **How to apply:** measure both first-result and full-scan times, keep all contracts and matched candle/OI semantics, and verify current provider limits before raising concurrency. Reference: https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Long-Short-Ratio
+
+Check the affected deployment's exchange status before treating zero Binance data as a loading-speed problem.
+
+**Why:** Render returned HTTP 418 while the Replit preview fetched hundreds of Binance contracts successfully. Binance documents 418 as an IP ban following rate-limit violations; preview success does not establish production access.
+
+**How to apply:** diagnose the actual site's API error, honor cooldown guidance, and verify fresh data from that same deployment before claiming recovery. Code can prevent further request bursts, but cannot remove an existing Binance ban. Reference: https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/general-info

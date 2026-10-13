@@ -1,3 +1,6 @@
+import { BinanceCooldownError, BinanceRequestGate } from "./binanceRequestGate.js";
+
+const binanceRequestGate = new BinanceRequestGate();
 const logger = {
     info(details, message) {
         console.info(message, details);
@@ -79,6 +82,8 @@ async function fetchJson(url) {
     let lastError;
     for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
+            const isBinance = url.startsWith(`${BINANCE_BASE}/`) || url.startsWith(`${BINANCE_COINM_BASE}/`);
+            if (isBinance) await binanceRequestGate.enter(url);
             const spacing = url.includes("bitget.com/api/v2/mix/market/account-long-short") ? 1050
                 : url.startsWith(OKX_BASE) ? 450 : url.startsWith(GATE_BASE) ? 120
                 : url.startsWith(TOOBIT_BASE) ? 150 : 0;
@@ -100,6 +105,7 @@ async function fetchJson(url) {
                 signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
                 headers: { "User-Agent": "Perpetual-LSAR-Screener/1.0" },
             });
+            if (isBinance) await binanceRequestGate.inspect(response);
             if (!response.ok) {
                 const message = `Exchange returned HTTP ${response.status}`;
                 if (response.status === 429 || response.status >= 500) {
@@ -107,7 +113,9 @@ async function fetchJson(url) {
                     lastError = new Error(message);
                     continue;
                 }
-                throw new Error(message);
+                const error = new Error(message);
+                error.retryable = false;
+                throw error;
             }
             const body = (await response.json());
             if (body.code !== undefined && !["0", "00000"].includes(String(body.code))) {
@@ -126,6 +134,7 @@ async function fetchJson(url) {
         }
         catch (error) {
             lastError = error;
+            if (error instanceof BinanceCooldownError || error?.retryable === false) break;
             if (attempt < 2 && error instanceof Error && error.name === "TimeoutError") {
                 await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
                 continue;
@@ -335,6 +344,7 @@ export async function fetchBinanceLinear({ request = fetchJson, onReading = publ
         contract.status === "TRADING" &&
         (contract.quoteAsset === "USDT" || contract.quoteAsset === "USDC"));
     let errorCount = 0;
+    let fetchError = null;
     const readings = await mapLimit(contracts, 8, async (contract) => {
         const price = prices.get(contract.symbol);
         if (price == null || price <= 0) {
@@ -363,8 +373,9 @@ export async function fetchBinanceLinear({ request = fetchJson, onReading = publ
             onReading(reading);
             return reading;
         }
-        catch {
+        catch (error) {
             errorCount += 1;
+            if (!fetchError || error instanceof BinanceCooldownError) fetchError = error;
             return null;
         }
     });
@@ -372,7 +383,7 @@ export async function fetchBinanceLinear({ request = fetchJson, onReading = publ
         readings: readings.filter((reading) => reading !== null),
         marketCount: contracts.length,
         errorCount,
-        error: null,
+        error: fetchError ? String(fetchError.message ?? fetchError) : null,
     };
 }
 export async function fetchBinanceCoinM({ request = fetchJson, onReading = publishReading } = {}) {
@@ -388,6 +399,7 @@ export async function fetchBinanceCoinM({ request = fetchJson, onReading = publi
         Number.isFinite(finiteNumber(contract.contractSize)) &&
         (finiteNumber(contract.contractSize) ?? 0) > 0);
     let errorCount = 0;
+    let fetchError = null;
     const readings = await mapLimit(contracts, 8, async (contract) => {
         const price = prices.get(contract.symbol);
         if (price == null || price <= 0) {
@@ -417,8 +429,9 @@ export async function fetchBinanceCoinM({ request = fetchJson, onReading = publi
             onReading(reading);
             return reading;
         }
-        catch {
+        catch (error) {
             errorCount += 1;
+            if (!fetchError || error instanceof BinanceCooldownError) fetchError = error;
             return null;
         }
     });
@@ -426,7 +439,7 @@ export async function fetchBinanceCoinM({ request = fetchJson, onReading = publi
         readings: readings.filter((reading) => reading !== null),
         marketCount: contracts.length,
         errorCount,
-        error: null,
+        error: fetchError ? String(fetchError.message ?? fetchError) : null,
     };
 }
 async function combineExchangeFetches(promises, exchange) {
@@ -443,7 +456,10 @@ async function combineExchangeFetches(promises, exchange) {
         readings: fulfilled.flatMap((result) => result.readings),
         marketCount: fulfilled.reduce((sum, result) => sum + result.marketCount, 0),
         errorCount: fulfilled.reduce((sum, result) => sum + result.errorCount, 0) + failures.length,
-        error: failures.length ? `${failures.length} product feed(s) could not be loaded.` : null,
+        error: [
+            ...fulfilled.map(result => result.error).filter(Boolean),
+            ...failures.map(result => String(result.reason?.message ?? result.reason)),
+        ].join("; ") || null,
     };
 }
 async function fetchBinance() {
@@ -712,6 +728,15 @@ function publishSnapshot() {
 export function getLsarMarketSnapshot() {
     const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget, toobit: fetchToobit };
     for (const [exchange, fetcher] of Object.entries(fetchers)) {
+        if (exchange === "binance" && binanceRequestGate.isCoolingDown) {
+            lastProviderAttempts.delete(exchange);
+            exchangeStates[exchange] = {
+                ...exchangeStates[exchange],
+                status: sourceReadings[exchange].length ? "delayed" : "error",
+                error: binanceRequestGate.cooldownError().message,
+            };
+            continue;
+        }
         if (activeProviderTasks.has(exchange) || Date.now() - (lastProviderAttempts.get(exchange) ?? 0) < REFRESH_INTERVAL_MS) continue;
         lastProviderAttempts.set(exchange, Date.now());
         exchangeStates[exchange] = { ...exchangeStates[exchange], status: "refreshing", error: null };
@@ -726,6 +751,7 @@ export function getLsarMarketSnapshot() {
             logger.info({ exchange, markets: result.readings.length }, "Exchange account-ratio scan completed");
         }).catch((error) => {
             exchangeStates[exchange] = { ...exchangeStates[exchange], status: sourceReadings[exchange].length ? "delayed" : "error", error: String(error.message ?? error) };
+            logger.error({ exchange, error: exchangeStates[exchange].error }, "Exchange account-ratio scan failed");
         }).finally(() => {
             activeProviderTasks.delete(exchange);
             publishSnapshot();

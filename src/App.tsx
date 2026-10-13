@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ExchangeFilter } from '@/components/exchange-filter';
@@ -14,6 +14,9 @@ import { snapshotPollInterval } from '@/lib/snapshot-polling';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import { ModuleComingSoon, ModuleHome } from '@/components/module-pages';
+import { MODULES, RATIO_SECTIONS } from '@/lib/modules';
+import './styles/modules.css';
 import type {
   HealthStatus,
   LsarInstrument,
@@ -41,6 +44,7 @@ import {
   Route,
   Switch,
   useLocation,
+  Link,
   Router as WouterRouter,
 } from 'wouter';
 
@@ -212,6 +216,8 @@ function Home() {
           <span className="brand-sub">market scanner</span>
         </div>
         <div className="topbar-right">
+          <Link className="lsar-home-link" href="/" aria-label="Back to Crypto Order Flow home">CO <span>Home</span></Link>
+          <span className="lsar-active-module" aria-current="page"><span>LS</span> Long Short Ratio</span>
           <span className={`live-indicator ${healthQuery.isError ? 'api-down' : ''}`} data-testid="status-api-health"
             aria-label={healthQuery.isError ? 'API unreachable' : 'Market feed'}
             title={healthQuery.isError ? 'API unreachable' : 'Market feed'}>
@@ -494,11 +500,27 @@ function Router() {
     // survives a page crash.
     <RoutedErrorBoundary>
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/" component={ModuleHome} />
+        <Route path="/long-short-account-ratio" component={Home} />
+        <Route path="/lsar" component={LsarAlias} />
+        <Route path="/long-short-position-ratio">
+          <ModuleComingSoon module={RATIO_SECTIONS[1]} />
+        </Route>
+        {MODULES.filter((module) => module.path !== '/long-short-account-ratio').map((module) => (
+          <Route key={module.path} path={module.path}>
+            <ModuleComingSoon module={module} />
+          </Route>
+        ))}
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
   );
+}
+
+function LsarAlias() {
+  const [, setLocation] = useLocation();
+  useEffect(() => { setLocation('/long-short-account-ratio', { replace: true }); }, [setLocation]);
+  return null;
 }
 
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {

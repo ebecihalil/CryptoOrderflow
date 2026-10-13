@@ -4,6 +4,8 @@ Crypto Orderflow is the umbrella project name: the product will not be limited t
 
 The LSAR screen's visible header branding remains **Perpetual LSAR** with the **LS** mark. The user clarified that renaming the project/repository does not mean replacing this screen's branding.
 
+The home page is the **Crypto Order Flow** module directory. The user wants Long Short Ratio to expand into Long Short Account Ratio (the existing live screener) and Long Short Position Ratio. Funding Rate, Open Interest, Liquidations, CVD, Super Charts (Indicators), and Position Ratio are planned sections to implement one by one later; do not invent data or implement their metrics ahead of that request. Keep the existing visual concept, light/dark themes, and two-letter section marks.
+
 The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.
 
 ## Run & Operate

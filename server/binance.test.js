@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fetchBinanceLinear, fetchBinanceCoinM } from "./lsarMarketData.js";
 import { snapshotPollInterval } from "../src/lib/snapshot-polling.ts";
+import { BinanceCooldownError } from "./binanceRequestGate.js";
 
 const now = Math.floor(Date.now() / 300_000) * 300_000;
 const history = [
@@ -80,3 +81,26 @@ test("poll snapshots faster only while Binance is connecting or scanning", () =>
     assert.equal(snapshotPollInterval([{ exchange: "bitget", status: "refreshing" }]), 30_000);
     assert.equal(snapshotPollInterval(), 30_000);
 });
+
+for (const fetcher of [fetchBinanceLinear, fetchBinanceCoinM]) {
+    test(`${fetcher.name} preserves the ban reason when a contract request fails`, async () => {
+        const published = [];
+        const request = async value => {
+            const path = new URL(value).pathname;
+            if (path.endsWith("/exchangeInfo")) return { symbols: [{
+                symbol: "ALPHAUSDT", pair: "ALPHAUSD", baseAsset: "ALPHA", quoteAsset: "USDT",
+                status: "TRADING", contractStatus: "TRADING", contractType: "PERPETUAL", contractSize: 100,
+            }] };
+            if (path.endsWith("/ticker/price")) return [{ symbol: "ALPHAUSDT", price: "8" }];
+            if (path.endsWith("/ticker/24hr")) return [{ symbol: "ALPHAUSDT", priceChangePercent: "1" }];
+            if (path.endsWith("/openInterest")) throw new BinanceCooldownError(418, Date.now() + 120_000);
+            return history;
+        };
+        const result = await fetcher({ request, onReading: reading => published.push(reading) });
+        assert.equal(result.readings.length, 0);
+        assert.equal(result.errorCount, 1);
+        assert.match(result.error, /HTTP 418/);
+        assert.match(result.error, /paused until/);
+        assert.equal(published.length, 0);
+    });
+}
