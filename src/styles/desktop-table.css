@@ -5,16 +5,21 @@
   .terminal .control-left { flex-wrap:wrap;min-width:0; }
   .terminal .control-right { margin-left:auto; }
 
-  .terminal .market-table { table-layout:fixed;width:100%;min-width:0; }
-  .terminal .market-table col.market-coin { width:14%; }
-  .terminal .market-table col.market-price { width:12%; }
+  .terminal .market-table {
+    --market-coin-width:clamp(130px,10vw,160px);
+    --market-price-width:110px;
+    table-layout:fixed;width:100%;min-width:0;
+  }
+  .terminal .market-table col.market-coin { width:var(--market-coin-width); }
+  .terminal .market-table col.market-price { width:var(--market-price-width); }
   .terminal .market-table col.market-aggregate { width:13%; }
   .terminal .market-table col.market-current { width:13%; }
-  .terminal .market-table col.market-venue { width:calc(48% / 6); }
+  .terminal .market-table col.market-venue { width:calc((74% - var(--market-coin-width) - var(--market-price-width)) / 6); }
   .terminal .market-table th,
   .terminal .market-table td { min-width:0;padding-left:4px;padding-right:4px;white-space:normal;overflow-wrap:anywhere; }
   .terminal .market-table th { height:auto;padding-top:10px;padding-bottom:10px;letter-spacing:0; }
   .terminal .market-table :is(th.asset-col,td.asset-cell,th.price-col,td.price-cell) { position:static;left:auto;width:auto;min-width:0; }
+  .terminal .market-table :is(th.price-col,td.price-cell) { text-align:left; }
   .terminal .market-table :is(th.current-lsar-col,th.aggregate-col,th.exchange-heading,.aggregate-cell,.exchange-ratio-cell) { min-width:0; }
   .terminal .market-table .timeframe-sort { min-width:0;gap:3px;white-space:normal;line-height:1.35;text-align:right; }
   .terminal .market-table .timeframe-sort > span { min-width:0;overflow-wrap:anywhere; }
