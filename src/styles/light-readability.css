@@ -1,4 +1,4 @@
-/* One-pixel type increase and stronger ink in light mode only. */
+/* Stronger light-mode ink and larger supporting UI text. */
 :root:not(.dark):not([data-theme='dark']) {
   --lsar-muted: #52625a;
   --lsar-strong: #223d35;
@@ -14,10 +14,12 @@
 :root:not(.dark):not([data-theme='dark']) .page-title { font-size:clamp(29px,calc(3.3vw + 1px),43px); }
 :root:not(.dark):not([data-theme='dark']) .page-subtitle { font-size:14px;color:var(--lsar-muted); }
 
-:root:not(.dark):not([data-theme='dark']) :is(.brand-sub,.topbar-right,.eyebrow,.fetched-data-line,.exchange-select-trigger,.exchange-select-option,.select-control,.price-input-wrap,.price-input-wrap input) { font-size:12px; }
+:root:not(.dark):not([data-theme='dark']) :is(.brand-sub,.topbar-right,.eyebrow,.exchange-select-trigger,.exchange-select-option,.select-control,.price-input-wrap,.price-input-wrap input) { font-size:12px; }
+:root:not(.dark):not([data-theme='dark']) .fetched-data-line { font-size:14px; }
 :root:not(.dark):not([data-theme='dark']) :is(.searchbox input,.refresh-button) { font-size:13px; }
 :root:not(.dark):not([data-theme='dark']) :is(.theme-toggle,.filter-label,.sort-toggle button,.table-meta,.exchange-select-actions button,.footnote) { font-size:11px; }
-:root:not(.dark):not([data-theme='dark']) :is(.exchange-select-menu p,.asset-market,.share-percent,.aggregate-share,.venue-shares,.footline,.coin-logo-fallback) { font-size:10px; }
+:root:not(.dark):not([data-theme='dark']) :is(.exchange-select-menu p,.footline,.coin-logo-fallback) { font-size:10px; }
+:root:not(.dark):not([data-theme='dark']) :is(.asset-market,.share-percent,.aggregate-share,.venue-shares) { font-size:11px; }
 :root:not(.dark):not([data-theme='dark']) :is(.brand-sub,.topbar-right,.eyebrow,.fetched-data-line,.filter-label,.table-meta,.exchange-select-menu p,.asset-market,.share-percent,.footnote,.footline) { color:var(--lsar-muted); }
 :root:not(.dark):not([data-theme='dark']) :is(.fetched-data-line strong,.footnote strong,.exchange-select-trigger,.exchange-select-option,.select-control) { color:var(--lsar-strong); }
 :root:not(.dark):not([data-theme='dark']) .sort-toggle button:not(.active) { color:var(--lsar-strong); }
@@ -26,13 +28,13 @@
 :root:not(.dark):not([data-theme='dark']) .searchbox input::placeholder { color:#59685f;opacity:1; }
 :root:not(.dark):not([data-theme='dark']) .searchbox svg { color:#59685f; }
 
-:root:not(.dark):not([data-theme='dark']) .market-table { font-size:12px; }
-:root:not(.dark):not([data-theme='dark']) .market-table th { font-size:10px;color:#3d5249;font-weight:600; }
+:root:not(.dark):not([data-theme='dark']) .market-table { font-size:14px; }
+:root:not(.dark):not([data-theme='dark']) .market-table th { font-size:12px;color:#3d5249;font-weight:600; }
 :root:not(.dark):not([data-theme='dark']) .market-table td { color:#263b3a; }
-:root:not(.dark):not([data-theme='dark']) .asset-name { font-size:13px;color:#1c3135; }
-:root:not(.dark):not([data-theme='dark']) .subhead { font-size:9px;color:#56685f; }
-:root:not(.dark):not([data-theme='dark']) .change-value { font-size:11px;font-weight:500; }
-:root:not(.dark):not([data-theme='dark']) .venue-reading strong { font-size:12px;color:#205f4c; }
+:root:not(.dark):not([data-theme='dark']) .asset-name { font-size:15px;color:#1c3135; }
+:root:not(.dark):not([data-theme='dark']) .subhead { font-size:11px;color:#56685f; }
+:root:not(.dark):not([data-theme='dark']) .change-value { font-size:13px;font-weight:500; }
+:root:not(.dark):not([data-theme='dark']) .venue-reading strong { font-size:14px;color:#205f4c; }
 :root:not(.dark):not([data-theme='dark']) :is(.price-cell,.ratio-number) { color:#263b3a; }
 :root:not(.dark):not([data-theme='dark']) :is(.change-value.positive,.aggregate-share.positive,.venue-shares span:first-child) { color:var(--lsar-positive); }
 :root:not(.dark):not([data-theme='dark']) :is(.change-value.negative,.aggregate-share.negative,.venue-shares span:last-child) { color:var(--lsar-negative); }

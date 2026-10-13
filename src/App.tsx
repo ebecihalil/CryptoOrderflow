@@ -224,11 +224,11 @@ function Home() {
       <main className="main-wrap">
         <section className="hero-line">
           <div>
-            <div className="eyebrow">Cross-exchange positioning / perpetuals</div>
+            <div className="eyebrow">Crypto Ordeflow Mechanics</div>
             <h1 className="page-title">Long Short Account Ratio (LSAR)</h1>
             <p className="page-subtitle">OI-weighted account positioning across perpetual markets. Each coin lists its contributing exchanges.</p>
-            <FetchedDataLine sources={snapshot?.sources} />
           </div>
+          <FetchedDataLine sources={snapshot?.sources} />
           <button className="refresh-button" onClick={handleRefresh} disabled={isFetching} data-testid="button-refresh">
             <RefreshCw className={isFetching ? 'spin' : ''} />
             {isFetching ? 'Loading snapshot' : 'Refresh'}

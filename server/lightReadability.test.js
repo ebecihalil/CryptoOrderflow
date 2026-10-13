@@ -14,9 +14,9 @@ test("all readability overrides exclude dark mode", () => {
     }
 });
 
-test("light mode increases table text, captions and headers by one pixel", () => {
+test("light mode keeps readable table values, captions, headings and fetched counts", () => {
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-    for (const [selector, size] of [[".market-table", 12], [".market-table th", 10], [".subhead", 9], [".asset-name", 13]]) {
+    for (const [selector, size] of [[".market-table", 14], [".market-table th", 12], [".subhead", 11], [".asset-name", 15], [".fetched-data-line", 14]]) {
         const rule = rules.find((match) => match[1].trim() === `${guard} ${selector}`);
         assert.ok(rule, selector);
         assert.match(rule[2], new RegExp(`font-size:\\s*${size}px`));
