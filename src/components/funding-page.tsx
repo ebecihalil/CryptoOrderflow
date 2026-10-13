@@ -196,12 +196,13 @@ function FundingRateCell({ venue, timeframe }: { venue?: FundingVenue; timeframe
     </td>;
   }
   const value = venue.valuePct;
+  const showDetail = timeframe !== 'current' || (venue.intervalHours !== null && venue.intervalHours !== 8);
   return (
     <td className={`funding-rate-cell ${value === null ? 'is-missing' : value > 0 ? 'is-positive' : value < 0 ? 'is-negative' : ''}`}>
-      <span title={timeframe === 'current' ? currentRateDetail(venue) : `${periodLabel(timeframe)} settled funding sum`}>
+      <span title={showDetail ? (timeframe === 'current' ? currentRateDetail(venue) : `${periodLabel(timeframe)} settled funding sum`) : undefined}>
         {formatPct(value)}
       </span>
-      <small>{timeframe === 'current' ? currentRateDetail(venue) : 'settled sum'}</small>
+      {showDetail && <small>{timeframe === 'current' ? currentRateDetail(venue) : 'settled sum'}</small>}
     </td>
   );
 }
@@ -434,7 +435,7 @@ function FundingExtremeList({
             <span className="funding-extreme-name"><strong>{item.asset}</strong><small><ExchangeLogo exchange={item.exchange} />{exchangeLabel(item.exchange)}</small></span>
             <span className={`funding-extreme-value ${item.valuePct > 0 ? 'is-positive' : item.valuePct < 0 ? 'is-negative' : ''}`}>
               {formatPct(item.valuePct)}
-              <small>{item.nativeRatePct === null ? 'native unavailable' : `${formatPct(item.nativeRatePct)} (${item.intervalHours === null ? 'interval unknown / mixed' : `${item.intervalHours}h`})`}</small>
+              {item.intervalHours !== null && item.intervalHours !== 8 && <small>{item.nativeRatePct === null ? 'native unavailable' : `${formatPct(item.nativeRatePct)} (${item.intervalHours}h)`}</small>}
             </span>
           </li>
         ))}

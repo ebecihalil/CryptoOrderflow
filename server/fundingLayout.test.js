@@ -14,6 +14,23 @@ test('positive funding is red and negative funding is green across tables and su
   assert.match(component, /value > 0 \? 'is-positive' : value < 0 \? 'is-negative' : ''/);
 });
 
+test('current eight-hour and unknown intervals show only the rate while other known intervals retain details', () => {
+  assert.match(component, /const showDetail = timeframe !== 'current' \|\| \(venue\.intervalHours !== null && venue\.intervalHours !== 8\);/);
+  assert.match(component, /<span title=\{showDetail \? .* : undefined\}>/);
+  assert.match(component, /\{showDetail && <small>\{timeframe === 'current' \? currentRateDetail\(venue\) : 'settled sum'\}<\/small>\}/);
+  assert.match(component, /\{item\.intervalHours !== null && item\.intervalHours !== 8 && <small>/);
+  for (const [timeframe, intervalHours, expected] of [
+    ['current', 8, false],
+    ['current', 1, true],
+    ['current', 4, true],
+    ['current', null, false],
+    ['1d', 8, true],
+    ['1d', null, true],
+  ]) {
+    assert.equal(timeframe !== 'current' || (intervalHours !== null && intervalHours !== 8), expected);
+  }
+});
+
 test('funding extreme lists keep one full-width entry per row on desktop and mobile', () => {
   const rules = [...css.matchAll(/\.funding-extreme-panel ol\s*\{([^}]*)\}/g)];
   assert.ok(rules.length >= 2);
