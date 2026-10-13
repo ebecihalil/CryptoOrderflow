@@ -17,7 +17,7 @@ import NotFound from '@/pages/not-found';
 import { ModuleComingSoon, ModuleHome } from '@/components/module-pages';
 import { FundingPage } from '@/components/funding-page';
 import { OpenInterestPage } from '@/components/open-interest-page';
-import { MODULES, RATIO_SECTIONS } from '@/lib/modules';
+import { MODULES } from '@/lib/modules';
 import './styles/modules.css';
 import type {
   LsarInstrument,
@@ -203,7 +203,7 @@ function Home() {
 
   return (
     <div className="terminal">
-      <AppHeader title="Long Short Account Ratio" mark="LS" sectionLabel="Long Short Ratio" isRefreshing={snapshot?.isRefreshing} />
+      <AppHeader title="Long Short Account Ratio" mark="LS" sectionLabel="Long Short Account Ratio" isRefreshing={snapshot?.isRefreshing} />
 
       <main className="main-wrap">
         <section className="hero-line">
@@ -478,9 +478,6 @@ function Router() {
         <Route path="/" component={ModuleHome} />
         <Route path="/long-short-account-ratio" component={Home} />
         <Route path="/lsar" component={LsarAlias} />
-        <Route path="/long-short-position-ratio">
-          <ModuleComingSoon module={RATIO_SECTIONS[1]} />
-        </Route>
         <Route path="/funding-rate" component={FundingPage} />
         <Route path="/open-interest" component={OpenInterestPage} />
         {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest').map((module) => (

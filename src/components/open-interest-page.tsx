@@ -183,9 +183,10 @@ export function OpenInterestPage() {
   const [sortField, setSortField] = useState<SortField>('aggregateOiUsd');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [page, setPage] = useState(0);
-  const query = useOpenInterestSnapshot(timeframe, selectedExchanges ?? []);
+  const query = useOpenInterestSnapshot(timeframe, selectedExchanges ?? [], timeframe === '24h' ? 'rolling24h' : 'candle');
   const dailyQuery = useOpenInterestSnapshot('24h', selectedExchanges ?? [], 'rolling24h');
-  const snapshot = query.data;
+  const tableQuery = timeframe === '24h' ? dailyQuery : query;
+  const snapshot = tableQuery.data;
   const dailySnapshot = dailyQuery.data;
   const sources = useMemo(
     () => orderFundingSources(dailySnapshot?.sources ?? snapshot?.sources ?? []),
@@ -226,19 +227,19 @@ export function OpenInterestPage() {
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const visibleRows = rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
-  const loading = query.isLoading && !snapshot;
+  const loading = tableQuery.isLoading && !snapshot;
   const dailyLoading = dailyQuery.isLoading && !dailySnapshot;
   const rankingCoverage = dailySnapshot?.rankingCoverage;
   const rankingCoverageLabel = rankingCoverage
     ? `${rankingCoverage.coinsWithHistory.toLocaleString()}/${rankingCoverage.eligibleCoins.toLocaleString()} coins`
     : 'coverage unavailable';
-  const refreshing = query.isFetching || dailyQuery.isFetching;
+  const refreshing = timeframe === '24h' ? dailyQuery.isFetching : query.isFetching || dailyQuery.isFetching;
   const hasExchangeSelection = selectedExchanges === null || activeExchanges.length > 0;
   const gainers = (hasExchangeSelection ? dailySnapshot?.extremes.gainers ?? [] : []).filter((row) => row.changePct !== null && Number.isFinite(row.changePct) && row.changePct > 0)
     .sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0)).slice(0, 5);
   const losers = (hasExchangeSelection ? dailySnapshot?.extremes.losers ?? [] : []).filter((row) => row.changePct !== null && Number.isFinite(row.changePct) && row.changePct < 0)
     .sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0)).slice(0, 5);
-  const errorMessage = query.error instanceof Error ? query.error.message : 'Open interest data is unavailable.';
+  const errorMessage = tableQuery.error instanceof Error ? tableQuery.error.message : 'Open interest data is unavailable.';
   const dailyErrorMessage = dailyQuery.error instanceof Error ? dailyQuery.error.message : 'Daily open interest rankings are unavailable.';
 
   return (
@@ -248,7 +249,9 @@ export function OpenInterestPage() {
         <div className="oi-heading">
           <div><span className="eyebrow">Crypto Order Flow Mechanics</span><h1>Open Interest</h1></div>
           <button type="button" className="refresh-button oi-refresh" onClick={() => {
-            void Promise.all([query.refetch(), dailyQuery.refetch()]);
+            void (timeframe === '24h'
+              ? dailyQuery.refetch()
+              : Promise.all([query.refetch(), dailyQuery.refetch()]));
           }} disabled={refreshing}
             aria-label={refreshing ? 'Refreshing open interest snapshot' : 'Refresh open interest snapshot'}>
             <RefreshCw className={refreshing ? 'spin' : ''} aria-hidden="true" /><span>{refreshing ? 'Refreshing' : 'Refresh'}</span>
@@ -282,9 +285,9 @@ export function OpenInterestPage() {
           </div>
         </section>
 
-        {query.isError && <div className="oi-error" role="alert">
+        {timeframe !== '24h' && tableQuery.isError && <div className="oi-error" role="alert">
           <span>{snapshot ? `Could not refresh. Showing the last available snapshot. ${errorMessage}` : errorMessage}</span>
-          <button type="button" onClick={() => { void query.refetch(); }}>Retry</button>
+          <button type="button" onClick={() => { void tableQuery.refetch(); }}>Retry</button>
         </div>}
 
         <div className="oi-table-meta">
@@ -300,7 +303,7 @@ export function OpenInterestPage() {
               {([
                 ['asset', 'Coin'],
                 ['aggregateOiCoin', 'Aggregated OI Contract Size'],
-                ['changePct', `Aggregated OI Change (%) · ${timeframe}`],
+                ['changePct', `Aggregated OI Change (%) · ${timeframe === '24h' ? '24h rolling' : `${timeframe} candle`}`],
                 ['aggregateOiUsd', 'Aggregated OI ($)'],
                 ['oiVolumeRatio', 'OI / 24H Volume Ratio'],
               ] as [SortField, string][]).map(([field, label]) => (
@@ -311,7 +314,7 @@ export function OpenInterestPage() {
             </tr></thead>
             <tbody>
               {loading && Array.from({ length: 7 }, (_, index) => <tr key={`loading-${index}`}><td colSpan={5}><i className="oi-skeleton-row" /></td></tr>)}
-              {!loading && !snapshot && query.isError && <tr><td colSpan={5}><div className="oi-empty" role="status"><span className="oi-empty-mark">OI</span><strong>Open interest snapshot unavailable</strong><p>Live open interest could not be reached. Retry when the market feed is available.</p></div></td></tr>}
+              {!loading && !snapshot && tableQuery.isError && <tr><td colSpan={5}><div className="oi-empty" role="status"><span className="oi-empty-mark">OI</span><strong>Open interest snapshot unavailable</strong><p>Live open interest could not be reached. Retry when the market feed is available.</p></div></td></tr>}
               {!loading && snapshot && rows.length === 0 && <tr><td colSpan={5}><div className="oi-empty"><span className="oi-empty-mark">OI</span><strong>{search || activeExchanges.length !== exchanges.length ? 'No coins match these filters' : 'No open interest readings yet'}</strong><p>{search || activeExchanges.length !== exchanges.length ? 'Adjust your search or exchange selection.' : 'No rows were returned by this cached snapshot.'}</p></div></td></tr>}
               {!loading && visibleRows.map((row) => {
                 const change = row.changePct;
@@ -320,8 +323,10 @@ export function OpenInterestPage() {
                   <td className="oi-coin-cell"><div className="oi-coin-content"><CoinLogo asset={row.asset} /><span><strong>{row.displayAsset || row.asset}</strong><small>{row.asset}</small></span></div></td>
                   <td title="Underlying coin units; contract sizing follows the row asset">{formatUnits(row.aggregateOiCoin, row.asset)}</td>
                   <td className={changeTone} title={change === null
-                    ? 'Change unavailable: no matched venues have an available historical comparison baseline.'
-                    : `${row.matchedSourceCount} venues matched across both compared candles`}>{formatPct(change)}</td>
+                    ? `Change unavailable: no matched venues have an available ${timeframe === '24h' ? 'rolling 24-hour' : 'candle'} comparison baseline.`
+                    : timeframe === '24h'
+                      ? `${row.matchedSourceCount} venues matched across the rolling 24-hour comparison`
+                      : `${row.matchedSourceCount} venues matched across both compared candles`}>{formatPct(change)}</td>
                   <td>{formatUsd(row.aggregateOiUsd)}</td>
                   <td className={row.oiVolumeRatio === null ? 'oi-missing' : ''}>{row.oiVolumeRatio === null || !Number.isFinite(row.oiVolumeRatio) ? '—' : row.oiVolumeRatio.toFixed(4)}</td>
                 </tr>;
@@ -344,11 +349,11 @@ export function OpenInterestPage() {
 
         <footer className="oi-footline"><span>CRYPTO ORDER FLOW / OPEN INTEREST</span><span>{snapshot ? `${exchanges.length} SOURCE VENUES · ${timeframe.toUpperCase()}` : 'AWAITING MARKET SNAPSHOT'}</span></footer>
 
-        <p className="oi-comparison-note"><strong>Aggregated open interest is summed, not weighted.</strong> Table change remains candle-based, comparing venues matched across the current and previous {timeframe} candles; coverage may differ from current OI source coverage.</p>
+        <p className="oi-comparison-note"><strong>Aggregated open interest is summed, not weighted.</strong> The 24h table change uses the same rolling 24-hour snapshot and matched-venue comparison as the top rankings. Shorter timeframes compare venues matched across adjacent candles; coverage may differ from current OI source coverage.</p>
         <section className="oi-method" aria-label="Open interest methodology and source notes">
           <span className="oi-method-mark" aria-hidden="true">i</span>
           <div className="oi-method-copy">
-            <p>Open interest is summed across available venues. Table percentage change compares matching venue coverage between adjacent candles; hover a change to see the number of matched venues. Top 24H rankings instead compare the latest observation with an available observation from approximately 24 hours earlier, using a 5-minute historical baseline tolerance. Rankings use verified crypto identities, with OI compared in underlying coin units; coins without a usable baseline are excluded, so history coverage may be incomplete. Current OI includes CME only when authorized real latest daily reports are available. The OI / 24H volume ratio uses paired venues with verified rolling 24-hour volume and excludes CME trading-day volume.</p>
+            <p>Open interest is summed across available venues. The 24h table percentage change uses the same rolling 24-hour snapshot as the top rankings: latest observations compared with available observations from approximately 24 hours earlier, using a 5-minute historical baseline tolerance. Shorter table timeframes compare matched venue coverage between adjacent candles. Hover a change to see the number of matched venues. Rankings use verified crypto identities, with OI compared in underlying coin units; coins without a usable baseline are excluded, so history coverage may be incomplete. Current OI includes CME only when authorized real latest daily reports are available. The OI / 24H volume ratio uses paired venues with verified rolling 24-hour volume and excludes CME trading-day volume.</p>
             {rankingCoverage && <p>Ranking coverage: {rankingCoverage.coinsWithHistory.toLocaleString()} of {rankingCoverage.eligibleCoins.toLocaleString()} eligible verified crypto coins had usable history; {rankingCoverage.excludedNonCryptoOrUnverifiedCoins.toLocaleString()} non-crypto or unverified identities were excluded. These counts describe the eligible identity catalogue, not the full market.</p>}
             {snapshot?.notes.map((note, index) => <p key={`${index}-${note}`}>{note}</p>)}
             {snapshot?.cmeReportDates.length ? <p className="oi-method-dates">CME report dates: {snapshot.cmeReportDates.join(', ')}</p> : null}

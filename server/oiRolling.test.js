@@ -8,6 +8,23 @@ import { createRows } from "./lsarMarketData.js";
 
 const now = Date.UTC(2026, 9, 13, 14, 30), day = 86400_000;
 const point = (timestamp, oiCoin) => ({ timestamp, oiCoin });
+test("BLUR's rolling 24H row and gainers use the exact same change, not yesterday's close", () => {
+    const source = { exchange: "bybit", symbol: "BLURUSDT", asset: "BLUR", exchangeAsset: "BLUR",
+        oiCoin: 394, oiUsd: 39.4, markPrice: 0.1, fetchedAt: now, volume24hUsd: 100 };
+    const states = { bybit: { readings: [source], status: "live", running: false } };
+    const histories = new Map([["bybit:BLURUSDT", [
+        point(now - day, 100), point(Date.UTC(2026, 9, 12, 23, 55), 318), point(now, 394),
+    ]]]);
+    const rolling = buildOiSnapshot(states, histories, new Map(), "24h", now, [], { comparison: "rolling24h" });
+    const candle = buildOiSnapshot(states, histories, new Map(), "24h", now);
+    assert.ok(Math.abs(rolling.rows[0].changePct - 294) < 1e-10);
+    assert.ok(Math.abs(candle.rows[0].changePct - (394 / 318 - 1) * 100) < 1e-10);
+    assert.equal(rolling.extremes.gainers[0], rolling.rows[0]);
+    assert.equal(rolling.extremes.gainers[0].matchedSourceCount, rolling.rows[0].matchedSourceCount);
+    const selected = buildOiSnapshot(states, histories, new Map(), "24h", now, ["bybit"], { comparison: "rolling24h" });
+    assert.equal(selected.extremes.gainers[0].changePct, selected.rows[0].changePct);
+    assert.equal(selected.rows[0].changePct, rolling.rows[0].changePct);
+});
 test("rolling 24h is not yesterday's closing candle comparison", () => {
     const points = [point(now - day, 100), point(Date.UTC(2026, 9, 12, 23, 55), 200), point(now, 120)];
     assert.ok(Math.abs(aggregateChange([rollingPair(points, now)]) - 20) < 1e-10);

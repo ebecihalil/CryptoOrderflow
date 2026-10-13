@@ -28,7 +28,7 @@ test('OI table columns use the required order and each header is sortable', () =
   assert.deepEqual(headings, [
     "'Coin'",
     "'Aggregated OI Contract Size'",
-    "`Aggregated OI Change (%) · ${timeframe}`",
+    "`Aggregated OI Change (%) · ${timeframe === '24h' ? '24h rolling' : `${timeframe} candle`}`",
     "'Aggregated OI ($)'",
     "'OI / 24H Volume Ratio'",
   ]);
@@ -42,9 +42,12 @@ test('positive and negative OI changes use normal positive/negative theme colors
   assert.match(component, /change > 0 \? 'oi-positive' : change < 0 \? 'oi-negative'/);
 });
 
-test('top gainers and losers use the independently queried 24H snapshot and exchange selection', () => {
+test('top rankings stay rolling 24H and the 24H table shares their snapshot and exchange selection', () => {
   assert.match(component, /const dailyQuery = useOpenInterestSnapshot\('24h', selectedExchanges \?\? \[\], 'rolling24h'\);/);
-  assert.match(component, /const query = useOpenInterestSnapshot\(timeframe, selectedExchanges \?\? \[\]\);/);
+  assert.match(component, /const query = useOpenInterestSnapshot\(timeframe, selectedExchanges \?\? \[\], timeframe === '24h' \? 'rolling24h' : 'candle'\);/);
+  assert.match(component, /const tableQuery = timeframe === '24h' \? dailyQuery : query;/);
+  assert.match(component, /const snapshot = tableQuery\.data;/);
+  assert.match(component, /const loading = tableQuery\.isLoading && !snapshot;/);
   assert.match(component, /const dailySnapshot = dailyQuery\.data;/);
   assert.match(component, /const hasExchangeSelection = selectedExchanges === null \|\| activeExchanges\.length > 0;/);
   assert.match(component, /hasExchangeSelection \? dailySnapshot\?\.extremes\.gainers \?\? \[\] : \[\]/);
@@ -57,16 +60,17 @@ test('top gainers and losers use the independently queried 24H snapshot and exch
   assert.match(component, /dailyQuery\.isError/);
   assert.match(component, /onClick=\{\(\) => \{ void dailyQuery\.refetch\(\); \}\}>Retry daily rankings/);
   assert.match(component, /Promise\.all\(\[query\.refetch\(\), dailyQuery\.refetch\(\)\]\)/);
+  assert.match(component, /void \(timeframe === '24h'\s*\? dailyQuery\.refetch\(\)\s*: Promise\.all/);
   assert.match(component, /approximately 24 hours earlier, using a 5-minute historical baseline tolerance/);
   assert.match(component, /coins without a usable baseline are excluded/i);
   assert.match(component, /Ranking coverage:/);
 });
 
-test('table candle and rolling-ranking requests use separate query modes', () => {
+test('24H table and rankings use identical cached query keys; shorter table TFs stay candle-based', () => {
   assert.match(snapshotHook, /comparison: OiComparison = 'candle'/);
   assert.match(snapshotHook, /queryKey: \['open-interest-snapshot', timeframe, selection, comparison\]/);
   assert.match(snapshotHook, /if \(comparison !== 'candle'\) params\.set\('comparison', comparison\)/);
-  assert.match(component, /useOpenInterestSnapshot\(timeframe, selectedExchanges \?\? \[\]\)/);
+  assert.match(component, /useOpenInterestSnapshot\(timeframe, selectedExchanges \?\? \[\], timeframe === '24h' \? 'rolling24h' : 'candle'\)/);
   assert.match(component, /useOpenInterestSnapshot\('24h', selectedExchanges \?\? \[\], 'rolling24h'\)/);
 });
 
@@ -85,7 +89,15 @@ test('source status, rankings, controls, table, pagination and methodology stay 
   assert.equal(component.indexOf('<p className="oi-comparison-note">'), comparisonNote);
   assert.equal(component.indexOf('<section className="oi-method"'), methodology);
   assert.match(component, /Retry daily rankings/);
-  assert.match(component, /onClick=\{\(\) => \{ void query\.refetch\(\); \}\}>Retry/);
+  assert.match(component, /onClick=\{\(\) => \{ void tableQuery\.refetch\(\); \}\}>Retry/);
+});
+
+test('OI labels and change tooltips distinguish shared rolling 24H from shorter candles', () => {
+  assert.match(component, /24h rolling/);
+  assert.match(component, /rolling 24-hour comparison/);
+  assert.match(component, /venues matched across both compared candles/);
+  assert.match(component, /The 24h table change uses the same rolling 24-hour snapshot/);
+  assert.match(component, /!snapshot && tableQuery\.isError/);
 });
 
 test('contract size formatting delegates to the shared abbreviated formatter', () => {

@@ -113,7 +113,7 @@ export function getOpenInterestSnapshot(timeframe = "1h", selection = [], compar
     return { ...snapshot, isRefreshing: snapshot.isRefreshing || queue.pendingCount > 0,
         notes: [
             "OI contract size is expressed in equivalent underlying-coin units, not a sum of incompatible exchange contract counts. OI is summed, not OI-weighted.",
-            "Table TF change compares the latest available observations in the current and previous candle, using the same contracts on both sides. Missing baselines are unavailable, not zero.",
+            "Shorter table TF changes compare the latest available observations in the current and previous candle, using the same contracts on both sides. The table's 24h option shares the rolling 24-hour snapshot used by top gainers/losers. Missing baselines are unavailable, not zero.",
             "Top gainers/losers use rolling 24-hour coin-equivalent OI changes, independently of table TF. A baseline must be at or up to five minutes before each venue's latest observation minus 24 hours. Only verified crypto identities qualify; stocks, ETFs, commodities and unverified identities are excluded from rankings. Coverage counts show coins with at least one matched venue, not complete coverage of all venues.",
             "Binance, Bybit and Gate linear contracts backfill shared five-minute history in a fair background queue. Other contracts build history from genuine collected snapshots; longer TFs require time to accumulate. Shared exchange limits/cooldowns apply to all requests.",
             "OI / 24H Volume uses the same venues with verified rolling 24-hour volume. CME trading-day volume is excluded. Base-denominated volumes are valued at the latest quote.",

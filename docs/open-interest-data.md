@@ -5,13 +5,18 @@
   OI using its mark price, including 100/1,000/10,000/100,000 symbol multipliers.
   The displayed size unit is the underlying asset, even when the majority
   exchange naming convention displays a prefixed contract name.
-- TF choices are 5m, 15m, 30m, 1h, 4h and 24h. Change compares the latest available
-  observations inside the current and previous candle. Both sums contain exactly
+- TF choices are 5m, 15m, 30m, 1h, 4h and 24h. Shorter TFs compare the latest available
+  observations inside the current and previous candle. The table's **24h** option
+  shares the exact **rolling24h snapshot** used by the top rankings, not a daily
+  candle comparison. Both sums contain exactly
   the same matched contracts; unpaired sources are excluded, not assigned zero.
   Percentage change is in coin-equivalent quantity, so a price rise alone does
   not create an increase in linear OI size.
 - Top gainers and losers use **rolling 24h coin-equivalent quantity change**,
-  independently of the table's selected candle TF. For each contract, compare
+  independently of the table's selected TF. Selecting 24h reuses the rankings'
+  query result for table rows, loading/error states, retry and refresh; the shared
+  query key deduplicates fetching and a manual 24h refresh requests it once.
+  For each contract, compare
   its latest fresh observation with a baseline at or up to five minutes before
   that observation minus 24h. No later baseline or interpolated value is used.
   Both views reuse cached inventory and request gates. Contract sizes display

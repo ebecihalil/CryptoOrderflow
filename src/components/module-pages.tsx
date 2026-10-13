@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { Link } from 'wouter';
-import { ArrowUpRight, ChevronDown, Clock3 } from 'lucide-react';
+import { ArrowUpRight, Clock3 } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
 import { HomeButton } from '@/components/home-button';
-import { MODULES, RATIO_SECTIONS, type ModuleInfo } from '@/lib/modules';
+import { HOME_MODULES, type ModuleInfo } from '@/lib/modules';
 
 function ProductHeader({ module }: { module?: ModuleInfo }) {
   return (
@@ -13,7 +12,6 @@ function ProductHeader({ module }: { module?: ModuleInfo }) {
 }
 
 export function ModuleHome() {
-  const [ratioOpen, setRatioOpen] = useState(false);
   return (
     <div className="terminal module-app">
       <ProductHeader />
@@ -25,49 +23,24 @@ export function ModuleHome() {
         <section className="module-directory" aria-label="Market modules">
           <div className="directory-heading">
             <div><span className="eyebrow">01 / MODULE DIRECTORY</span><h2>Choose a market lens</h2></div>
-            <span className="directory-count">06 MODULES</span>
+            <span className="directory-count">{String(HOME_MODULES.length).padStart(2, '0')} MODULES</span>
           </div>
           <div className="module-list">
-            {MODULES.map((module, index) => {
-              const isRatio = module.title === 'Long Short Ratio';
-              return (
-                <article key={module.path} className={`module-entry ${isRatio ? 'module-entry-ratio' : ''} ${ratioOpen && isRatio ? 'is-open' : ''}`}>
-                  <div className="module-entry-row">
-                    <span className="module-index">{String(index + 1).padStart(2, '0')}</span>
-                    <span className="module-mark">{module.mark}</span>
-                    <div className="module-entry-copy">
-                      <h3>{isRatio ? (
-                        <button className="module-title-button" type="button" aria-expanded={ratioOpen}
-                          aria-controls="ratio-options" onClick={() => setRatioOpen(open => !open)}>
-                          {module.title}
-                        </button>
-                      ) : <Link className="module-title-link" href={module.path}>{module.title}</Link>}</h3>
-                      <p>{module.description}</p>
-                    </div>
-                    {isRatio ? (
-                      <button type="button" className="module-expand" aria-label={`${ratioOpen ? 'Collapse' : 'Expand'} Long Short Ratio`} aria-expanded={ratioOpen} aria-controls="ratio-options" onClick={() => setRatioOpen((open) => !open)}>
-                        <span>{ratioOpen ? 'Close' : 'Explore'}</span><ChevronDown size={16} aria-hidden="true" />
-                      </button>
-                    ) : (
-                      <Link href={module.path} className="module-open-link" aria-label={`Open ${module.title}`}>
-                        <span>Open module</span><ArrowUpRight size={16} aria-hidden="true" />
-                      </Link>
-                    )}
+            {HOME_MODULES.map((module, index) => (
+              <article key={module.path} className={`module-entry${module.path === '/super-charts' ? ' module-entry-super-charts' : ''}`}>
+                <div className="module-entry-row">
+                  <span className="module-index">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="module-mark">{module.mark}</span>
+                  <div className="module-entry-copy">
+                    <h3><Link className="module-title-link" href={module.path}>{module.title}</Link></h3>
+                    <p>{module.description}</p>
                   </div>
-                  {isRatio && ratioOpen && (
-                    <div className="ratio-options" id="ratio-options" role="group" aria-label="Long Short Ratio sections">
-                      {RATIO_SECTIONS.map(section => (
-                        <Link key={section.path} href={section.path} className="ratio-option">
-                          <span className="ratio-option-mark">{section.mark}</span>
-                          <span><strong>{section.title}</strong><small>{section.description}</small></span>
-                          <ArrowUpRight size={15} aria-hidden="true" />
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+                  <Link href={module.path} className="module-open-link" aria-label={`Open ${module.title}`}>
+                    <span>Open module</span><ArrowUpRight size={16} aria-hidden="true" />
+                  </Link>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
       </main>

@@ -38,15 +38,22 @@ https://bybit-exchange.github.io/docs/v5/market/open-interest
 
 Top OI gainers and losers use rolling 24-hour coin-equivalent quantity changes,
 not daily candle changes, and include verified crypto only (no stocks/ETFs).
-They remain independent of the table's candle-based TF. Keep TF controls below ranking panels and
+They remain independent of the selected table TF; the table's 24h option must
+share the rankings' rolling snapshot, while shorter TFs remain candle-based.
+Keep TF controls below ranking panels and
 all methodology/explanation notes below the rest of the page.
 
 **Why:** the user requested fixed 24-hour rankings and explanations out of the
 middle of the screen, then approved rolling crypto-only rankings after incomplete
 coverage and stock/ETF leaders made the earlier rankings misleading.
+The user subsequently approved using the same rolling 24h data for the table
+after BLUR showed a large rolling gain but a small daily-candle change.
 
 **How to apply:** changing the table TF must not recalculate, relabel or hide
 the daily rankings. Retain exchange selection and shared rate-limit protection.
+For 24h, share the actual query result with the rankings, including loading,
+errors, retries and refresh, rather than separately fetching equivalent
+snapshots that can update at different moments.
 Show matched-history coverage; do not imply partially matched coins represent
 complete cross-exchange coverage or reproduce another site's USD OI metric.
 
