@@ -4,7 +4,7 @@ Crypto Orderflow is the umbrella project name: the product will not be limited t
 
 The LSAR screen's visible header is **Long Short Account Ratio** with the **LS** mark and **Perpetual Markets** subtitle. Renaming the project/repository does not mean replacing section branding with the umbrella product name.
 
-The home page is the **Crypto Order Flow** module directory. Long Short Account Ratio, Funding Rate and Open Interest are live screeners. Super Charts (Indicators) has a hosted TradingView chart under Technical Indicators and an intentionally empty Orderflow Indicators tab for future work. Position Ratio is removed; Liquidations and CVD remain placeholders but are hidden from the home page. Keep the existing visual concept, shared header, light/dark themes, and two-letter section marks. See `docs/super-charts.md` for widget limitations.
+The home page is the **Crypto Order Flow** module directory. Long Short Account Ratio, Funding Rate and Open Interest are live screeners. Super Charts (Indicators) has a hosted TradingView chart under Technical Indicators and a custom Liquidity Zones chart under Orderflow Indicators. Position Ratio is removed; Liquidations and CVD remain placeholders but are hidden from the home page. Keep the existing visual concept, shared header, light/dark themes, and two-letter section marks. See `docs/super-charts.md` and `docs/liquidity-zones.md` for chart limitations.
 
 Leave the home page area below the module navigation empty for now: the user intends to fill it with other information later, rather than adding content there ahead of that request.
 

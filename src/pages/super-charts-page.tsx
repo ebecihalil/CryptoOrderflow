@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { SuperChartWidget } from '@/components/super-chart-widget';
+import { OrderflowIndicators } from '@/components/orderflow-indicators';
 import {
   CHART_EXCHANGES,
   CHART_INTERVALS,
@@ -50,7 +51,7 @@ export function SuperChartsPage() {
         <div className="super-charts-heading">
           <div className="module-kicker"><span className="module-kicker-rule" /> MARKET TOOLKIT / CHARTING</div>
           <h1 className="module-page-title">Super Charts</h1>
-          <p>Technical studies on hosted perpetual-market charts, with a separate space reserved for future orderflow tools.</p>
+          <p>Technical studies and price-derived liquidity zones across hosted perpetual markets.</p>
         </div>
 
         <div className="super-chart-tabs" role="tablist" aria-label="Chart indicator categories">
@@ -109,11 +110,8 @@ export function SuperChartsPage() {
             <p className="super-chart-disclaimer">Market symbols and availability are determined by TradingView. Perpetual contract coverage varies by exchange; unsupported symbols are handled by TradingView.</p>
           </section>
         ) : (
-          <section id="super-charts-panel-orderflow" role="tabpanel" aria-labelledby="super-charts-tab-orderflow" className="super-orderflow-empty">
-            <div className="super-orderflow-empty-mark" aria-hidden="true">OF</div>
-            <span className="eyebrow">ORDERFLOW INDICATORS / IN DEVELOPMENT</span>
-            <h2>No orderflow indicators yet</h2>
-            <p>Exchange-specific orderflow studies will appear here when custom market data is available.</p>
+          <section id="super-charts-panel-orderflow" role="tabpanel" aria-labelledby="super-charts-tab-orderflow" className="super-orderflow-panel">
+            <OrderflowIndicators />
           </section>
         )}
       </main>

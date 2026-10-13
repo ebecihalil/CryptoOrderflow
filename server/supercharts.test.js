@@ -50,7 +50,7 @@ test("Super Charts replaces its placeholder and uses the shared header and acces
   assert.match(page, /role="tablist"/);
   assert.match(page, /aria-selected/);
   assert.match(page, /ArrowLeft/);
-  assert.match(page, /No orderflow indicators yet/);
+  assert.match(page, /<OrderflowIndicators/);
 });
 
 test("widget uses official embedding, theme observation and cleanup without scraping market data", () => {

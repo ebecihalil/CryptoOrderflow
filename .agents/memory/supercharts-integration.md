@@ -4,13 +4,15 @@ description: Approved technical versus custom orderflow scope and hosted-widget 
 ---
 
 Keep Super Charts split into Technical Indicators and Orderflow Indicators.
-The first uses TradingView's official hosted widget; the second is intentionally
-empty until the user defines our custom indicators.
+The first uses TradingView's official hosted widget; the second hosts our custom
+exchange-data indicators, starting with the approved Liquidity Zones adaptation.
 
 **Why:** the user approved launching standard TradingView charts first, with a
-separate area ready for future custom exchange-data indicators.
+separate area for custom exchange-data indicators. They subsequently supplied
+Liquidity Zones and approved adding it with its existing rules.
 
-**How to apply:** do not invent indicator formulas or fake orderflow charts.
+**How to apply:** preserve supplied indicator semantics rather than silently
+"improving" them. Do not invent additional formulas or fake orderflow charts.
 The hosted widget cannot consume our custom exchange data; use a separate chart
 library or approved Advanced Charts access for that future work. Do not treat
 TradingView's chart-control APIs as downloadable market-data APIs.

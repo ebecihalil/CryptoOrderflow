@@ -1,6 +1,7 @@
 import express from "express";
 import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
+import { candleService } from "./server/chartCandles.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -19,6 +20,20 @@ app.use(express.json());
 
 app.get("/api/healthz", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/market/candles", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.json(await candleService.get(req.query));
+  } catch (error) {
+    res.status(error.status ?? 503).json({ error: error.message, retryAt: error.retryAt });
+  }
+});
+
+// Make the preferred, unminified form of the MPL-covered adaptation available.
+app.get("/api/indicators/liquidity-zones/source", (_req, res) => {
+  res.type("text/plain").sendFile(path.join(rootDir, "src/lib/liquidity-zones.ts"));
 });
 
 app.get("/api/market/funding", (req, res) => {

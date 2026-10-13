@@ -65,7 +65,10 @@ export class BinanceRequestGate {
             const funding = /\/funding(Rate|Info)$/.test(parsed.pathname);
             // Bulk tickers carry more weight than a single-symbol OI call.
             // Reserve conservatively for both USD-M and COIN-M variants.
-            const cost = parsed.pathname.endsWith("/exchangeInfo") ? 5
+            const candleLimit = Number(parsed.searchParams.get("limit") || 500);
+            const cost = parsed.pathname.endsWith("/klines")
+                ? (candleLimit < 100 ? 1 : candleLimit < 500 ? 2 : candleLimit <= 1000 ? 5 : 10)
+                : parsed.pathname.endsWith("/exchangeInfo") ? 5
                 : parsed.pathname.endsWith("/openInterest") ? 1
                 : parsed.searchParams.has("symbol") ? 2 : 50;
             const windowMs = funding ? 300_000 : history ? this.historyWindowMs : this.generalWindowMs;
