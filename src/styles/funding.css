@@ -63,7 +63,7 @@
 .funding-extremes { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 14px; }
 .funding-extreme-panel { min-width:0;padding:13px 15px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
 .funding-extreme-panel h2 { margin:0 0 8px;color:var(--lsar-muted);font:12px var(--app-font-mono);letter-spacing:.06em;text-transform:uppercase; }
-.funding-extreme-panel ol { display:grid;grid-template-columns:1fr 1fr;gap:0 18px;margin:0;padding:0;list-style:none; }
+.funding-extreme-panel ol { display:grid;grid-template-columns:minmax(0,1fr);gap:0;margin:0;padding:0;list-style:none; }
 .funding-extreme-panel li { display:grid;grid-template-columns:19px 21px minmax(0,1fr) auto;align-items:center;gap:7px;min-width:0;padding:6px 0;border-top:1px solid var(--lsar-rule); }
 .funding-extreme-rank { color:var(--lsar-muted);font:9px var(--app-font-mono); }
 .funding-extreme-panel li > .coin-logo { width:19px;height:19px; }
@@ -96,13 +96,15 @@
 .funding-sort-button:focus-visible,.funding-timeframes button:focus-visible,.funding-table-scroll:focus-visible { outline:2px solid var(--lsar-accent);outline-offset:2px; }
 .funding-sort-button svg { width:11px;height:11px;flex:none;color:var(--lsar-accent); }
 .funding-sort-button > span { min-width:0;overflow-wrap:anywhere; }
-.funding-table td { padding:9px 4px;border-bottom:1px solid var(--lsar-rule);text-align:center;vertical-align:middle;color:var(--lsar-body-ink); }
-.funding-table tbody tr:last-child td { border-bottom:0; }
+.funding-table td { display:table-cell;padding:9px 4px;border-bottom:0;text-align:center;vertical-align:middle;color:var(--lsar-body-ink); }
+.funding-table tbody tr { border-bottom:1px solid var(--lsar-rule); }
+.funding-table tbody tr:last-child { border-bottom:0; }
 .funding-table tbody tr:hover { background:var(--lsar-row-hover); }
-.funding-coin-cell { display:flex;align-items:center;gap:9px;text-align:left!important; }
+.funding-coin-cell { text-align:left!important; }
+.funding-coin-content { display:flex;align-items:center;gap:9px;min-width:0; }
 .funding-coin-logo { display:grid;place-items:center;flex:none;width:25px;height:25px; }
 .funding-coin-cell .coin-logo { width:23px;height:23px; }
-.funding-coin-cell > span:last-child { display:flex;flex-direction:column;gap:2px;min-width:0; }
+.funding-coin-content > span:last-child { display:flex;flex-direction:column;gap:2px;min-width:0; }
 .funding-coin-cell strong { overflow:hidden;color:var(--lsar-strong);font:600 12px var(--app-font-sans);text-overflow:ellipsis;white-space:nowrap; }
 .funding-coin-cell small { color:var(--lsar-muted);font:8px var(--app-font-mono); }
 .funding-rate-cell { text-align:center!important; }
@@ -177,7 +179,7 @@
   .funding-highlight > small { font-size:9px; }
   .funding-extremes { grid-template-columns:1fr;gap:9px;margin:9px 0 11px; }
   .funding-extreme-panel { padding:11px; }
-  .funding-extreme-panel ol { grid-template-columns:1fr 1fr;gap:0 10px; }
+  .funding-extreme-panel ol { grid-template-columns:minmax(0,1fr);gap:0; }
   .funding-extreme-panel li { grid-template-columns:15px 18px minmax(0,1fr) auto;gap:5px; }
   .funding-extreme-rank { font-size:9px; }
   .funding-extreme-panel li > .coin-logo { width:17px;height:17px; }

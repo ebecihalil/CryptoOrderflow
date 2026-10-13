@@ -391,8 +391,10 @@ export function FundingPage() {
                   return (
                     <tr key={row.asset}>
                       <td className="funding-coin-cell">
-                        <span className="funding-coin-logo"><CoinLogo asset={row.asset} /></span>
-                        <span><strong>{row.displayAsset || row.asset}</strong><small>{row.asset}</small></span>
+                        <div className="funding-coin-content">
+                          <span className="funding-coin-logo"><CoinLogo asset={row.asset} /></span>
+                          <span><strong>{row.displayAsset || row.asset}</strong><small>{row.asset}</small></span>
+                        </div>
                       </td>
                       <td className={`funding-rate-cell funding-aggregate ${aggregateValue === null ? 'is-missing' : aggregateValue > 0 ? 'is-positive' : aggregateValue < 0 ? 'is-negative' : ''}`}>
                         <span title={aggregateValue === null ? aggregateUnavailable : timeframe === 'current' ? 'OI-weighted normalized 8-hour rate' : `${periodLabel(timeframe)} settled funding sum`}>
