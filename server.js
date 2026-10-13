@@ -2,6 +2,7 @@ import express from "express";
 import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
 import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
+import { fundingIndicatorService } from "./server/fundingIndicator.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -34,6 +35,13 @@ app.get("/api/market/candles", async (req, res) => {
 // Make the preferred, unminified form of the MPL-covered adaptation available.
 app.get("/api/indicators/liquidity-zones/source", (_req, res) => {
   res.type("text/plain").sendFile(path.join(rootDir, "src/lib/liquidity-zones.ts"));
+});
+
+app.get("/api/indicators/funding", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(fundingIndicatorService.get(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "Funding indicator data is currently unavailable." }); }
 });
 
 app.get("/api/market/funding", (req, res) => {

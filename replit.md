@@ -12,6 +12,13 @@ The original single-exchange volume remains selectable. Cross-venue history must
 use matched timestamps and stable source coverage, with no missing-bar zero-fill.
 All calls use the shared exchange request gates; never fetch providers from React.
 
+Orderflow Indicators also includes Aggregated Funding Rate with Simple Mean,
+Median and OI-Weighted live values. Its settled history supports mean/median;
+weighted history is recorded from contemporaneous live snapshots, not today's
+OI applied retrospectively. It reuses all verified funding-provider inventory
+without changing the Funding screener's global cutoff. See
+`docs/funding-indicator.md` for data limitations and local-cache retention.
+
 Leave the home page area below the module navigation empty for now: the user intends to fill it with other information later, rather than adding content there ahead of that request.
 
 The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.

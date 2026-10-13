@@ -30,6 +30,10 @@ Keep TradingView attribution visible.
 Contains the approved Liquidity Zones adaptation of the user-supplied Pine v6
 indicator, on a separate exchange-data chart. See `liquidity-zones.md` for its
 calculation rules, request protection, licence and data limitations.
+
+The indicator selector also includes Multi-Exchange Aggregated Funding Rate.
+See `funding-indicator.md` for its live aggregation modes, settled-history
+comparison, contemporaneous OI tracking and exchange coverage.
 The hosted TradingView widget does not accept our custom data or indicators.
 For future custom charts, use our own calculations and a suitable chart library,
 or obtain access to TradingView Advanced Charts and supply our own data feed.

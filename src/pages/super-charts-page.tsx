@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { AppHeader } from '@/components/app-header';
 import { SuperChartWidget } from '@/components/super-chart-widget';
-import { OrderflowIndicators } from '@/components/orderflow-indicators';
+import { OrderflowIndicatorPanel } from '@/components/orderflow-indicator-panel';
 import {
   CHART_EXCHANGES,
   CHART_INTERVALS,
@@ -51,7 +51,7 @@ export function SuperChartsPage() {
         <div className="super-charts-heading">
           <div className="module-kicker"><span className="module-kicker-rule" /> MARKET TOOLKIT / CHARTING</div>
           <h1 className="module-page-title">Super Charts</h1>
-          <p>Technical studies and price-derived liquidity zones across hosted perpetual markets.</p>
+          <p>Technical studies, liquidity zones and multi-exchange funding across perpetual markets.</p>
         </div>
 
         <div className="super-chart-tabs" role="tablist" aria-label="Chart indicator categories">
@@ -111,7 +111,7 @@ export function SuperChartsPage() {
           </section>
         ) : (
           <section id="super-charts-panel-orderflow" role="tabpanel" aria-labelledby="super-charts-tab-orderflow" className="super-orderflow-panel">
-            <OrderflowIndicators />
+            <OrderflowIndicatorPanel />
           </section>
         )}
       </main>
