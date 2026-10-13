@@ -206,8 +206,8 @@ function Home() {
     <div className="terminal">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">LS</div>
-          <span>Perpetual LSAR</span>
+          <div className="brand-mark">CO</div>
+          <span>Crypto Orderflow</span>
           <span className="brand-sub">market scanner</span>
         </div>
         <div className="topbar-right">
@@ -399,7 +399,7 @@ function Home() {
         </div>
         {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable: {snapshot.sources.filter((source) => source.error).map((source) => `${source.exchange.toUpperCase()}: ${source.error}`).join(' · ')}. Only available readings contribute.</span></div>}
         <div className="footline">
-          <span>PERPETUAL LSAR SCREENER / ACCOUNT-BASED POSITIONING</span>
+          <span>CRYPTO ORDERFLOW / LSAR SCREENER</span>
           <span data-testid="text-generated-at">SNAPSHOT {formatTimestamp(latestTimestamp)} · {snapshot?.totalMarkets ?? summary?.totalMarkets ?? '—'} ASSETS</span>
         </div>
       </main>

@@ -1,6 +1,8 @@
-# Perpetual LSAR Screener
+# Crypto Orderflow
 
-A live Binance, Bybit, OKX, Gate.io, and Bitget perpetual-futures screener for long-short account-ratio changes by timeframe.
+Crypto Orderflow is the umbrella project name: the product will not be limited to LSAR. Keep LSAR as the current screener feature, not the name of the entire application.
+
+The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.
 
 ## Run & Operate
 

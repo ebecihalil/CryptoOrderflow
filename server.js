@@ -67,5 +67,5 @@ app.get(/.*/, (_req, res, next) => {
 });
 
 app.listen(port, "0.0.0.0", () => {
-  console.info(`Perpetual LSAR Screener listening on port ${port}`);
+  console.info(`Crypto Orderflow listening on port ${port}`);
 });
