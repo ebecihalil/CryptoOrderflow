@@ -323,11 +323,11 @@ export async function fetchToobit({ request = fetchJson, onReading = publishRead
     });
     return { readings: readings.filter(Boolean), marketCount: contracts.length, errorCount, error: null };
 }
-async function fetchBinanceLinear() {
+export async function fetchBinanceLinear({ request = fetchJson, onReading = publishReading } = {}) {
     const [info, priceTickers, dayTickers] = await Promise.all([
-        fetchJson(`${BINANCE_BASE}/fapi/v1/exchangeInfo`),
-        fetchJson(`${BINANCE_BASE}/fapi/v1/ticker/price`),
-        fetchJson(`${BINANCE_BASE}/fapi/v1/ticker/24hr`),
+        request(`${BINANCE_BASE}/fapi/v1/exchangeInfo`),
+        request(`${BINANCE_BASE}/fapi/v1/ticker/price`),
+        request(`${BINANCE_BASE}/fapi/v1/ticker/24hr`),
     ]);
     const prices = new Map(priceTickers.map((ticker) => [ticker.symbol, finiteNumber(ticker.price)]));
     const changes = new Map(dayTickers.map((ticker) => [ticker.symbol, finiteNumber(ticker.priceChangePercent)]));
@@ -343,14 +343,14 @@ async function fetchBinanceLinear() {
         }
         try {
             const [history, oi] = await Promise.all([
-                fetchJson(`${BINANCE_BASE}/futures/data/globalLongShortAccountRatio?symbol=${encodeURIComponent(contract.symbol)}&period=5m&limit=${HISTORY_LIMIT}`),
-                fetchJson(`${BINANCE_BASE}/fapi/v1/openInterest?symbol=${encodeURIComponent(contract.symbol)}`),
+                request(`${BINANCE_BASE}/futures/data/globalLongShortAccountRatio?symbol=${encodeURIComponent(contract.symbol)}&period=5m&limit=${HISTORY_LIMIT}`),
+                request(`${BINANCE_BASE}/fapi/v1/openInterest?symbol=${encodeURIComponent(contract.symbol)}`),
             ]);
             const openInterest = finiteNumber(oi.openInterest);
             if (openInterest == null || openInterest <= 0)
                 return null;
             const normalized = canonicalAsset(contract.baseAsset);
-            return {
+            const reading = {
                 exchange: "binance",
                 symbol: contract.symbol,
                 asset: normalized.asset,
@@ -360,6 +360,8 @@ async function fetchBinanceLinear() {
                 openInterestUsd: openInterest * price,
                 points: parseBinanceHistory(history),
             };
+            onReading(reading);
+            return reading;
         }
         catch {
             errorCount += 1;
@@ -373,11 +375,11 @@ async function fetchBinanceLinear() {
         error: null,
     };
 }
-async function fetchBinanceCoinM() {
+export async function fetchBinanceCoinM({ request = fetchJson, onReading = publishReading } = {}) {
     const [info, priceTickers, dayTickers] = await Promise.all([
-        fetchJson(`${BINANCE_COINM_BASE}/dapi/v1/exchangeInfo`),
-        fetchJson(`${BINANCE_COINM_BASE}/dapi/v1/ticker/price`),
-        fetchJson(`${BINANCE_COINM_BASE}/dapi/v1/ticker/24hr`),
+        request(`${BINANCE_COINM_BASE}/dapi/v1/exchangeInfo`),
+        request(`${BINANCE_COINM_BASE}/dapi/v1/ticker/price`),
+        request(`${BINANCE_COINM_BASE}/dapi/v1/ticker/24hr`),
     ]);
     const prices = new Map(priceTickers.map((ticker) => [ticker.symbol, finiteNumber(ticker.price)]));
     const changes = new Map(dayTickers.map((ticker) => [ticker.symbol, finiteNumber(ticker.priceChangePercent)]));
@@ -394,15 +396,15 @@ async function fetchBinanceCoinM() {
         }
         try {
             const [history, oi] = await Promise.all([
-                fetchJson(`${BINANCE_COINM_BASE}/futures/data/globalLongShortAccountRatio?pair=${encodeURIComponent(contract.pair)}&contractType=PERPETUAL&period=5m&limit=${HISTORY_LIMIT}`),
-                fetchJson(`${BINANCE_COINM_BASE}/dapi/v1/openInterest?symbol=${encodeURIComponent(contract.symbol)}`),
+                request(`${BINANCE_COINM_BASE}/futures/data/globalLongShortAccountRatio?pair=${encodeURIComponent(contract.pair)}&contractType=PERPETUAL&period=5m&limit=${HISTORY_LIMIT}`),
+                request(`${BINANCE_COINM_BASE}/dapi/v1/openInterest?symbol=${encodeURIComponent(contract.symbol)}`),
             ]);
             const openInterest = finiteNumber(oi.openInterest);
             const contractSize = finiteNumber(contract.contractSize);
             if (openInterest == null || openInterest <= 0 || contractSize == null)
                 return null;
             const normalized = canonicalAsset(contract.baseAsset);
-            return {
+            const reading = {
                 exchange: "binance",
                 symbol: contract.symbol,
                 asset: normalized.asset,
@@ -412,6 +414,8 @@ async function fetchBinanceCoinM() {
                 openInterestUsd: openInterest * contractSize,
                 points: parseBinanceHistory(history),
             };
+            onReading(reading);
+            return reading;
         }
         catch {
             errorCount += 1;

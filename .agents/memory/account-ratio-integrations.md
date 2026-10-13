@@ -38,3 +38,9 @@ Show fetched exchange counts as a single line immediately below the OI-weighted 
 **Why:** the user requested compact fetch visibility after removing the coverage boxes.
 
 **How to apply:** count fresh, complete contracts independently of the screener's price/exchange filters. Support multi-select exchange filtering rather than a single-choice dropdown.
+
+Distinguish time to first usable Binance data from the time to finish every contract. Optimize progressive delivery before increasing request concurrency.
+
+**Why:** Binance's market-wide USD-M account-ratio endpoint advertises request weight zero but has a separate IP limit of 1,000 requests per five minutes (official docs checked 2026-10-13). Zero weight does not mean unlimited throughput; buffered results and slow UI polling can make successful requests look slow.
+
+**How to apply:** measure both first-result and full-scan times, keep all contracts and matched candle/OI semantics, and verify current provider limits before raising concurrency. Reference: https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Long-Short-Ratio

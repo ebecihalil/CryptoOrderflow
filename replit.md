@@ -2,6 +2,8 @@
 
 Crypto Orderflow is the umbrella project name: the product will not be limited to LSAR. Keep LSAR as the current screener feature, not the name of the entire application.
 
+The LSAR screen's visible header branding remains **Perpetual LSAR** with the **LS** mark. The user clarified that renaming the project/repository does not mean replacing this screen's branding.
+
 The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.
 
 ## Run & Operate

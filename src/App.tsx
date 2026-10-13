@@ -10,6 +10,7 @@ import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchang
 import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
 import { TIMEFRAMES } from '@/lib/table-timeframes';
+import { snapshotPollInterval } from '@/lib/snapshot-polling';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -142,7 +143,7 @@ function Home() {
   const snapshotQuery = useQuery({
     queryKey: ['market-snapshot', serverPriceFilter],
     queryFn: ({ signal }) => getJson<LsarMarketSnapshot>(`/api/market/lsar?maxPrice=${encodeURIComponent(serverPriceFilter)}`, signal),
-    refetchInterval: 30_000,
+    refetchInterval: (query) => snapshotPollInterval(query.state.data?.sources),
     refetchOnWindowFocus: true,
   });
   const summaryQuery = useQuery({
@@ -206,8 +207,8 @@ function Home() {
     <div className="terminal">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">CO</div>
-          <span>Crypto Orderflow</span>
+          <div className="brand-mark">LS</div>
+          <span>Perpetual LSAR</span>
           <span className="brand-sub">market scanner</span>
         </div>
         <div className="topbar-right">
