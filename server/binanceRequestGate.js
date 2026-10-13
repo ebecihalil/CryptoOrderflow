@@ -2,7 +2,7 @@ const wait = milliseconds => new Promise(resolve => setTimeout(resolve, millisec
 
 export class BinanceCooldownError extends Error {
     constructor(status, retryAt) {
-        super(`Binance HTTP ${status}: ${status === 418 ? "IP temporarily blocked" : "rate limited"}. Requests paused until ${new Date(retryAt).toISOString()}.`);
+        super(`Binance HTTP ${status}: ${status === 418 ? "IP temporarily blocked" : status === 403 ? "access temporarily blocked" : "rate limited"}. Requests paused until ${new Date(retryAt).toISOString()}.`);
         this.name = "BinanceCooldownError";
         this.status = status;
         this.retryAt = retryAt;
@@ -16,14 +16,34 @@ export class BinanceRequestGate {
         now = Date.now, sleep = wait, spacingMs = 75,
         historyLimit = 900, historyWindowMs = 300_000,
         generalLimit = 500, generalWindowMs = 60_000,
+        state, save = () => {},
     } = {}) {
-        Object.assign(this, { now, sleep, spacingMs, historyLimit, historyWindowMs, generalLimit, generalWindowMs });
+        Object.assign(this, { now, sleep, spacingMs, historyLimit, historyWindowMs, generalLimit, generalWindowMs, save });
         this.history = [];
         this.general = [];
+        this.generalCosts = [];
         this.nextStart = 0;
         this.blockedUntil = 0;
         this.blockedStatus = 429;
+        this.backoffLevel = 0;
+        this.lastLimitAt = 0;
+        if (state) {
+            for (const key of ["nextStart", "blockedUntil", "blockedStatus", "backoffLevel", "lastLimitAt"])
+                if (!Number.isFinite(state[key]) || state[key] < 0) throw new Error("Invalid Binance limiter state");
+            for (const key of ["history", "general", "generalCosts"])
+                if (!Array.isArray(state[key]) || !state[key].every(value => Number.isFinite(value) && value >= 0))
+                    throw new Error("Invalid Binance request window");
+            if (state.general.length !== state.generalCosts.length || state.generalCosts.some(cost => cost <= 0))
+                throw new Error("Invalid Binance request weights");
+            for (const key of ["history", "general", "generalCosts", "nextStart", "blockedUntil", "blockedStatus", "backoffLevel", "lastLimitAt"])
+                this[key] = state[key];
+        }
         this.queue = Promise.resolve();
+    }
+
+    checkpoint() {
+        const { history, general, generalCosts, nextStart, blockedUntil, blockedStatus, backoffLevel, lastLimitAt } = this;
+        this.save({ history, general, generalCosts, nextStart, blockedUntil, blockedStatus, backoffLevel, lastLimitAt });
     }
 
     get isCoolingDown() { return this.now() < this.blockedUntil; }
@@ -36,23 +56,43 @@ export class BinanceRequestGate {
 
     async enter(url) {
         const task = this.queue.then(async () => {
-            const history = new URL(url).pathname.startsWith("/futures/data/");
+            const parsed = new URL(url);
+            const history = parsed.pathname.startsWith("/futures/data/");
+            // Bulk tickers carry more weight than a single-symbol OI call.
+            // Reserve conservatively for both USD-M and COIN-M variants.
+            const cost = parsed.pathname.endsWith("/exchangeInfo") ? 5
+                : parsed.pathname.endsWith("/openInterest") ? 1
+                : parsed.searchParams.has("symbol") ? 2 : 50;
             const windowMs = history ? this.historyWindowMs : this.generalWindowMs;
             const limit = history ? this.historyLimit : this.generalLimit;
+            if (!history && cost > limit) throw new Error("Binance request exceeds configured weight allowance");
             while (true) {
                 this.checkCooldown();
                 const now = this.now();
                 this.history = this.history.filter(time => time > now - this.historyWindowMs);
-                this.general = this.general.filter(time => time > now - this.generalWindowMs);
+                const retained = this.general.map((time, index) => ({ time, cost: this.generalCosts[index] }))
+                    .filter(entry => entry.time > now - this.generalWindowMs);
+                this.general = retained.map(entry => entry.time);
+                this.generalCosts = retained.map(entry => entry.cost);
                 const starts = history ? this.history : this.general;
-                const delay = Math.max(0, this.nextStart - now,
-                    starts.length >= limit ? starts[0] + windowMs - now + 1 : 0);
+                let quotaDelay = 0;
+                if (history && starts.length >= limit) quotaDelay = starts[starts.length - limit] + windowMs - now + 1;
+                if (!history) {
+                    let total = this.generalCosts.reduce((sum, value) => sum + value, 0);
+                    for (let i = 0; total + cost > limit && i < starts.length; i++) {
+                        total -= this.generalCosts[i];
+                        quotaDelay = starts[i] + windowMs - now + 1;
+                    }
+                }
+                const delay = Math.max(0, this.nextStart - now, quotaDelay);
                 if (delay) {
                     await this.sleep(delay);
                     continue;
                 }
                 starts.push(now);
+                if (!history) this.generalCosts.push(cost);
                 this.nextStart = now + this.spacingMs;
+                this.checkpoint();
                 return;
             }
         });
@@ -61,38 +101,54 @@ export class BinanceRequestGate {
     }
 
     async inspect(response) {
-        if (response.status !== 418 && response.status !== 429) {
+        if (![418, 429, 403].includes(response.status)) {
             // Headers reflect usage by the whole outgoing IP, not just us.
             // Leave substantial headroom below the usual futures weight limit.
             const weight = Number(response.headers.get("x-mbx-used-weight-1m"));
-            if (response.ok && Number.isFinite(weight) && weight >= 1000)
+            if (response.ok && Number.isFinite(weight) && weight >= 1000) {
                 this.nextStart = Math.max(this.nextStart, this.now() + 60_000);
+                this.checkpoint();
+            }
             return;
         }
         // Pause immediately, before reading the error body, so queued requests
         // cannot keep hitting Binance while its ban deadline is being parsed.
         const now = this.now();
-        const ongoingBan = this.isCoolingDown && this.blockedStatus === 418;
+        const ongoingBan = this.isCoolingDown && [418, 403].includes(this.blockedStatus);
         const priorDeadline = this.blockedUntil;
-        this.blockedStatus = ongoingBan ? 418 : response.status;
+        this.blockedStatus = response.status === 418 || (ongoingBan && this.blockedStatus === 418) ? 418
+            : ongoingBan ? this.blockedStatus : response.status;
         const raw = response.headers.get("retry-after");
         const seconds = raw === null ? NaN : Number(raw);
         const headerDeadline = Number.isFinite(seconds) && seconds >= 0
             ? now + seconds * 1000 : Date.parse(raw ?? "");
-        const fallback = now + (response.status === 418 ? 15 * 60_000 : 60_000);
-        const provisionalDeadline = Math.max(priorDeadline, now + 1000,
+        if (now - this.lastLimitAt > 3_600_000) this.backoffLevel = 0;
+        this.backoffLevel = Math.min(6, this.backoffLevel + 1);
+        this.lastLimitAt = now;
+        const fallback = now + Math.max(response.status === 429 ? 0 : 15 * 60_000,
+            60_000 * 2 ** (this.backoffLevel - 1));
+        const provisionalDeadline = Math.max(priorDeadline, now + (response.status === 403 ? 900_000 : 1000),
             Number.isFinite(headerDeadline) && headerDeadline > now ? headerDeadline : fallback);
         this.blockedUntil = provisionalDeadline;
+        this.checkpoint();
         const body = await response.clone().json().catch(() => null);
         const match = String(body?.msg ?? "").match(/banned until\s+(\d{10,13})\b/i);
         const epoch = match ? Number(match[1]) : NaN;
         const bodyDeadline = epoch < 1e12 ? epoch * 1000 : epoch;
         const deadlines = [headerDeadline, bodyDeadline].filter(value => Number.isFinite(value) && value > now);
-        const deadline = Math.max(priorDeadline, now + 1000, ...(deadlines.length ? deadlines : [fallback]));
+        const deadline = Math.max(priorDeadline, now + (response.status === 403 ? 900_000 : 1000), ...(deadlines.length ? deadlines : [fallback]));
         // Refine our provisional deadline, but never overwrite a longer
         // cooldown reported by another in-flight response.
         this.blockedUntil = this.blockedUntil === provisionalDeadline
             ? deadline : Math.max(this.blockedUntil, deadline);
+        this.checkpoint();
         throw this.cooldownError();
+    }
+
+    async inspectBody(body, response) {
+        if (String(body?.code) === "-1003")
+            await this.inspect(new Response(JSON.stringify(body), {
+                status: /banned until/i.test(String(body.msg)) ? 418 : 429, headers: response.headers,
+            }));
     }
 }

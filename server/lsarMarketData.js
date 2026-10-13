@@ -1,6 +1,9 @@
-import { BinanceCooldownError, BinanceRequestGate } from "./binanceRequestGate.js";
+import { createRequestGates } from "./requestGates.js";
+import { createExchangeHttpClient } from "./exchangeHttpClient.js";
+import { BinanceCooldownError } from "./binanceRequestGate.js";
 
-const binanceRequestGate = new BinanceRequestGate();
+const requestGates = createRequestGates();
+const fetchJson = createExchangeHttpClient({ gates: requestGates });
 const logger = {
     info(details, message) {
         console.info(message, details);
@@ -17,7 +20,6 @@ const GATE_BASE = "https://api.gateio.ws/api/v4";
 const BITGET_BASE = "https://api.bitget.com";
 const TOOBIT_BASE = "https://api.toobit.com";
 const REFRESH_INTERVAL_MS = 5 * 60_000;
-const REQUEST_TIMEOUT_MS = 12_000;
 const HISTORY_LIMIT = 300;
 const WINDOWS = [
     { timeframe: "5m", ms: 5 * 60_000 },
@@ -45,8 +47,6 @@ const sourceReadings = {
 };
 const activeProviderTasks = new Map();
 const lastProviderAttempts = new Map();
-let nextBybitRequestAt = 0;
-const nextRequestAt = {};
 let lastPartialPublishAt = 0;
 let cachedSnapshot = {
     generatedAt: null,
@@ -77,79 +77,6 @@ export function canonicalAsset(base) {
         return { asset: base, priceDivisor: 1 };
     const multiplier = Number(match[1]);
     return Number.isSafeInteger(multiplier) ? { asset: match[2], priceDivisor: multiplier } : { asset: base, priceDivisor: 1 };
-}
-async function fetchJson(url) {
-    let lastError;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-            const isBinance = url.startsWith(`${BINANCE_BASE}/`) || url.startsWith(`${BINANCE_COINM_BASE}/`);
-            if (isBinance) await binanceRequestGate.enter(url);
-            const spacing = url.includes("bitget.com/api/v2/mix/market/account-long-short") ? 1050
-                : url.startsWith(OKX_BASE) ? 450 : url.startsWith(GATE_BASE) ? 120
-                : url.startsWith(TOOBIT_BASE) ? 150 : 0;
-            if (spacing) {
-                const key = new URL(url).hostname;
-                const scheduled = Math.max(Date.now(), nextRequestAt[key] ?? 0);
-                nextRequestAt[key] = scheduled + spacing;
-                await new Promise((resolve) => setTimeout(resolve, Math.max(0, scheduled - Date.now())));
-            }
-            if (url.startsWith(BYBIT_BASE)) {
-                const now = Date.now();
-                const requestAt = Math.max(now, nextBybitRequestAt);
-                nextBybitRequestAt = requestAt + 120;
-                if (requestAt > now) {
-                    await new Promise((resolve) => setTimeout(resolve, requestAt - now));
-                }
-            }
-            const response = await fetch(url, {
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-                headers: { "User-Agent": "Perpetual-LSAR-Screener/1.0" },
-            });
-            if (isBinance) await binanceRequestGate.inspect(response);
-            if (!response.ok) {
-                const message = `Exchange returned HTTP ${response.status}`;
-                if (response.status === 429 || response.status >= 500) {
-                    await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
-                    lastError = new Error(message);
-                    continue;
-                }
-                const error = new Error(message);
-                error.retryable = false;
-                throw error;
-            }
-            const body = (await response.json());
-            if (body.code !== undefined && !["0", "00000"].includes(String(body.code))) {
-                throw new Error(body.msg || `Exchange error ${body.code}`);
-            }
-            if (typeof body.retCode === "number" && body.retCode !== 0) {
-                const message = body.retMsg || `Exchange error ${body.retCode}`;
-                if (body.retCode === 10006 || body.retCode === 10016) {
-                    await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-                    lastError = new Error(message);
-                    continue;
-                }
-                throw new Error(message);
-            }
-            return body;
-        }
-        catch (error) {
-            lastError = error;
-            if (error instanceof BinanceCooldownError || error?.retryable === false) break;
-            if (attempt < 2 && error instanceof Error && error.name === "TimeoutError") {
-                await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-                continue;
-            }
-            if (attempt < 2 && error instanceof TypeError) {
-                await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-                continue;
-            }
-            if (attempt === 2)
-                break;
-            if (!(error instanceof Error) || !error.message.startsWith("Exchange returned HTTP"))
-                break;
-        }
-    }
-    throw lastError instanceof Error ? lastError : new Error("Exchange request failed");
 }
 async function mapLimit(values, limit, work) {
     const results = new Array(values.length);
@@ -728,12 +655,13 @@ function publishSnapshot() {
 export function getLsarMarketSnapshot() {
     const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget, toobit: fetchToobit };
     for (const [exchange, fetcher] of Object.entries(fetchers)) {
-        if (exchange === "binance" && binanceRequestGate.isCoolingDown) {
+        const gate = requestGates[exchange];
+        if (gate.isCoolingDown) {
             lastProviderAttempts.delete(exchange);
             exchangeStates[exchange] = {
                 ...exchangeStates[exchange],
                 status: sourceReadings[exchange].length ? "delayed" : "error",
-                error: binanceRequestGate.cooldownError().message,
+                error: gate.cooldownError().message,
             };
             continue;
         }
@@ -746,7 +674,8 @@ export function getLsarMarketSnapshot() {
                 status: !result.readings.length ? "error" : result.errorCount ? "delayed" : "live",
                 marketCount: result.readings.length,
                 updatedAt: new Date(),
-                error: result.error ?? (result.errorCount ? `${result.errorCount} markets did not return complete account-ratio data.` : null),
+                error: gate.isCoolingDown ? gate.cooldownError().message
+                    : result.error ?? (result.errorCount ? `${result.errorCount} markets did not return complete account-ratio data.` : null),
             };
             logger.info({ exchange, markets: result.readings.length }, "Exchange account-ratio scan completed");
         }).catch((error) => {

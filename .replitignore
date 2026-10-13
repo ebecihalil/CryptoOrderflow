@@ -3,3 +3,4 @@
 
 # Keep Replit's local agent tooling out of the deployment bundle.
 .local
+.cache

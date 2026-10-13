@@ -2,3 +2,4 @@
 - [Account-ratio integrations](account-ratio-integrations.md) — preserve metric compatibility, matched candles, and truthful disclosure of rate-limited coverage.
 - [Toobit metadata](toobit-metadata.md) — its baseAsset can contain the full contract symbol, unlike other venues; verify the underlying ticker before grouping.
 - [Screener readability](screener-readability.md) — retain all desktop exchange columns without horizontal scrolling; preserve readable text rather than shrinking it to fit.
+- [Provider documentation redirects](provider-documentation.md) — successful fetches can land on unrelated introductions; verify the actual endpoint before trusting rate-limit claims.

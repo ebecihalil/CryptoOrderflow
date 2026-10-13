@@ -10,6 +10,13 @@ Leave the home page area below the module navigation empty for now: the user int
 
 The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.
 
+## Exchange rules for all future sections
+
+- Respect each exchange's documented request limits throughout the entire website, including future order-flow sections and newly added exchanges. Review the rules for every endpoint before integrating it.
+- Share each exchange's IP-wide request/weight budgets and cooldowns across all modules; do not give LSAR, Open Interest, Funding Rate, or other sections independent allowances that collectively exceed the exchange's limits. Also enforce endpoint-specific limits where applicable.
+- Exchange support is specific to the metric, not restricted to the LSAR exchange list. LSAR is available from fewer exchanges; Open Interest should support more exchanges where compatible data is available.
+- Keep these protections in place as the website expands, including queued requests, retries, and overlapping module updates.
+
 ## Run & Operate
 
 - `npm run build` — bundle the React frontend into `dist/`
