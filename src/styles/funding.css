@@ -148,8 +148,6 @@
   .funding-topbar .module-brand-copy strong { font-size:16px; }
   .funding-topbar .module-brand-copy small { font-size:8px; }
   .funding-topbar .module-topbar-right { gap:7px; }
-  .funding-topbar .module-home-link { min-height:36px;padding:0 7px;font-size:0; }
-  .funding-topbar .module-home-link svg { width:15px;height:15px; }
   .funding-topbar .theme-toggle { min-height:36px;padding:0 7px; }
   .funding-topbar .theme-toggle-label { display:none; }
   .funding-current-module { display:none; }

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
-import { ArrowDown, ArrowDownUp, ArrowLeft, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw, Search } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw, Search } from 'lucide-react';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { HomeButton } from '@/components/home-button';
 import { useFundingSnapshot } from '@/hooks/use-funding-snapshot';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
 import { orderFundingSources } from '@/lib/funding-source-order';
@@ -93,7 +94,7 @@ function FundingHeader() {
       </Link>
       <div className="module-topbar-right">
         <span className="funding-current-module" aria-current="page">FR <span>Funding Rate</span></span>
-        <Link href="/" className="module-home-link"><ArrowLeft size={15} aria-hidden="true" /> Home</Link>
+        <HomeButton />
         <ThemeToggle />
       </div>
     </header>

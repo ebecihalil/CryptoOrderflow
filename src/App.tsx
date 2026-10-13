@@ -6,6 +6,7 @@ import { FetchedDataLine } from '@/components/fetched-data-line';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { HomeButton } from '@/components/home-button';
 import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
 import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
@@ -45,7 +46,6 @@ import {
   Route,
   Switch,
   useLocation,
-  Link,
   Router as WouterRouter,
 } from 'wouter';
 
@@ -219,7 +219,7 @@ function Home() {
           </span>
         </div>
         <div className="topbar-right">
-          <Link className="lsar-home-link" href="/" aria-label="Back to Crypto Order Flow home">CO <span>Home</span></Link>
+          <HomeButton />
           <span className="lsar-active-module" aria-current="page"><span>LS</span> Long Short Ratio</span>
           <span className={`live-indicator ${healthQuery.isError ? 'api-down' : ''}`} data-testid="status-api-health"
             aria-label={healthQuery.isError ? 'API unreachable' : 'Market feed'}

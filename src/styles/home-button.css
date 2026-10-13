@@ -1,0 +1,19 @@
+.home-button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  height:36px;
+  padding:0 11px;
+  flex-shrink:0;
+  border:1px solid var(--lsar-control-border);
+  background:var(--lsar-surface);
+  color:var(--lsar-strong);
+  text-decoration:none;
+  white-space:nowrap;
+  font:11px var(--app-font-mono);
+  transition:background .16s ease,border-color .16s ease;
+}
+.home-button svg { width:15px;height:15px;flex-shrink:0; }
+.home-button:hover { background:var(--lsar-accent-soft);border-color:var(--lsar-accent); }
+.home-button:focus-visible { outline:2px solid var(--lsar-accent);outline-offset:3px; }

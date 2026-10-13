@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { ArrowLeft, ArrowUpRight, ChevronDown, Clock3 } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, Clock3 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { HomeButton } from '@/components/home-button';
 import { MODULES, RATIO_SECTIONS, type ModuleInfo } from '@/lib/modules';
 
 function ProductHeader({ module }: { module?: ModuleInfo }) {
@@ -13,7 +14,7 @@ function ProductHeader({ module }: { module?: ModuleInfo }) {
       </Link>
       <div className="module-topbar-right">
         {module && <span className="module-active-label">Coming later</span>}
-        <Link href="/" className="module-home-link"><ArrowLeft size={15} aria-hidden="true" /> Home</Link>
+        <HomeButton />
         <ThemeToggle />
       </div>
     </header>
@@ -95,7 +96,7 @@ export function ModuleComingSoon({ module }: { module: ModuleInfo }) {
           <h1 className="module-page-title">{module.title}</h1>
           <p>{module.description}</p>
           <div className="coming-status"><Clock3 size={15} aria-hidden="true" /><span>This module is not available yet.</span></div>
-          <Link href="/" className="coming-back"><ArrowLeft size={15} aria-hidden="true" /> Back to all modules</Link>
+          <div className="coming-home"><HomeButton /></div>
         </div>
       </main>
     </div>
