@@ -4,7 +4,7 @@ Crypto Orderflow is the umbrella project name: the product will not be limited t
 
 The LSAR screen's visible header branding remains **Perpetual LSAR** with the **LS** mark. The user clarified that renaming the project/repository does not mean replacing this screen's branding.
 
-The home page is the **Crypto Order Flow** module directory. The user wants Long Short Ratio to expand into Long Short Account Ratio (the existing live screener) and Long Short Position Ratio. Funding Rate, Open Interest, Liquidations, CVD, Super Charts (Indicators), and Position Ratio are planned sections to implement one by one later; do not invent data or implement their metrics ahead of that request. Keep the existing visual concept, light/dark themes, and two-letter section marks.
+The home page is the **Crypto Order Flow** module directory. Long Short Account Ratio and Funding Rate are live screener sections. Long Short Position Ratio, Open Interest, Liquidations, CVD, and Super Charts (Indicators) remain planned sections to implement one by one when requested; do not invent their data. Keep the existing visual concept, light/dark themes, and two-letter section marks.
 
 Leave the home page area below the module navigation empty for now: the user intends to fill it with other information later, rather than adding content there ahead of that request.
 
@@ -37,6 +37,9 @@ The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit p
 - `public/` — static assets copied into the production build.
 
 ## Architecture decisions
+
+- Funding Rate uses a >=1% exchange-wide share of observed fetched USD perpetual OI, not a per-coin cutoff. Compare current quotes on a common 8h basis and display native rates/variable intervals. Historical TFs sum actual settled funding, with current OI weights only from complete-history venues.
+- Do not extrapolate a current funding quote into historical totals or hide a provider's history-retention limit.
 
 - Readings for the same asset are aggregated using USD open interest as the weight.
 - Each timeframe compares matching venues in the current and immediately preceding UTC-aligned candle with identical OI weights. OKX/Bitget fall back to hourly history for previous 4h/24h candles when their limited 5m history does not reach the previous candle.

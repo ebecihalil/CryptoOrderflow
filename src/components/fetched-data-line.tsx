@@ -7,7 +7,7 @@ export function FetchedDataLine({ sources = [] }: { sources?: MarketSourceStatus
   return (
     <div className="fetched-data-line" role="status" aria-live="polite" aria-label="Fetched exchange contract counts"
       data-testid="fetched-data-line">
-      <strong>Total Fetched Data:</strong>
+      <strong>Total Fetched Coin Data:</strong>
       {MARKET_EXCHANGES.map((exchange) => {
         const source = sources.find((item) => item.exchange === exchange);
         const count = source?.marketCount ?? 0;

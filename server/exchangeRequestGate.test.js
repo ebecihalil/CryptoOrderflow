@@ -24,7 +24,7 @@ function fixture(exchange, options = {}) {
     return { gate, ...clock, advance: delay => { time += delay; } };
 }
 
-for (const exchange of Object.keys(EXCHANGE_POLICIES)) {
+for (const exchange of Object.keys(urls)) {
     test(`${exchange} concurrent symbols/timeframes remain within every rolling quota`, async () => {
         const f = fixture(exchange);
         const starts = [];
@@ -170,7 +170,7 @@ test("HTTP rate errors pause admission before a slow error body is parsed", asyn
 test("all six request gates are registered, with shared Binance products and no unguarded hosts", async () => {
     const memory = new Map();
     const gates = createRequestGates({ store: { read: key => memory.get(key), save: (key, state) => memory.set(key, state) } });
-    assert.deepEqual(Object.keys(gates).sort(), ["binance", "bitget", "bybit", "gate", "okx", "toobit"]);
+    assert.deepEqual(Object.keys(gates).sort(), ["binance", ...Object.keys(EXCHANGE_POLICIES)].sort());
     assert.equal(gates.binance.historyLimit, 800);
     const client = createExchangeHttpClient({ gates, fetchImpl: () => { throw Error("Should not fetch"); } });
     await assert.rejects(client("https://unknown.example/market"), /No request limiter/);

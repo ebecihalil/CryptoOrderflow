@@ -1,9 +1,6 @@
-import { createRequestGates } from "./requestGates.js";
-import { createExchangeHttpClient } from "./exchangeHttpClient.js";
+import { requestGates, requestJson as fetchJson } from "./exchangeRequests.js";
 import { BinanceCooldownError } from "./binanceRequestGate.js";
 
-const requestGates = createRequestGates();
-const fetchJson = createExchangeHttpClient({ gates: requestGates });
 const logger = {
     info(details, message) {
         console.info(message, details);

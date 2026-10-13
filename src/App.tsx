@@ -15,6 +15,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { ModuleComingSoon, ModuleHome } from '@/components/module-pages';
+import { FundingPage } from '@/components/funding-page';
 import { MODULES, RATIO_SECTIONS } from '@/lib/modules';
 import './styles/modules.css';
 import type {
@@ -506,7 +507,8 @@ function Router() {
         <Route path="/long-short-position-ratio">
           <ModuleComingSoon module={RATIO_SECTIONS[1]} />
         </Route>
-        {MODULES.filter((module) => module.path !== '/long-short-account-ratio').map((module) => (
+        <Route path="/funding-rate" component={FundingPage} />
+        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />
           </Route>

@@ -1,4 +1,5 @@
 import express from "express";
+import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -17,6 +18,14 @@ app.use(express.json());
 
 app.get("/api/healthz", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/market/funding", (req, res) => {
+  const timeframe=req.query.timeframe??"current";
+  if(typeof timeframe!=="string"||!["current","1d","7d","30d","1y"].includes(timeframe)){
+    res.status(400).json({error:"timeframe must be current, 1d, 7d, 30d, or 1y."});return;
+  }
+  res.set("Cache-Control","no-store").json(getFundingMarketSnapshot(timeframe));
 });
 
 app.get("/api/market/lsar", (req, res) => {

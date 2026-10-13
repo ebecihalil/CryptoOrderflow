@@ -14,6 +14,20 @@ export const EXCHANGE_POLICIES = {
     // No numeric LSAR endpoint limit/weight is published. Do not equate the
     // general 3000-weight allowance with 3000 account-ratio requests.
     toobit: { spacingMs: 1100, rules: [rule("all", 50, 60_000)] },
+    mexc: { spacingMs: 250, rules: [rule("all", 8, 2000)] },
+    kucoin: { spacingMs: 600, rules: [rule("all", 40, 30_000)] },
+    kraken: { spacingMs: 600, rules: [rule("all", 12, 10_000)] },
+    bingx: { spacingMs: 600, rules: [rule("all", 12, 10_000)] },
+    // Reserve for history responses too: 6 * (20 + 2000/20) < 1200 weight/min.
+    hyperliquid: { spacingMs: 2000, rules: [rule("all", 6, 60_000)] },
+    htx: { spacingMs: 600, rules: [rule("all", 12, 10_000)] },
+    deribit: { spacingMs: 600, rules: [rule("all", 12, 10_000)] },
+    aster: { spacingMs: 400, rules: [rule("all", 150, 60_000)] },
+    coinex: { spacingMs: 600, rules: [rule("all", 12, 10_000)] },
+    bitmex: { spacingMs: 2000, rules: [rule("all", 15, 60_000)] },
+    lighter: { spacingMs: 2000, rules: [rule("all", 20, 60_000)] },
+    paradex: { spacingMs: 1500, rules: [rule("all", 20, 60_000)] },
+    backpack: { spacingMs: 1500, rules: [rule("all", 20, 60_000)] },
 };
 
 export class ExchangeCooldownError extends Error {
@@ -148,7 +162,8 @@ export class ExchangeRequestGate {
         const message = String(body?.retMsg ?? body?.msg ?? body?.message ?? "");
         if (code === "10009" || /IP.*bann|access too frequent/i.test(message))
             throw this.pause(response, 403, code);
-        if (["10006", "50011", "50013", "429", "-1003", "-1015"].includes(code)
+        if (["10006", "50011", "50013", "429", "-1003", "-1015", "10028", "200002", "429000"].includes(code)
+            || body?.error === "apiLimitExceeded" || body?.error?.code === 10028
             || body?.label === "TOO_MANY_REQUESTS"
             || (code && !["0", "00000"].includes(code) && /too many requests|too many visits|too frequent|rate limit|frequency limit/i.test(message)))
             throw this.pause(response, 429, code);
