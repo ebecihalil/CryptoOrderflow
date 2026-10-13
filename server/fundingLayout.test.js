@@ -5,6 +5,15 @@ import { readFileSync } from 'node:fs';
 const css = readFileSync(new URL('../src/styles/funding.css', import.meta.url), 'utf8');
 const component = readFileSync(new URL('../src/components/funding-page.tsx', import.meta.url), 'utf8');
 
+test('positive funding is red and negative funding is green across tables and summaries', () => {
+  for (const selector of ['funding-highlight-value', 'funding-rate-cell', 'funding-extreme-value']) {
+    assert.match(css, new RegExp(`\\.${selector}\\.is-positive[^{}]*\\{\\s*color:var\\(--lsar-negative\\);`));
+    assert.match(css, new RegExp(`\\.${selector}\\.is-negative[^{}]*\\{\\s*color:var\\(--lsar-positive\\);`));
+  }
+  assert.doesNotMatch(css, /--lsar-(positive|negative)\s*:/);
+  assert.match(component, /value > 0 \? 'is-positive' : value < 0 \? 'is-negative' : ''/);
+});
+
 test('funding extreme lists keep one full-width entry per row on desktop and mobile', () => {
   const rules = [...css.matchAll(/\.funding-extreme-panel ol\s*\{([^}]*)\}/g)];
   assert.ok(rules.length >= 2);

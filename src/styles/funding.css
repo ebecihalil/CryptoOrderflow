@@ -53,8 +53,8 @@
 .funding-highlight-asset { display:flex;align-items:center;gap:7px;color:var(--lsar-strong);font-size:12px; }
 .funding-highlight-asset .coin-logo { width:20px;height:20px; }
 .funding-highlight-value { display:block;margin-top:7px;font:500 20px/1.2 var(--app-font-mono);letter-spacing:-.05em;color:var(--lsar-ink); }
-.funding-highlight-value.is-positive,.funding-rate-cell.is-positive,.funding-extreme-value.is-positive { color:var(--lsar-positive); }
-.funding-highlight-value.is-negative,.funding-rate-cell.is-negative,.funding-extreme-value.is-negative { color:var(--lsar-negative); }
+.funding-highlight-value.is-positive,.funding-rate-cell.is-positive,.funding-extreme-value.is-positive { color:var(--lsar-negative); }
+.funding-highlight-value.is-negative,.funding-rate-cell.is-negative,.funding-extreme-value.is-negative { color:var(--lsar-positive); }
 .funding-highlight-value.is-missing { color:var(--lsar-muted); }
 .funding-highlight > small { display:block;margin-top:5px;color:var(--lsar-muted);font:9px var(--app-font-mono);line-height:1.45; }
 .funding-extremes { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 14px; }
