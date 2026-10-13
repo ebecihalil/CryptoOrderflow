@@ -7,10 +7,11 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'
 test('LSAR, Funding and all other module pages use the shared Home button', () => {
   for (const path of ['src/App.tsx', 'src/components/funding-page.tsx', 'src/components/module-pages.tsx']) {
     const source = read(path);
-    assert.match(source, /import \{ HomeButton \} from '@\/components\/home-button'/);
-    assert.match(source, /<HomeButton \/>/);
+    assert.match(source, /import \{ AppHeader \} from '@\/components\/app-header'/);
+    assert.match(source, /<AppHeader /);
     assert.doesNotMatch(source, /(?:lsar-home-link|module-home-link|coming-back)/);
   }
+  assert.match(read('src/components/app-header.tsx'), /<HomeButton \/>/);
 });
 
 test('shared Home navigation has an accessible label, arrow and root destination', () => {

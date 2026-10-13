@@ -13,10 +13,15 @@ const LOGOS: Record<string, string> = {
   htx: '/exchanges/htx.png',
   deribit: '/exchanges/deribit.jpg',
   aster: '/exchanges/aster.png',
+  lighter: '/exchanges/lighter.png',
+  paradex: '/exchanges/paradex.png',
+  coinex: '/exchanges/coinex.png',
+  bitmex: '/exchanges/bitmex.ico',
 };
 
 export function ExchangeLogo({ exchange }: { exchange: string }) {
-  const source = LOGOS[exchange];
+  const key = exchange.trim().toLowerCase();
+  const source = Object.hasOwn(LOGOS, key) ? LOGOS[key] : undefined;
   if (!source) {
     return <span className="exchange-logo funding-exchange-fallback" aria-hidden="true">{exchange.slice(0, 2).toUpperCase()}</span>;
   }

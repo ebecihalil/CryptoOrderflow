@@ -1,23 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
 import { ArrowUpRight, ChevronDown, Clock3 } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { AppHeader } from '@/components/app-header';
 import { HomeButton } from '@/components/home-button';
 import { MODULES, RATIO_SECTIONS, type ModuleInfo } from '@/lib/modules';
 
 function ProductHeader({ module }: { module?: ModuleInfo }) {
   return (
-    <header className="topbar module-topbar">
-      <Link href="/" className="module-brand" aria-label="Crypto Order Flow home">
-        <span className="brand-mark">{module?.mark ?? 'CO'}</span>
-        <span className="module-brand-copy"><strong>{module?.title ?? 'Crypto Order Flow'}</strong><small>MARKET TOOLKIT</small></span>
-      </Link>
-      <div className="module-topbar-right">
-        {module && <span className="module-active-label">Coming later</span>}
-        <HomeButton />
-        <ThemeToggle />
-      </div>
-    </header>
+    <AppHeader title={module?.title ?? 'Crypto Order Flow'} mark={module?.mark ?? 'CO'}
+      sectionLabel={module?.title ?? 'Overview'} subtitle={module ? 'Perpetual Markets' : 'Market Toolkit'} />
   );
 }
 

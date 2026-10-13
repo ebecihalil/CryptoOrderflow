@@ -5,4 +5,4 @@
 - [Provider documentation redirects](provider-documentation.md) — successful fetches can land on unrelated introductions; verify the actual endpoint before trusting rate-limit claims.
 - [Funding OI units](funding-unit-verification.md) — verify inverse face value, linear USD value and funding quote/payment bases before global OI weighting.
 - [Coin logo identity](coin-logo-identity.md) — duplicate tickers and non-crypto contracts need verified identities; logo maintenance must not add market-data traffic.
-- [Section navigation](section-navigation.md) — keep the Home button identical across LSAR, Funding and other section pages.
+- [Section navigation](section-navigation.md) — share the complete header, including Home placement and Market Feed, across LSAR, Funding and other sections.

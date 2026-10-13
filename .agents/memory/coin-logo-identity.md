@@ -15,3 +15,14 @@ unrelated token's logo (for example, ETN can represent an equity rather than Ele
 and verify logo aliases without changing market grouping or calculations. Shipped logo
 metadata is maintained separately from live market scans so viewing or refreshing logos
 does not spend exchange request quotas.
+
+Known exchange names must have real, verified exchange logos, not two-letter
+placeholders.
+
+**Why:** the user repeated that all crypto exchanges in the app should have their
+logos available, including the exchanges shown in highest/lowest funding tables.
+
+**How to apply:** include the brand asset when adding an exchange and use it
+consistently wherever that exchange appears. Verify that deployed logo URLs
+return actual images; an HTTP 200 response can be an HTML fallback rather than
+the requested logo.

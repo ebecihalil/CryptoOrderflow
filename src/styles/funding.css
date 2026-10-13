@@ -1,8 +1,4 @@
 .funding-app { min-height:100dvh;color:var(--lsar-ink);background:var(--lsar-page); }
-.funding-topbar { border-color:var(--lsar-border);background:var(--lsar-topbar); }
-.funding-current-module { display:inline-flex;align-items:center;gap:8px;color:var(--lsar-accent);font:10px var(--app-font-mono); }
-.funding-current-module::first-letter { display:grid; }
-.funding-current-module > span { color:var(--lsar-muted); }
 .funding-main { max-width:1660px;margin:0 auto;padding:28px clamp(18px,3.3vw,52px) 38px; }
 .funding-heading { display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:17px; }
 .funding-heading .eyebrow { color:var(--lsar-muted); }
@@ -71,7 +67,7 @@
 .funding-extreme-name { display:flex;flex-direction:column;gap:3px;min-width:0; }
 .funding-extreme-name > strong { overflow:hidden;color:var(--lsar-strong);font-size:11px;text-overflow:ellipsis;white-space:nowrap; }
 .funding-extreme-name small { display:flex;align-items:center;gap:4px;overflow:hidden;color:var(--lsar-muted);font:10px var(--app-font-mono);text-overflow:ellipsis;white-space:nowrap; }
-.funding-extreme-name .exchange-logo,.funding-extreme-name .funding-exchange-fallback { width:12px;height:12px;flex:none; }
+.funding-extreme-name .exchange-logo,.funding-extreme-name .funding-exchange-fallback { width:16px;height:16px;flex:none;object-fit:contain; }
 .funding-extreme-value { text-align:right;color:var(--lsar-ink);font:11px var(--app-font-mono);white-space:nowrap; }
 .funding-extreme-value small { display:block;margin-top:3px;color:var(--lsar-muted);font-size:9px; }
 .funding-extreme-empty { margin:0;padding:10px 0;color:var(--lsar-muted);font-size:11px; }
@@ -144,15 +140,6 @@
   .funding-table-meta { align-items:flex-start;flex-direction:column; }
 }
 @media (max-width:620px) {
-  .funding-topbar { min-height:68px;padding:11px 13px; }
-  .funding-topbar .module-brand { gap:9px; }
-  .funding-topbar .module-brand .brand-mark { width:36px;height:36px;font-size:16px; }
-  .funding-topbar .module-brand-copy strong { font-size:16px; }
-  .funding-topbar .module-brand-copy small { font-size:8px; }
-  .funding-topbar .module-topbar-right { gap:7px; }
-  .funding-topbar .theme-toggle { min-height:36px;padding:0 7px; }
-  .funding-topbar .theme-toggle-label { display:none; }
-  .funding-current-module { display:none; }
   .funding-main { padding:20px 12px 25px; }
   .funding-heading { align-items:center;margin-bottom:14px; }
   .funding-heading h1 { font-size:28px; }

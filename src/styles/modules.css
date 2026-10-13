@@ -1,12 +1,4 @@
 .module-app { color:var(--lsar-ink);background:var(--lsar-page); }
-.module-topbar { min-height:82px;height:auto;padding:16px clamp(20px,4.2vw,68px);gap:16px; }
-.module-brand { display:flex;align-items:center;gap:14px;color:inherit;text-decoration:none;min-width:0; }
-.module-brand .brand-mark { border-radius:10px;width:42px;height:42px;font-size:18px; }
-.module-brand-copy { display:flex;flex-direction:column;gap:3px; }
-.module-brand-copy strong { font-size:24px;letter-spacing:-.045em;line-height:1.2; }
-.module-brand-copy small { color:var(--lsar-muted);font:11px var(--app-font-mono);letter-spacing:.1em; }
-.module-topbar-right { display:flex;align-items:center;gap:18px;flex-shrink:0; }
-.module-active-label { display:flex;align-items:center;gap:8px;color:var(--lsar-muted);font:10px var(--app-font-mono); }
 .module-main { max-width:1160px;margin:0 auto;padding:64px 34px 38px; }
 .module-kicker { display:flex;align-items:center;justify-content:center;gap:14px;color:var(--lsar-muted);font:10px var(--app-font-mono);letter-spacing:.16em; }
 .module-kicker-rule { width:34px;height:1px;background:var(--lsar-border); }
@@ -71,20 +63,8 @@
 .coming-status svg { color:var(--lsar-accent); }
 .coming-home { margin-top:22px; }
 .module-app :focus-visible { outline:2px solid var(--lsar-accent);outline-offset:3px; }
-.lsar-active-module { display:inline-flex;align-items:center;gap:7px;color:var(--lsar-muted);font:10px var(--app-font-mono); }
-.lsar-active-module > span { display:grid;place-items:center;width:24px;height:24px;background:var(--lsar-accent-soft);color:var(--lsar-accent); }
 @media (max-width:700px) {
-  .module-topbar { height:auto;min-height:68px;padding:12px 16px;gap:10px; }
-  .module-brand { gap:9px; }
-  .module-brand .brand-mark { width:35px;height:35px; }
-  .module-brand-copy strong { font-size:18px; }
-  .module-brand-copy small { font-size:10px; }
-  .module-topbar-right { gap:8px; }
-  .module-active-label { display:none; }
-  .module-topbar .theme-toggle { min-height:36px;padding:0 8px; }
-  .module-topbar .theme-toggle-label { display:none; }
   .topbar-right { gap:9px; }
-  .lsar-active-module { display:none; }
   .module-main { padding:42px 17px 28px; }
   .module-home-main { min-height:calc(100dvh - 68px);padding:34px 17px 130px; }
   .module-home-main .module-directory { margin-top:30px; }

@@ -5,8 +5,7 @@ import { ExchangeFilter } from '@/components/exchange-filter';
 import { FetchedDataLine } from '@/components/fetched-data-line';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { HomeButton } from '@/components/home-button';
+import { AppHeader } from '@/components/app-header';
 import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
 import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
@@ -20,7 +19,6 @@ import { FundingPage } from '@/components/funding-page';
 import { MODULES, RATIO_SECTIONS } from '@/lib/modules';
 import './styles/modules.css';
 import type {
-  HealthStatus,
   LsarInstrument,
   LsarMarketSnapshot,
   LsarMarketSummary,
@@ -157,12 +155,6 @@ function Home() {
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
-  const healthQuery = useQuery({
-    queryKey: ['health'],
-    queryFn: ({ signal }) => getJson<HealthStatus>('/api/healthz', signal),
-    refetchInterval: 60_000,
-    retry: 1,
-  });
 
   const snapshot = snapshotQuery.data;
   const summary = summaryQuery.data;
@@ -210,28 +202,7 @@ function Home() {
 
   return (
     <div className="terminal">
-      <header className="topbar">
-        <div className="brand lsar-brand">
-          <div className="brand-mark">LS</div>
-          <span className="lsar-brand-copy">
-            <strong>Long Short Account Ratio</strong>
-            <small>Perpetual Markets</small>
-          </span>
-        </div>
-        <div className="topbar-right">
-          <HomeButton />
-          <span className="lsar-active-module" aria-current="page"><span>LS</span> Long Short Ratio</span>
-          <span className={`live-indicator ${healthQuery.isError ? 'api-down' : ''}`} data-testid="status-api-health"
-            aria-label={healthQuery.isError ? 'API unreachable' : 'Market feed'}
-            title={healthQuery.isError ? 'API unreachable' : 'Market feed'}>
-            <span className="live-dot" />
-            <span className="feed-status-label">{healthQuery.isError ? 'API unreachable' : 'Market feed'}</span>
-          </span>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {snapshot?.isRefreshing && <div className="refreshing-bar" data-testid="status-refreshing" />}
+      <AppHeader title="Long Short Account Ratio" mark="LS" sectionLabel="Long Short Ratio" isRefreshing={snapshot?.isRefreshing} />
 
       <main className="main-wrap">
         <section className="hero-line">

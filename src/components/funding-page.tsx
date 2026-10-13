@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'wouter';
 import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw, Search } from 'lucide-react';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { HomeButton } from '@/components/home-button';
+import { AppHeader } from '@/components/app-header';
 import { useFundingSnapshot } from '@/hooks/use-funding-snapshot';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
 import { orderFundingSources } from '@/lib/funding-source-order';
@@ -80,22 +78,6 @@ function sourceStatusLabel(status: string) {
   return status;
 }
 
-function FundingHeader() {
-  return (
-    <header className="topbar module-topbar funding-topbar">
-      <Link href="/" className="module-brand" aria-label="Crypto Order Flow home">
-        <span className="brand-mark">FR</span>
-        <span className="module-brand-copy"><strong>Funding Rate</strong><small>PERPETUAL MARKETS</small></span>
-      </Link>
-      <div className="module-topbar-right">
-        <span className="funding-current-module" aria-current="page">FR <span>Funding Rate</span></span>
-        <HomeButton />
-        <ThemeToggle />
-      </div>
-    </header>
-  );
-}
-
 function FundingSourceLine({ sources }: { sources?: FundingSource[] }) {
   const visibleSources = orderFundingSources(sources ?? []).filter((source) => source.status !== 'excluded');
   return (
@@ -114,6 +96,7 @@ function FundingSourceLine({ sources }: { sources?: FundingSource[] }) {
             return (
               <span key={source.exchange} className={`funding-source-item ${state}`} title={title}>
                 <span className="funding-source-dot" aria-hidden="true" />
+                <ExchangeLogo exchange={source.exchange} />
                 <span>{exchangeLabel(source.exchange)}</span>
                 <span className="funding-source-count">{source.marketCount.toLocaleString()}</span>
                 <span className="sr-only"> — {sourceStatusLabel(source.status)}{source.error ? `: ${source.error}` : ''}</span>
@@ -281,10 +264,10 @@ export function FundingPage() {
 
   return (
     <div className="terminal funding-app">
-      <FundingHeader />
+      <AppHeader title="Funding Rate" mark="FR" isRefreshing={snapshot?.isRefreshing} />
       <main className="funding-main">
         <div className="funding-heading">
-          <div><span className="eyebrow">PERPETUAL MARKET SCREENER / FR</span><h1>Funding Rate</h1></div>
+          <div><span className="eyebrow">Crypto Order Flow Mechanics</span><h1>Funding Rate</h1></div>
           <button type="button" className="refresh-button funding-refresh" onClick={() => { void query.refetch(); }} disabled={query.isFetching}
             aria-label={query.isFetching ? 'Refreshing funding data' : 'Refresh funding data'}>
             <RefreshCw className={query.isFetching ? 'spin' : ''} aria-hidden="true" /><span>{query.isFetching ? 'Refreshing' : 'Refresh'}</span>

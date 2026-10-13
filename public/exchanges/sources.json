@@ -17,5 +17,15 @@
   "hyperliquid": "https://coin-images.coingecko.com/markets/images/1208/small/Hyperliquid_logo.png?1706865217",
   "htx": "https://coin-images.coingecko.com/markets/images/25/small/htx.png?1721712842",
   "deribit": "https://coin-images.coingecko.com/markets/images/1144/small/deribit-spot.jpg?1756737820",
-  "aster": "https://coin-images.coingecko.com/markets/images/22084/small/aster-profile-200.png?1756966162"
+  "aster": "https://coin-images.coingecko.com/markets/images/22084/small/aster-profile-200.png?1756966162",
+  "officialSites": {
+    "lighter": "https://lighter.xyz/",
+    "paradex": "https://www.paradex.trade/",
+    "coinex": "https://www.coinex.com/",
+    "bitmex": "https://www.bitmex.com/"
+  },
+  "lighter": "https://framerusercontent.com/images/uTdLWjhUvfSiBaN37kYNLsUu4.png",
+  "paradex": "https://cdn.prod.website-files.com/632b1650d518e93de132751a/6925a8200edc68bffd32afa6_fav-icon-32px.png",
+  "coinex": "https://www.coinex.com/favicon-48x48.png",
+  "bitmex": "https://www.bitmex.com/favicon.ico"
 }
