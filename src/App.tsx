@@ -135,18 +135,11 @@ function Home() {
   const [sortTarget, setSortTarget] = useState<MarketSortTarget>('change');
   const [{ selected: selectedExchanges, multipleOnly }, setExchangeSelection] = useState(() => selectExchanges(MARKET_EXCHANGES));
   const [search, setSearch] = useState('');
-  const [maxPrice, setMaxPrice] = useState('5');
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
 
-  const parsedMaxPrice = maxPrice.trim() === '' ? null : Number(maxPrice);
-  const maxPriceLimit =
-    parsedMaxPrice !== null && Number.isFinite(parsedMaxPrice) && parsedMaxPrice >= 0
-      ? parsedMaxPrice
-      : null;
-  const serverPriceFilter = maxPriceLimit === null ? 'all' : String(maxPriceLimit);
   const snapshotQuery = useQuery({
-    queryKey: ['market-snapshot', serverPriceFilter],
-    queryFn: ({ signal }) => getJson<LsarMarketSnapshot>(`/api/market/lsar?maxPrice=${encodeURIComponent(serverPriceFilter)}`, signal),
+    queryKey: ['market-snapshot', 'all'],
+    queryFn: ({ signal }) => getJson<LsarMarketSnapshot>('/api/market/lsar?maxPrice=all', signal),
     refetchInterval: (query) => snapshotPollInterval(query.state.data?.sources),
     refetchOnWindowFocus: true,
   });
@@ -190,7 +183,7 @@ function Home() {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
   };
 
-  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== MARKET_EXCHANGES.length || multipleOnly || maxPriceLimit !== null;
+  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== MARKET_EXCHANGES.length || multipleOnly;
   const latestTimestamp = snapshot?.generatedAt ?? summary?.generatedAt ?? null;
   const latestRatioTimestamp =
     snapshot?.rows.reduce<string | null>((latest, row) => {
@@ -199,8 +192,6 @@ function Home() {
       return !latest || new Date(observed).getTime() > new Date(latest).getTime() ? observed : latest;
     }, null) ?? null;
   const snapshotFailed = Boolean(snapshotQuery.isError);
-  const queryErrorMessage = snapshotQuery.error instanceof Error ? snapshotQuery.error.message : 'The market snapshot could not be reached.';
-
   return (
     <div className="terminal">
       <AppHeader title="Long Short Account Ratio" mark="LS" sectionLabel="Long Short Account Ratio" isRefreshing={snapshot?.isRefreshing} />
@@ -224,8 +215,8 @@ function Home() {
             <AlertCircle />
             <span>
               {snapshot
-                ? `Could not refresh the latest market data. Showing the last available snapshot${queryErrorMessage ? ` — ${queryErrorMessage}` : ''}.`
-                : `Live market data is unavailable. ${queryErrorMessage}`}
+                ? 'Could not refresh the latest market data. Showing the last available snapshot.'
+                : 'Live market data is unavailable.'}
             </span>
             <button onClick={handleRefresh} data-testid="button-retry">Retry</button>
           </div>
@@ -252,23 +243,6 @@ function Home() {
               aria-label="TF (timeframe)" className="select-control" data-testid="select-timeframe">
               {TIMEFRAMES.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
-            <label className="price-filter">
-              <span className="filter-label">Max price</span>
-              <span className="price-input-wrap">
-                <span aria-hidden="true">$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  inputMode="decimal"
-                  value={maxPrice}
-                  onChange={(event) => setMaxPrice(event.target.value)}
-                  placeholder="No limit"
-                  aria-label="Maximum coin price in USD"
-                  data-testid="input-max-price"
-                />
-              </span>
-            </label>
           </div>
           <div className="control-right">
             <span className="filter-label">Sort</span>
@@ -283,7 +257,6 @@ function Home() {
         <div className="table-meta">
           <span>
             <strong>{snapshot ? rows.length.toLocaleString() : '—'}</strong> assets shown
-            {maxPriceLimit !== null && <> · price ≤ ${formatPrice(maxPriceLimit)}</>}
             {' · '}sorted by {sortTarget === 'current'
               ? `current aggregated LSAR (${sortMode === 'increase' ? 'high to low' : 'low to high'})`
               : sortTarget !== 'change'
@@ -358,7 +331,7 @@ function Home() {
                   <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
                 )}
                 {snapshot && rows.length === 0 && (
-                  <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try raising the max price, changing the exchange, or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
+                  <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try changing the exchange filter or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
                 )}
                 {snapshot && rows.map((row) => {
                   const expanded = expandedAsset === row.asset;
@@ -381,7 +354,7 @@ function Home() {
           <Info />
           <span><strong>Read this correctly.</strong> Aggregated LSAR converts each source ratio to long and short account shares first, OI-weights both shares, then reconstructs the ratio; overall long percentage is the OI-weighted long share. Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical current USD OI weights on both sides. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Only verified crypto identities are included; stocks/ETFs and unverified tickers are excluded. Expand a coin to see contract timestamps and the selected timeframe's contributing sources. Binance/Bybit include linear and inverse perpetuals; Gate.io, Bitget and Toobit currently add USDT perpetuals, and OKX adds swaps. Toobit fetches 5-minute history for all displayed candle comparisons. Feeds load progressively; Bitget runs at its one-request-per-second limit, and slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
         </div>
-        {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable: {snapshot.sources.filter((source) => source.error).map((source) => `${source.exchange.toUpperCase()}: ${source.error}`).join(' · ')}. Only available readings contribute.</span></div>}
+        {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable. Only available readings contribute.</span></div>}
         <div className="footline">
           <span>CRYPTO ORDERFLOW / LSAR SCREENER</span>
           <span data-testid="text-generated-at">SNAPSHOT {formatTimestamp(latestTimestamp)} · {snapshot?.totalMarkets ?? summary?.totalMarkets ?? '—'} ASSETS</span>

@@ -44,4 +44,4 @@ The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit p
 - Readings for the same asset are aggregated using USD open interest as the weight.
 - Each timeframe compares matching venues in the current and immediately preceding UTC-aligned candle with identical OI weights. OKX/Bitget fall back to hourly history for previous 4h/24h candles when their limited 5m history does not reach the previous candle.
 - Bitget account data is limited to one request per second. It fills progressively, independently of other scans. All readings older than 15 minutes are excluded.
-- The server applies the maximum-price filter before returning screener rows; the default cap is `$5`, and the UI can request all prices.
+- The LSAR page has no maximum-price control and explicitly requests all prices. The API retains its optional server-side price filter and legacy default `$5` for compatibility with other callers; `maxPrice=all` disables it.

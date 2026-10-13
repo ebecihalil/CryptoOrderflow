@@ -1,8 +1,7 @@
 # Funding Rate data and coverage
 
-The `/funding-rate` page is a separate module. LSAR candle calculations and its
-default $5 price cap are unchanged. Funding is not price-capped: BTC/ETH/SOL/HYPE
-are intentionally available.
+The `/funding-rate` page is a separate module and does not change LSAR calculations.
+Neither page is price-capped: BTC/ETH/SOL/HYPE are intentionally available.
 
 ## Comparison rules
 

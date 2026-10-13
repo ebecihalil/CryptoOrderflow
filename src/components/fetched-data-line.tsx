@@ -15,13 +15,13 @@ export function FetchedDataLine({ sources = [] }: { sources?: MarketSourceStatus
         const successful = count > 0;
         const state = successful ? 'success' : source?.status === 'error' || failureLabel ? 'error' : 'pending';
         const description = successful
-          ? `${count} successfully fetched perpetual contracts with valid account ratio, price and USD OI, observed within 15 minutes. Counts are before price and exchange filters.${source?.error ? ` Partial feed: ${source.error}` : ''}`
-          : source?.error || 'Waiting for successfully fetched account-ratio data.';
+          ? `${count} successfully fetched perpetual contracts with valid account ratio, price and USD OI, observed within 15 minutes. Counts are before exchange filters.`
+          : 'No fresh account-ratio data is currently available.';
         return (
-          <span className="fetched-data-source" key={exchange} title={description} data-testid={`fetched-count-${exchange}`}>
+          <span className="fetched-data-source" key={exchange} title={description} aria-label={`${EXCHANGE_LABELS[exchange]}: ${successful ? `${count.toLocaleString()} contracts fetched` : 'data unavailable'}`} data-testid={`fetched-count-${exchange}`}>
             <span className={`fetched-data-dot ${state}`} aria-hidden="true" />
             <ExchangeLogo exchange={exchange} />
-            <span>{EXCHANGE_LABELS[exchange]} {count.toLocaleString()}{failureLabel ? ` (${failureLabel})` : ''}</span>
+            <span>{EXCHANGE_LABELS[exchange]} {count.toLocaleString()}</span>
             <span className="sr-only">{successful ? ' — data fetched successfully' : ' — no fresh data yet'}</span>
           </span>
         );

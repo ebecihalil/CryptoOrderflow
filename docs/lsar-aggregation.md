@@ -38,6 +38,11 @@ position sizes. OI shares refer to the usable contributing contracts, not
 automatically every exchange in the market.
 
 ## Requests and numerical handling
+The LSAR page requests `maxPrice=all`; there is no maximum-price control or
+hidden $5 cap in the screener. Crypto-only identity checks still apply.
+Source status displays exchange logos, names, counts and signals, without
+ban/rate-limit prose. Removing that prose does not remove server cooldowns.
+
 This is a calculation-only change: it introduces no new exchange requests or
 changes to rate limits. OI weights are normalized by the largest weight to avoid
 overflow. Short shares are accumulated directly, not obtained by subtracting

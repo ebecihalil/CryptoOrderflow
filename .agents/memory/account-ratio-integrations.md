@@ -29,6 +29,16 @@ change definition, and long-share percentage-point changes. Do not change
 individual exchange ratios or cap/remove a venue solely for having an extreme
 ratio. Genuine OI concentration should still be visible.
 
+LSAR has no maximum-price option or price cap, and exchange failure states
+should be communicated through status signals without “IP blocked” prose.
+
+**Why:** the user explicitly requested removing the maximum-price option and
+keeping only the red signal instead of the IP-blocked text.
+
+**How to apply:** do not silently retain the former $5 screener restriction.
+Keep crypto-only identity filtering and server-side request limits/cooldowns;
+hiding error prose must not bypass restrictions or misreport successful data.
+
 **Why:** the user specifically trades changes in Long Short Account Ratio; mixing different populations would change the meaning of the screener.
 
 **How to apply:** verify the exact endpoint's definition before adding any venue. HTX has not yet been confirmed to offer a compatible public market-wide account-ratio endpoint.
