@@ -6,6 +6,7 @@ import { ExchangeLogo } from '@/components/exchange-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useFundingSnapshot } from '@/hooks/use-funding-snapshot';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
+import { orderFundingSources } from '@/lib/funding-source-order';
 import type { MarketExchange } from '@/types/market';
 import type { FundingRow, FundingSource, FundingTimeframe, FundingVenue } from '@/types/funding';
 import '@/styles/funding.css';
@@ -100,7 +101,7 @@ function FundingHeader() {
 }
 
 function FundingSourceLine({ sources }: { sources?: FundingSource[] }) {
-  const visibleSources = (sources ?? []).filter((source) => source.status !== 'excluded');
+  const visibleSources = orderFundingSources(sources ?? []).filter((source) => source.status !== 'excluded');
   return (
     <div className="funding-source-line" aria-label="Funding source status" role="status" aria-live="polite">
       <strong><span className="funding-label-dot" aria-hidden="true" />Total Fetched Coin Data</strong>
@@ -117,9 +118,8 @@ function FundingSourceLine({ sources }: { sources?: FundingSource[] }) {
             return (
               <span key={source.exchange} className={`funding-source-item ${state}`} title={title}>
                 <span className="funding-source-dot" aria-hidden="true" />
-                <ExchangeMark exchange={source.exchange} />
-                <span>{exchangeLabel(source.exchange)} {sourceStatusLabel(source.status)} · {source.marketCount.toLocaleString()}{source.eligible ? ' · eligible' : ''}</span>
-                {source.error && <span className="sr-only"> — {source.error}</span>}
+                <span>{exchangeLabel(source.exchange)}</span>
+                <span className="sr-only"> — {sourceStatusLabel(source.status)}{source.error ? `: ${source.error}` : ''}</span>
               </span>
             );
           })}
@@ -241,7 +241,7 @@ export function FundingPage() {
   const query = useFundingSnapshot(timeframe);
   const snapshot = query.data;
   const exchanges = useMemo(
-    () => snapshot?.sources.filter((source) => source.eligible && source.status !== 'excluded').map((source) => source.exchange) ?? [],
+    () => orderFundingSources(snapshot?.sources ?? []).filter((source) => source.eligible && source.status !== 'excluded').map((source) => source.exchange),
     [snapshot?.sources],
   );
   const selected = useMemo(

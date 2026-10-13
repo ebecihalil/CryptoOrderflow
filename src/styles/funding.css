@@ -42,10 +42,10 @@
 .funding-source-item { display:inline-flex;align-items:center;gap:5px;color:var(--lsar-muted);font:12px var(--app-font-mono);white-space:nowrap; }
 .funding-source-item .exchange-logo { width:14px;height:14px; }
 .funding-source-dot { width:7px;height:7px;flex:none;border-radius:50%;background:#bd554d;box-shadow:0 0 0 3px #bd554d1b; }
-.funding-source-item.live .funding-source-dot,
+.funding-source-item.live .funding-source-dot { background:#259775;box-shadow:0 0 0 3px #25977522; }
 .funding-source-item.error .funding-source-dot,
-.funding-source-item.delayed .funding-source-dot,
-.funding-source-item.pending .funding-source-dot { background:#bd554d;box-shadow:0 0 0 3px #bd554d1b; }
+.funding-source-item.delayed .funding-source-dot { background:#bd554d;box-shadow:0 0 0 3px #bd554d1b; }
+.funding-source-item.pending .funding-source-dot { background:#c4a05c;box-shadow:0 0 0 3px #c4a05c1b; }
 .funding-source-waiting { color:var(--lsar-muted);font:9px var(--app-font-mono); }
 .funding-exchange-fallback { display:grid;place-items:center;width:15px;height:15px;background:var(--lsar-accent-soft);color:var(--lsar-accent);font:8px var(--app-font-mono); }
 .funding-error { display:flex;align-items:flex-start;gap:12px;margin:0 0 14px;padding:11px 13px;border:1px solid var(--lsar-error-border);background:var(--lsar-error-bg);color:var(--lsar-error-ink);font-size:11px;line-height:1.5; }
