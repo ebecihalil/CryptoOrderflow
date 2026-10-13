@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const component = readFileSync(new URL('../src/components/open-interest-page.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/styles/open-interest.css', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const snapshotHook = readFileSync(new URL('../src/hooks/use-open-interest-snapshot.ts', import.meta.url), 'utf8');
 
 test('open interest is routed before and excluded from module placeholders', () => {
   assert.match(app, /import \{ OpenInterestPage \} from '@\/components\/open-interest-page';/);
@@ -42,7 +43,8 @@ test('positive and negative OI changes use normal positive/negative theme colors
 });
 
 test('top gainers and losers use the independently queried 24H snapshot and exchange selection', () => {
-  assert.match(component, /const dailyQuery = useOpenInterestSnapshot\('24h', selectedExchanges \?\? \[\]\);/);
+  assert.match(component, /const dailyQuery = useOpenInterestSnapshot\('24h', selectedExchanges \?\? \[\], 'rolling24h'\);/);
+  assert.match(component, /const query = useOpenInterestSnapshot\(timeframe, selectedExchanges \?\? \[\]\);/);
   assert.match(component, /const dailySnapshot = dailyQuery\.data;/);
   assert.match(component, /const hasExchangeSelection = selectedExchanges === null \|\| activeExchanges\.length > 0;/);
   assert.match(component, /hasExchangeSelection \? dailySnapshot\?\.extremes\.gainers \?\? \[\] : \[\]/);
@@ -50,10 +52,22 @@ test('top gainers and losers use the independently queried 24H snapshot and exch
   assert.doesNotMatch(component, /snapshot\?\.extremes\.(?:gainers|losers)/);
   assert.match(component, /<ExtremePanel title="Top OI gainers" rows=\{gainers\} kind="gainer" loading=\{dailyLoading\}/);
   assert.match(component, /<ExtremePanel title="Top OI losers" rows=\{losers\} kind="loser" loading=\{dailyLoading\}/);
-  assert.match(component, /24H · aggregated change · top 5/);
+  assert.match(component, /24H rolling/);
+  assert.match(component, /rankingCoverage\.coinsWithHistory\.toLocaleString\(\).*rankingCoverage\.eligibleCoins\.toLocaleString\(\)/);
   assert.match(component, /dailyQuery\.isError/);
   assert.match(component, /onClick=\{\(\) => \{ void dailyQuery\.refetch\(\); \}\}>Retry daily rankings/);
-  assert.match(component, /Promise\.all\(\[query\.refetch\(\), \.\.\.\(timeframe === '24h' \? \[\] : \[dailyQuery\.refetch\(\)\]\)\]\)/);
+  assert.match(component, /Promise\.all\(\[query\.refetch\(\), dailyQuery\.refetch\(\)\]\)/);
+  assert.match(component, /approximately 24 hours earlier, using a 5-minute historical baseline tolerance/);
+  assert.match(component, /coins without a usable baseline are excluded/i);
+  assert.match(component, /Ranking coverage:/);
+});
+
+test('table candle and rolling-ranking requests use separate query modes', () => {
+  assert.match(snapshotHook, /comparison: OiComparison = 'candle'/);
+  assert.match(snapshotHook, /queryKey: \['open-interest-snapshot', timeframe, selection, comparison\]/);
+  assert.match(snapshotHook, /if \(comparison !== 'candle'\) params\.set\('comparison', comparison\)/);
+  assert.match(component, /useOpenInterestSnapshot\(timeframe, selectedExchanges \?\? \[\]\)/);
+  assert.match(component, /useOpenInterestSnapshot\('24h', selectedExchanges \?\? \[\], 'rolling24h'\)/);
 });
 
 test('source status, rankings, controls, table, pagination and methodology stay in the requested order', () => {

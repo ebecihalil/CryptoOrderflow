@@ -1,6 +1,7 @@
 import type { FundingSource } from './funding';
 
 export type OiTimeframe = '5m' | '15m' | '30m' | '1h' | '4h' | '24h';
+export type OiComparison = 'candle' | 'rolling24h';
 export interface OiVenue {
   oiCoin: number | null;
   oiUsd: number;
@@ -25,6 +26,12 @@ export interface OiRow {
 export interface OiSnapshot {
   generatedAt: string;
   timeframe: OiTimeframe;
+  comparison?: OiComparison;
+  rankingCoverage?: {
+    eligibleCoins: number;
+    coinsWithHistory: number;
+    excludedNonCryptoOrUnverifiedCoins: number;
+  };
   isRefreshing: boolean;
   universeReady: boolean;
   totalOpenInterestUsd: number;

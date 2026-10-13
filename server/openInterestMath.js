@@ -1,5 +1,6 @@
 import { canonicalAsset, selectDisplayAsset } from "./lsarMarketData.js";
 import { FUNDING_LABELS } from "./fundingMath.js";
+import { isCryptoAsset } from "./cryptoAssets.js";
 
 export const OI_WINDOWS = { "5m": 300_000, "15m": 900_000, "30m": 1800_000, "1h": 3600_000, "4h": 14400_000, "24h": 86400_000 };
 export const underlyingPrice = item => item.markPrice > 0 ? item.markPrice / canonicalAsset(item.exchangeAsset).priceDivisor : null;
@@ -24,7 +25,24 @@ export function aggregateChange(pairs) {
     const valid = pairs.filter(Boolean), previous = valid.reduce((total, pair) => total + pair.previous, 0);
     return previous > 0 ? (valid.reduce((total, pair) => total + pair.current, 0) / previous - 1) * 100 : null;
 }
-export function buildOiSnapshot(states, histories, nativeHistories, timeframe, now = Date.now(), selection = []) {
+export function rollingPair(points, now, duration = 86400_000, tolerance = 300_000) {
+    let current = null, previous = null;
+    for (const point of points ?? []) {
+        if (Number.isFinite(point.timestamp) && Number.isFinite(point.oiCoin) && point.oiCoin >= 0 &&
+            point.timestamp <= now && now - point.timestamp <= 900_000 &&
+            (!current || point.timestamp > current.timestamp)) current = point;
+    }
+    if (!current) return null;
+    const target = current.timestamp - duration;
+    for (const point of points ?? []) {
+        if (Number.isFinite(point.timestamp) && Number.isFinite(point.oiCoin) && point.oiCoin > 0 &&
+            point.timestamp <= target && target - point.timestamp <= tolerance &&
+            (!previous || point.timestamp > previous.timestamp)) previous = point;
+    }
+    return previous ? { current: current.oiCoin, previous: previous.oiCoin } : null;
+}
+export function buildOiSnapshot(states, histories, nativeHistories, timeframe, now = Date.now(), selection = [], options = {}) {
+    const rolling = options.comparison === "rolling24h";
     const selected = selection.length ? new Set(selection) : null;
     const all = Object.values(states).flatMap(state => state.readings).filter(item =>
         item.oiUsd > 0 && (item.exchange === "cme" || now - item.fetchedAt <= 900_000));
@@ -40,15 +58,17 @@ export function buildOiSnapshot(states, histories, nativeHistories, timeframe, n
         if (!grouped.has(item.asset)) grouped.set(item.asset, []);
         grouped.get(item.asset).push({ ...item, oiCoin: coinSize(item) });
     }
-    const rows = [...grouped].map(([asset, items]) => {
+    const eligibleCryptoCount = [...grouped.keys()].filter(isCryptoAsset).length;
+    const rows = [...grouped].filter(([asset]) => !rolling || isCryptoAsset(asset)).map(([asset, items]) => {
         const venues = {}, paired = [];
         for (const exchange of new Set(items.map(item => item.exchange))) {
             const contracts = items.filter(item => item.exchange === exchange), pairs = [];
             for (const item of contracts) {
                 if (exchange === "cme") continue; // Daily reports are not intraday candle observations.
                 const key = `${exchange}:${item.symbol}`;
-                const native = nativeHistories.get(`${key}:${timeframe}`);
-                const pair = candlePair([...(native ?? []), ...(histories.get(key) ?? [])], timeframe, now);
+                const native = nativeHistories.get(key) ?? nativeHistories.get(`${key}:${timeframe}`);
+                const points = [...(native ?? []), ...(histories.get(key) ?? [])];
+                const pair = rolling ? rollingPair(points, now) : candlePair(points, timeframe, now);
                 if (pair) pairs.push(pair);
             }
             if (pairs.length) paired.push(...pairs.map(pair => ({ ...pair, exchange })));
@@ -69,7 +89,10 @@ export function buildOiSnapshot(states, histories, nativeHistories, timeframe, n
             sourceCount: Object.keys(venues).length, volume24hUsd: volume, volumeSourceCount: volumeVenues.length,
             oiVolumeRatio: volume > 0 ? ratioOi / volume : null, venues };
     }).sort((a, b) => b.aggregateOiUsd - a.aggregateOiUsd || a.asset.localeCompare(b.asset));
-    return { generatedAt: new Date(now).toISOString(), timeframe, sources, rows,
+    return { generatedAt: new Date(now).toISOString(), timeframe, comparison: rolling ? "rolling24h" : "candle", sources, rows,
+        rankingCoverage: rolling ? { eligibleCoins: eligibleCryptoCount,
+            coinsWithHistory: rows.filter(row => row.changePct !== null).length,
+            excludedNonCryptoOrUnverifiedCoins: grouped.size - eligibleCryptoCount } : undefined,
         totalOpenInterestUsd: rows.reduce((total, row) => total + row.aggregateOiUsd, 0),
         historyReadyCount: rows.filter(row => row.changePct !== null).length,
         cmeReportDates: [...new Set(all.filter(item => item.exchange === "cme").map(item => item.reportDate))].sort(),

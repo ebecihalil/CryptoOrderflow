@@ -30,6 +30,11 @@ app.get("/api/market/funding", (req, res) => {
 });
 
 app.get("/api/market/open-interest", (req, res) => {
+  const comparison = req.query.comparison ?? "candle";
+  if (!["candle", "rolling24h"].includes(comparison) ||
+      (comparison === "rolling24h" && (req.query.timeframe ?? "1h") !== "24h")) {
+    res.status(400).json({ error: "comparison must be candle, or rolling24h with timeframe=24h." }); return;
+  }
   const timeframe = req.query.timeframe ?? "1h";
   if (typeof timeframe !== "string" || !timeframes.has(timeframe)) {
     res.status(400).json({ error: "timeframe must be one of 5m, 15m, 30m, 1h, 4h, or 24h." }); return;
