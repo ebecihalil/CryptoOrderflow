@@ -10,6 +10,10 @@
   the same matched contracts; unpaired sources are excluded, not assigned zero.
   Percentage change is in coin-equivalent quantity, so a price rise alone does
   not create an increase in linear OI size.
+- Top gainers and losers always use the 24h candle comparison, independently of
+  the table's selected timeframe. Both views reuse the same cached inventory and
+  request gates. Contract sizes display K/M/B abbreviations without changing the
+  underlying quantities used in calculations or sorting.
 - Binance USD-M, Bybit linear and Gate USDT backfill five-minute OI observations.
   Other venues/contracts accumulate real observations in a persistent local
   cache. Missing history is shown as a dash. Longer TFs need a previous-candle

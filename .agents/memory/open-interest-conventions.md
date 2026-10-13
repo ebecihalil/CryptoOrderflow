@@ -35,3 +35,13 @@ also differed from the current position-size basis by roughly a factor of two.
 prefer explicitly single-sided fields, and test that unchanged exposure stays
 unchanged after conversion. Reference:
 https://bybit-exchange.github.io/docs/v5/market/open-interest
+
+Top OI gainers and losers always use the 24-hour timeframe, independent of the
+table's selected TF. Keep the table TF controls below these ranking panels and
+all methodology/explanation notes below the rest of the page.
+
+**Why:** the user explicitly requested fixed 24-hour rankings and explanations
+out of the middle of the screen.
+
+**How to apply:** changing the table TF must not recalculate, relabel or hide
+the daily rankings. Retain exchange selection and shared rate-limit protection.

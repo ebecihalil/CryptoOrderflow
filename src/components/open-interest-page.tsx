@@ -6,6 +6,7 @@ import { ExchangeLogo } from '@/components/exchange-logo';
 import { useOpenInterestSnapshot } from '@/hooks/use-open-interest-snapshot';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
 import { orderFundingSources } from '@/lib/funding-source-order';
+import { formatOiUnits } from '@/lib/open-interest-format';
 import type { MarketExchange } from '@/types/market';
 import type { OiRow, OiTimeframe } from '@/types/open-interest';
 import '@/styles/open-interest.css';
@@ -45,9 +46,7 @@ function formatUsd(value: number | null | undefined) {
 }
 
 function formatUnits(value: number | null | undefined, asset: string) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
-  const formatted = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(value);
-  return `${formatted} ${asset}`;
+  return formatOiUnits(value, asset);
 }
 
 function formatUpdated(value: string | undefined) {
@@ -133,7 +132,7 @@ function ExtremePanel({ title, rows, kind, loading }: {
 }) {
   return (
     <article className="oi-extreme-panel">
-      <h2>{title}<span>Aggregated change · top 5</span></h2>
+      <h2>{title}<span>24H · aggregated change · top 5</span></h2>
       {loading ? <div aria-label={`Loading ${title.toLowerCase()}`} role="status">
         {Array.from({ length: 4 }, (_, index) => <i className="oi-skeleton-row" key={index} />)}
       </div> : rows.length === 0 ? (
@@ -184,8 +183,13 @@ export function OpenInterestPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [page, setPage] = useState(0);
   const query = useOpenInterestSnapshot(timeframe, selectedExchanges ?? []);
+  const dailyQuery = useOpenInterestSnapshot('24h', selectedExchanges ?? []);
   const snapshot = query.data;
-  const sources = useMemo(() => orderFundingSources(snapshot?.sources ?? []), [snapshot?.sources]);
+  const dailySnapshot = dailyQuery.data;
+  const sources = useMemo(
+    () => orderFundingSources(dailySnapshot?.sources ?? snapshot?.sources ?? []),
+    [dailySnapshot?.sources, snapshot?.sources],
+  );
   const exchanges = useMemo(
     () => sources.filter((source) => source.eligible && source.status !== 'excluded').map((source) => source.exchange),
     [sources],
@@ -222,12 +226,15 @@ export function OpenInterestPage() {
   const currentPage = Math.min(page, pageCount - 1);
   const visibleRows = rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const loading = query.isLoading && !snapshot;
+  const dailyLoading = dailyQuery.isLoading && !dailySnapshot;
+  const refreshing = query.isFetching || dailyQuery.isFetching;
   const hasExchangeSelection = selectedExchanges === null || activeExchanges.length > 0;
-  const gainers = (hasExchangeSelection ? snapshot?.extremes.gainers ?? [] : []).filter((row) => row.changePct !== null && Number.isFinite(row.changePct) && row.changePct > 0)
+  const gainers = (hasExchangeSelection ? dailySnapshot?.extremes.gainers ?? [] : []).filter((row) => row.changePct !== null && Number.isFinite(row.changePct) && row.changePct > 0)
     .sort((a, b) => (b.changePct ?? 0) - (a.changePct ?? 0)).slice(0, 5);
-  const losers = (hasExchangeSelection ? snapshot?.extremes.losers ?? [] : []).filter((row) => row.changePct !== null && Number.isFinite(row.changePct) && row.changePct < 0)
+  const losers = (hasExchangeSelection ? dailySnapshot?.extremes.losers ?? [] : []).filter((row) => row.changePct !== null && Number.isFinite(row.changePct) && row.changePct < 0)
     .sort((a, b) => (a.changePct ?? 0) - (b.changePct ?? 0)).slice(0, 5);
   const errorMessage = query.error instanceof Error ? query.error.message : 'Open interest data is unavailable.';
+  const dailyErrorMessage = dailyQuery.error instanceof Error ? dailyQuery.error.message : 'Daily open interest rankings are unavailable.';
 
   return (
     <div className="terminal oi-app">
@@ -235,11 +242,25 @@ export function OpenInterestPage() {
       <main className="oi-main">
         <div className="oi-heading">
           <div><span className="eyebrow">Crypto Order Flow Mechanics</span><h1>Open Interest</h1></div>
-          <button type="button" className="refresh-button oi-refresh" onClick={() => { void query.refetch(); }} disabled={query.isFetching}
-            aria-label={query.isFetching ? 'Refreshing open interest snapshot' : 'Refresh open interest snapshot'}>
-            <RefreshCw className={query.isFetching ? 'spin' : ''} aria-hidden="true" /><span>{query.isFetching ? 'Refreshing' : 'Refresh'}</span>
+          <button type="button" className="refresh-button oi-refresh" onClick={() => {
+            void Promise.all([query.refetch(), ...(timeframe === '24h' ? [] : [dailyQuery.refetch()])]);
+          }} disabled={refreshing}
+            aria-label={refreshing ? 'Refreshing open interest snapshot' : 'Refresh open interest snapshot'}>
+            <RefreshCw className={refreshing ? 'spin' : ''} aria-hidden="true" /><span>{refreshing ? 'Refreshing' : 'Refresh'}</span>
           </button>
         </div>
+
+        <SourceLine sources={sources} />
+
+        <section className="oi-extremes" aria-label="Largest aggregated open interest changes">
+          <ExtremePanel title="Top OI gainers" rows={gainers} kind="gainer" loading={dailyLoading} />
+          <ExtremePanel title="Top OI losers" rows={losers} kind="loser" loading={dailyLoading} />
+        </section>
+
+        {dailyQuery.isError && <div className="oi-error" role="alert">
+          <span>{dailySnapshot ? `Could not refresh daily rankings. Showing the last available snapshot. ${dailyErrorMessage}` : dailyErrorMessage}</span>
+          <button type="button" onClick={() => { void dailyQuery.refetch(); }}>Retry daily rankings</button>
+        </div>}
 
         <section className="oi-controls" aria-label="Open interest controls">
           <div className="oi-timeframes" role="group" aria-label="Open interest change timeframe">
@@ -256,27 +277,10 @@ export function OpenInterestPage() {
           </div>
         </section>
 
-        <p className="oi-comparison-note"><strong>Aggregated open interest is summed, not weighted.</strong> Change is calculated from venues matched across the current and previous {timeframe} candles; coverage may differ from current OI source coverage.</p>
-        <SourceLine sources={sources} />
-
         {query.isError && <div className="oi-error" role="alert">
           <span>{snapshot ? `Could not refresh. Showing the last available snapshot. ${errorMessage}` : errorMessage}</span>
           <button type="button" onClick={() => { void query.refetch(); }}>Retry</button>
         </div>}
-
-        <section className="oi-extremes" aria-label="Largest aggregated open interest changes">
-          <ExtremePanel title="Top OI gainers" rows={gainers} kind="gainer" loading={loading} />
-          <ExtremePanel title="Top OI losers" rows={losers} kind="loser" loading={loading} />
-        </section>
-
-        <section className="oi-method" aria-label="Open interest methodology and source notes">
-          <span className="oi-method-mark" aria-hidden="true">i</span>
-          <div className="oi-method-copy">
-            <p>Open interest is summed across available venues. Percentage change compares matching venue coverage between adjacent candles; hover a change to see the number of matched venues. Current OI includes CME only when authorized real latest daily reports are available. The OI / 24H volume ratio uses paired venues with verified rolling 24-hour volume and excludes CME trading-day volume.</p>
-            {snapshot?.notes.map((note, index) => <p key={`${index}-${note}`}>{note}</p>)}
-            {snapshot?.cmeReportDates.length ? <p className="oi-method-dates">CME report dates: {snapshot.cmeReportDates.join(', ')}</p> : null}
-          </div>
-        </section>
 
         <div className="oi-table-meta">
           <span><strong>{snapshot ? rows.length.toLocaleString() : '—'}</strong> coins · {rows.length > 0 ? `showing ${currentPage * PAGE_SIZE + 1}–${Math.min((currentPage + 1) * PAGE_SIZE, rows.length)} · ` : ''}sorted by {sortField === 'asset' ? 'coin' : ({
@@ -292,7 +296,7 @@ export function OpenInterestPage() {
                 ['asset', 'Coin'],
                 ['aggregateOiCoin', 'Aggregated OI Contract Size'],
                 ['changePct', `Aggregated OI Change (%) · ${timeframe}`],
-                ['aggregateOiUsd', 'OI in Dollars'],
+                ['aggregateOiUsd', 'Aggregated OI ($)'],
                 ['oiVolumeRatio', 'OI / 24H Volume Ratio'],
               ] as [SortField, string][]).map(([field, label]) => (
                 <th key={field} scope="col" aria-sort={sortField === field ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
@@ -332,6 +336,16 @@ export function OpenInterestPage() {
         </nav>}
 
         <footer className="oi-footline"><span>CRYPTO ORDER FLOW / OPEN INTEREST</span><span>{snapshot ? `${exchanges.length} SOURCE VENUES · ${timeframe.toUpperCase()}` : 'AWAITING MARKET SNAPSHOT'}</span></footer>
+
+        <p className="oi-comparison-note"><strong>Aggregated open interest is summed, not weighted.</strong> Change is calculated from venues matched across the current and previous {timeframe} candles; coverage may differ from current OI source coverage.</p>
+        <section className="oi-method" aria-label="Open interest methodology and source notes">
+          <span className="oi-method-mark" aria-hidden="true">i</span>
+          <div className="oi-method-copy">
+            <p>Open interest is summed across available venues. Percentage change compares matching venue coverage between adjacent candles; hover a change to see the number of matched venues. Current OI includes CME only when authorized real latest daily reports are available. The OI / 24H volume ratio uses paired venues with verified rolling 24-hour volume and excludes CME trading-day volume.</p>
+            {snapshot?.notes.map((note, index) => <p key={`${index}-${note}`}>{note}</p>)}
+            {snapshot?.cmeReportDates.length ? <p className="oi-method-dates">CME report dates: {snapshot.cmeReportDates.join(', ')}</p> : null}
+          </div>
+        </section>
       </main>
     </div>
   );

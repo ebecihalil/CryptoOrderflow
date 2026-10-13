@@ -28,7 +28,7 @@ test('OI table columns use the required order and each header is sortable', () =
     "'Coin'",
     "'Aggregated OI Contract Size'",
     "`Aggregated OI Change (%) · ${timeframe}`",
-    "'OI in Dollars'",
+    "'Aggregated OI ($)'",
     "'OI / 24H Volume Ratio'",
   ]);
   assert.match(component, /<SortButton field=\{field\} label=\{label\} active=\{sortField === field\}/);
@@ -41,10 +41,42 @@ test('positive and negative OI changes use normal positive/negative theme colors
   assert.match(component, /change > 0 \? 'oi-positive' : change < 0 \? 'oi-negative'/);
 });
 
-test('an explicitly cleared exchange selection suppresses both global extreme lists', () => {
+test('top gainers and losers use the independently queried 24H snapshot and exchange selection', () => {
+  assert.match(component, /const dailyQuery = useOpenInterestSnapshot\('24h', selectedExchanges \?\? \[\]\);/);
+  assert.match(component, /const dailySnapshot = dailyQuery\.data;/);
   assert.match(component, /const hasExchangeSelection = selectedExchanges === null \|\| activeExchanges\.length > 0;/);
-  assert.match(component, /hasExchangeSelection \? snapshot\?\.extremes\.gainers \?\? \[\] : \[\]/);
-  assert.match(component, /hasExchangeSelection \? snapshot\?\.extremes\.losers \?\? \[\] : \[\]/);
+  assert.match(component, /hasExchangeSelection \? dailySnapshot\?\.extremes\.gainers \?\? \[\] : \[\]/);
+  assert.match(component, /hasExchangeSelection \? dailySnapshot\?\.extremes\.losers \?\? \[\] : \[\]/);
+  assert.doesNotMatch(component, /snapshot\?\.extremes\.(?:gainers|losers)/);
+  assert.match(component, /<ExtremePanel title="Top OI gainers" rows=\{gainers\} kind="gainer" loading=\{dailyLoading\}/);
+  assert.match(component, /<ExtremePanel title="Top OI losers" rows=\{losers\} kind="loser" loading=\{dailyLoading\}/);
+  assert.match(component, /24H · aggregated change · top 5/);
+  assert.match(component, /dailyQuery\.isError/);
+  assert.match(component, /onClick=\{\(\) => \{ void dailyQuery\.refetch\(\); \}\}>Retry daily rankings/);
+  assert.match(component, /Promise\.all\(\[query\.refetch\(\), \.\.\.\(timeframe === '24h' \? \[\] : \[dailyQuery\.refetch\(\)\]\)\]\)/);
+});
+
+test('source status, rankings, controls, table, pagination and methodology stay in the requested order', () => {
+  const source = component.indexOf('<SourceLine sources={sources} />');
+  const rankings = component.indexOf('<section className="oi-extremes"');
+  const controls = component.indexOf('<section className="oi-controls"');
+  const table = component.indexOf('<div className="oi-table-shell">');
+  const pagination = component.indexOf('<nav className="oi-pagination"');
+  const footer = component.indexOf('<footer className="oi-footline"');
+  const comparisonNote = component.indexOf('<p className="oi-comparison-note">');
+  const methodology = component.indexOf('<section className="oi-method"');
+  assert.ok(source < rankings);
+  assert.ok(rankings < controls && controls < table);
+  assert.ok(table < pagination && pagination < footer && footer < comparisonNote && comparisonNote < methodology);
+  assert.equal(component.indexOf('<p className="oi-comparison-note">'), comparisonNote);
+  assert.equal(component.indexOf('<section className="oi-method"'), methodology);
+  assert.match(component, /Retry daily rankings/);
+  assert.match(component, /onClick=\{\(\) => \{ void query\.refetch\(\); \}\}>Retry/);
+});
+
+test('contract size formatting delegates to the shared abbreviated formatter', () => {
+  assert.match(component, /import \{ formatOiUnits \} from '@\/lib\/open-interest-format';/);
+  assert.match(component, /function formatUnits\(value: number \| null \| undefined, asset: string\) \{\s*return formatOiUnits\(value, asset\);\s*\}/);
 });
 
 test('50-row pagination reports visible ranges and resets after table controls change', () => {
