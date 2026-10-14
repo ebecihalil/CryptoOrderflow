@@ -1,6 +1,13 @@
 // Personal UI preferences only. Background recording remains server-wide.
 const PREFIX = 'crypto-orderflow:chart:v1:';
 const memory = new Map();
+export const LAST_CHART_CONTRACT_KEY = `${PREFIX}last-contract`;
+
+export function validChartContract(value) {
+  return !!value && typeof value.asset === 'string' && /^[A-Z0-9]{1,30}$/.test(value.asset) &&
+    typeof value.exchange === 'string' && ['binance', 'bybit', 'okx', 'gate', 'mexc', 'bitget', 'bingx'].includes(value.exchange) &&
+    typeof value.symbol === 'string' && /^[A-Z0-9_-]{1,60}$/i.test(value.symbol);
+}
 
 export function coinPreferenceKey(asset, field) {
   return `${PREFIX}${encodeURIComponent(asset.toUpperCase())}:${field}`;

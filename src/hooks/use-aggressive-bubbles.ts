@@ -32,7 +32,7 @@ export function useAggressiveBubbles(
         const query = new URLSearchParams({ asset, timeframe, market, minValue: String(minValue) });
         const response = await fetch(`/api/indicators/aggressive-bubbles?${query}`, { signal: controller.signal });
         const body = await response.json() as AggressiveBubblesPayload & { error?: string };
-        if (!response.ok) throw new Error(body.error || 'Aggressive bubbles feed unavailable.');
+        if (!response.ok) throw new Error(body.error || 'Aggressive Volume Bubbles feed unavailable.');
         if (body.asset !== asset || body.market !== market || body.timeframe !== timeframe ||
           body.minValue !== minValue || !Array.isArray(body.points) || !Array.isArray(body.sources)) {
           throw new Error('Bubble response does not match the selected contract and filters.');
@@ -41,7 +41,7 @@ export function useAggressiveBubbles(
       } catch (error) {
         if (active && !(error instanceof DOMException && error.name === 'AbortError')) {
           setState(previous => ({ ...previous, loading: false,
-            error: error instanceof Error ? error.message : 'Aggressive bubbles feed unavailable.' }));
+            error: error instanceof Error ? error.message : 'Aggressive Volume Bubbles feed unavailable.' }));
         }
       } finally { if (active) timer = window.setTimeout(load, 5000); }
     }

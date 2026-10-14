@@ -17,7 +17,7 @@ symbol spelling. Switching the preferred price venue must reuse recorded flow.
 Protect watched cohorts from idle eviction and preserve independent indicators.
 
 Each watched coin must restore its own selected indicators, all indicator
-parameters (including Aggressive bubbles minimum USD), timeframe, zoom, scroll,
+parameters (including Aggressive Volume Bubbles minimum USD), timeframe, zoom, scroll,
 price scale and pane sizes exactly as left when switching away and returning.
 
 **Why:** The user said resetting their chart conditions wastes time and explicitly
@@ -27,6 +27,16 @@ requested independent settings for every watchlist coin.
 queue. Settings follow canonical underlying identity; chart views are specific
 to the native price contract and timeframe to avoid mixing incompatible price
 scales. Persist in the user's browser, not as shared global server settings.
+
+Leaving Super Charts, navigating to another section or closing the website must
+not remove watchlist coins or discard their saved settings. Return to the last
+selected coin and preserve its setup; explicit removal is the only list action
+that releases a saved recording slot.
+
+**Why:** The user explicitly requested persistence beyond the Super Charts page.
+
+**How to apply:** Route and browser cleanup may stop UI polling, not remove
+server-side watch entries. Retain the hosting and browser-storage limitations.
 
 The recording list is currently server-wide rather than private per-browser.
 

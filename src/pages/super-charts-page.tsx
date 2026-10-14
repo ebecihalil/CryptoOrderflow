@@ -7,6 +7,7 @@ import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
 import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
 import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
+import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
 
 type MenuId = 'technical' | 'orderflow' | null;
@@ -14,9 +15,9 @@ type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'agg
 const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'liquidity', label: 'Liquidity Zones' },
   { id: 'funding', label: 'Aggregated Funding Rate' },
-  { id: 'perpetual-cvd', label: 'Perpetual CVD' },
-  { id: 'spot-cvd', label: 'Spot CVD' },
-  { id: 'aggressive-bubbles', label: 'Aggressive bubbles' },
+  { id: 'perpetual-cvd', label: 'Aggregated Perpetual CVD' },
+  { id: 'spot-cvd', label: 'Aggregated Spot CVD' },
+  { id: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles' },
 ];
 const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 
@@ -42,13 +43,22 @@ export function SuperChartsPage() {
 
   useEffect(() => {
     if (market || !contracts.length) return;
+    const saved = readChartPreference(LAST_CHART_CONTRACT_KEY, null, validChartContract);
+    const preferred = saved ? contracts.find(contract =>
+      contract.asset === saved.asset && contract.exchange === saved.exchange && contract.symbol === saved.symbol) : null;
+    // Don't replace a saved selection with BTC while its catalogue is still loading.
+    if (saved && !preferred && catalogue.data?.sources.some(source =>
+      source.exchange === saved.exchange && source.status === 'loading')) return;
     const bitcoin = contracts.find((contract) => contract.exchange.toLowerCase() === 'binance' && contract.asset.toUpperCase() === 'BTC')
       ?? contracts.find((contract) => contract.asset.toUpperCase() === 'BTC');
     const catalogueStillLoading = catalogue.data?.sources.some((source) => source.status === 'loading') ?? false;
     if (!bitcoin && catalogueStillLoading) return;
-    const initial = bitcoin ?? contracts[0];
+    const initial = preferred ?? bitcoin ?? contracts[0];
     setMarket(initial);
     setMarketDraft(initial.label);
+    writeChartPreference(LAST_CHART_CONTRACT_KEY, {
+      asset: initial.asset, exchange: initial.exchange, symbol: initial.symbol,
+    });
   }, [contracts, market, catalogue.data]);
 
   useEffect(() => {
@@ -62,11 +72,14 @@ export function SuperChartsPage() {
   const selectMarket = (value: string) => {
     setMarketDraft(value);
     const selected = contracts.find((contract) => contract.label === value);
-    if (selected) setMarket(selected);
+    if (selected) selectWatchlistContract(selected);
   };
   const selectWatchlistContract = (contract: MarketContract) => {
     setMarket(contract);
     setMarketDraft(contract.label);
+    writeChartPreference(LAST_CHART_CONTRACT_KEY, {
+      asset: contract.asset, exchange: contract.exchange, symbol: contract.symbol,
+    });
   };
   const toggleStudy = (id: ChartStudyId) => setStudies((current) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);

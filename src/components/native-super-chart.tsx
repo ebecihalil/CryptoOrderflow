@@ -337,7 +337,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         wickColor: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
         borderColor: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
       })));
-      series.applyOptions({ title: `${key === 'perpetual-cvd' ? 'Perpetual CVD' : 'Spot CVD'} · ${(payload?.anchor ?? '1w').toUpperCase()}` });
+      series.applyOptions({ title: `${key === 'perpetual-cvd' ? 'Aggregated Perpetual CVD' : 'Aggregated Spot CVD'} · ${(payload?.anchor ?? '1w').toUpperCase()}` });
     };
     addCvdPane(perpetualCvd, perpetualCvdEnabled, 'perpetual-cvd');
     addCvdPane(spotCvd, spotCvdEnabled, 'spot-cvd');
@@ -446,7 +446,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         {showVolume && <span><i className="legend-volume" /> Volume</span>}{studies.includes('ema') && <span><i className="legend-ema" /> EMA</span>}
         {studies.includes('sma') && <span><i className="legend-sma" /> SMA</span>}{studies.includes('bb') && <span><i className="legend-bb" /> Bollinger</span>}
         {studies.includes('rsi') && <span>RSI · 30 / 70</span>}{studies.includes('macd') && <span>MACD</span>}{funding && <span>Funding · normalized 8h</span>}
-         {perpetualCvdEnabled && <span>Perpetual CVD · signed trade flow</span>}{spotCvdEnabled && <span>Spot CVD · signed trade flow</span>}
+         {perpetualCvdEnabled && <span>Aggregated Perpetual CVD · signed trade flow</span>}{spotCvdEnabled && <span>Aggregated Spot CVD · signed trade flow</span>}
          {aggressiveBubblesEnabled && <><span><i className="legend-bubble-buy" /> Aggressive buys</span><span><i className="legend-bubble-sell" /> Aggressive sells</span><span>Outlined · Spot / filled · Perpetual</span></>}
       </div>
     </div>

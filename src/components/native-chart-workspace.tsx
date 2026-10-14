@@ -161,7 +161,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
     const payload = feed.payload && feed.payload.asset.toUpperCase() === canonicalAsset &&
       feed.payload.market === market && feed.payload.timeframe === timeframe && feed.payload.anchor === anchor
       ? feed.payload : null;
-    const marketLabel = market === 'spot' ? 'Spot CVD' : 'Perpetual CVD';
+    const marketLabel = market === 'spot' ? 'Aggregated Spot CVD' : 'Aggregated Perpetual CVD';
     const activeSourceCount = payload?.sources.filter((source) => source.status === 'live').length ?? 0;
     const tradeCount = payload?.candles.reduce((sum, candle) => sum + candle.trades, 0) ?? 0;
     const recordedSources = payload?.candles.reduce((maximum, candle) => Math.max(maximum, candle.sourceCount), 0) ?? 0;
@@ -335,22 +335,22 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
       {technicalControls}
       {cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd)}
       {cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd)}
-      {hasAggressiveBubbles && <section className="native-bubble-controls" aria-label="Aggressive bubbles controls">
+      {hasAggressiveBubbles && <section className="native-bubble-controls" aria-label="Aggressive Volume Bubbles controls">
         <div className="native-cvd-heading">
-          <div><span className="module-kicker">EXECUTED TRADE ACTIVITY / USD-EQUIVALENT</span><h2>Aggressive bubbles</h2></div>
+          <div><span className="module-kicker">EXECUTED TRADE ACTIVITY / USD-EQUIVALENT</span><h2>Aggressive Volume Bubbles</h2></div>
           <span className="native-cvd-source-total">{bubblePayload
             ? `${bubblePayload.sources.filter((source) => source.status === 'live').length}/${bubblePayload.sources.length} live sources · up to ${bubblePayload.points.reduce((max, point) => Math.max(max, point.sourceCount), 0)} per level`
             : 'Awaiting recorded executions'}</span>
         </div>
         <div className="native-cvd-control-row native-bubble-control-row">
           <label className="super-chart-control"><span>Market</span><select value={bubbleMarket}
-            onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive bubbles market">
+            onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive Volume Bubbles market">
             <option value="both">Both markets</option><option value="spot">Spot</option><option value="perpetual">Perpetual</option>
           </select></label>
           <label className="super-chart-control"><span>Minimum USD value</span><input type="number" min="1" max="100000000" step="1"
             value={bubbleMinDraft} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
             onBlur={commitBubbleMinimum} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMinimum(); event.currentTarget.blur(); } }}
-            aria-label="Minimum aggressive bubble USD-equivalent value" /></label>
+             aria-label="Minimum aggressive volume bubble USD-equivalent value" /></label>
           <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
           <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
             <RefreshCw size={12} aria-hidden="true" /> Refresh
@@ -399,7 +399,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         <span>i</span><p>Prices and OHLC are from the selected native exchange contract. {volumeBasis === 'aggregated'
           ? 'Volume sums exactly matched underlying-coin volume from up to four venues; it is not open-interest weighted.'
           : 'Volume is from the selected venue only.'}
-          {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD and Aggressive bubbles reuse recorded public trade streams; bubble points describe newly recorded executions only.</p>
+          {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD and Aggressive Volume Bubbles reuse recorded public trade streams; bubble points describe newly recorded executions only.</p>
       </div>
     </>
   );

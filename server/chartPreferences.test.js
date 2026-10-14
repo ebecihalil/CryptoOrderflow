@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   coinPreferenceKey, chartViewKey, readChartPreference, writeChartPreference,
   shiftedChartRange, validChartView,
+  LAST_CHART_CONTRACT_KEY, validChartContract,
 } from '../src/lib/chart-preferences.js';
 
 test('each coin retains independent indicator parameters, selections and timeframe', () => {
@@ -74,6 +75,34 @@ test('preferences persist to browser storage and reload when not in memory', () 
     assert.equal(readChartPreference(otherKey, 'mean'), 'weighted');
     values.set(coinPreferenceKey('SOL', 'bad'), '{broken');
     assert.equal(readChartPreference(coinPreferenceKey('SOL', 'bad'), 42), 42);
+  } finally {
+    if (old) Object.defineProperty(globalThis, 'localStorage', old);
+    else delete globalThis.localStorage;
+  }
+});
+
+test('reopening the site restores the last contract and per-coin settings without session memory', async () => {
+  const values = new Map();
+  const old = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  } });
+  try {
+    const contract = { asset: 'ETH', exchange: 'bybit', symbol: 'ETHUSDT' };
+    assert.equal(validChartContract(contract), true);
+    assert.equal(validChartContract({ ...contract, exchange: 'invented' }), false);
+    assert.equal(validChartContract({ ...contract, symbol: '' }), false);
+    writeChartPreference(LAST_CHART_CONTRACT_KEY, contract);
+    writeChartPreference(coinPreferenceKey('ETH', 'bubbleMinValue'), 2500);
+    writeChartPreference(coinPreferenceKey('ETH', 'timeframe'), '5m');
+    writeChartPreference(coinPreferenceKey('ETH', 'indicators'), ['aggressive-bubbles', 'spot-cvd']);
+    const reopened = await import('../src/lib/chart-preferences.js?new-browser-session');
+    assert.deepEqual(reopened.readChartPreference(LAST_CHART_CONTRACT_KEY, null, validChartContract), contract);
+    assert.equal(reopened.readChartPreference(coinPreferenceKey('ETH', 'bubbleMinValue'), 10000), 2500);
+    assert.equal(reopened.readChartPreference(coinPreferenceKey('ETH', 'timeframe'), '1h'), '5m');
+    assert.deepEqual(reopened.readChartPreference(coinPreferenceKey('ETH', 'indicators'), []),
+      ['aggressive-bubbles', 'spot-cvd']);
   } finally {
     if (old) Object.defineProperty(globalThis, 'localStorage', old);
     else delete globalThis.localStorage;

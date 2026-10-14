@@ -3,7 +3,7 @@
 Each underlying coin has separate selected technical/orderflow indicators,
 indicator parameters, timeframe, volume visibility and volume basis. Switching
 through the watchlist or contract search restores that coin's own settings.
-Aggressive bubbles minimum USD and market selection are included.
+Aggressive Volume Bubbles minimum USD and market selection are included.
 
 Zoom, horizontal position, manual price scales and pane proportions are saved
 for each native exchange contract and timeframe. The view uses a timestamp
@@ -14,6 +14,9 @@ from the provider, the nearest available timestamp is used with the same zoom.
 Preferences are personal to the browser and saved locally, independently of the
 shared server recording list. They survive page reloads, but clearing browser
 storage removes them; blocked storage supports same-session switching only.
+The last selected native contract is also restored when returning from another
+section or reopening the site. Saved coins are not removed on navigation or
+browser close; only an explicit watchlist removal releases their recording slot.
 Only the active coin's chart is mounted, so restoring views does not keep extra
 client polling loops or exchange feeds open.
 
@@ -27,8 +30,9 @@ it, or click a saved entry to switch without resetting selected indicators.
 The list is **shared server-wide**, not a private per-browser portfolio. The
 existing app has no user accounts; five is the global continuous-recording cap.
 Native price candles are retrieved for the selected chart. Watchlist recording
-specifically retains executed-trade data for Spot CVD, Perpetual CVD and Aggressive
-bubbles; this does not imply continuous background funding/OI history collection.
+specifically retains executed-trade data for Aggregated Spot CVD, Aggregated
+Perpetual CVD and Aggressive Volume Bubbles; this does not imply continuous
+background funding/OI history collection.
 
 ## Background collection
 

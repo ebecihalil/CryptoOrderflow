@@ -169,7 +169,7 @@ export function ChartWatchlist({ currentContract, onSelectContract }: ChartWatch
       )}
 
       <footer className="chart-watchlist-footer">
-        Collection continues server-side when switching charts. History begins when collection starts and can have gaps. Local files survive restarts only when the host preserves the data directory.
+        Saved coins remain until removed, even when you leave this section or close the site. Chart settings and your last selected coin stay in this browser. Collection continues while the server is awake; history can have gaps. Local files survive restarts only when the host preserves the data directory.
       </footer>
     </aside>
   );

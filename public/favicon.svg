@@ -1,3 +1,8 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Crypto Order Flow">
+  <rect width="64" height="64" rx="13" fill="#247869"/>
+  <g fill="none" stroke="#F5FFF7" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 25c-2-3-11-5-11 3v8c0 8 9 6 11 3"/>
+    <rect x="27" y="22" width="12" height="20" rx="6"/>
+    <path d="M46 42V22h11M46 31h9"/>
+  </g>
 </svg>

@@ -35,16 +35,24 @@ explicitly said "new candle must start at the close of previous candle."
 coverage incomplete; leave missing candle periods absent rather than estimating
 trades or creating zero-volume candles.
 
-The user requested a separate indicator named exactly "Aggressive bubbles".
+The user requested a separate indicator, now named "Aggressive Volume Bubbles".
 It is not a CVD display mode and must remain independently selectable.
 
 **Why:** The user wants Bookmap/DeepCharts-style executed-trade bubbles alongside
-their existing CVD and other native chart indicators.
+their existing CVD and other native chart indicators, and explicitly renamed it.
 
 **How to apply:** Use original executed price, time, taker side and gross volume.
 Keep opposite-side activity visible even when net CVD is zero. Reuse shared trade
 collectors; never reconstruct price-level bubbles from cumulative CVD candles.
 Do not call bubbles an order-book heatmap or proof of institutional activity.
+
+The visible CVD indicator names must be "Aggregated Spot CVD" and
+"Aggregated Perpetual CVD".
+
+**Why:** The user explicitly requested Aggregated at the front of both names.
+
+**How to apply:** Use the same labels in indicator menus, controls and chart
+panes; renaming must not invalidate previously saved indicator selections.
 
 Spot bubbles must show a centered S and Perpetual bubbles a centered P, including
 small bubbles rather than labeling only the largest ones.
