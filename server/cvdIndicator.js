@@ -175,7 +175,7 @@ export function createCvdIndicatorService({
       "Each exchange contributes one verified USD/stablecoin spot or linear perpetual market. This is not every quote pair or inverse contract.",
       "USD, USDT and USDC quoted values use a 1:1 USD-equivalent assumption, not a live stablecoin FX conversion.",
       "CVD sums taker-buy value minus taker-sell value; there is no open-interest weighting. Anchor resets use UTC calendar boundaries.",
-      "Trade extrema use exchange timestamp order with a 2.5-second reorder buffer; cross-venue clocks can differ. Coverage changes reset the observed segment.",
+      "Trade extrema use exchange timestamp order with a 2.5-second reorder buffer; cross-venue clocks can differ. Coverage gaps stay incomplete, but the observed CVD balance carries forward until its calendar anchor resets.",
       "BingX perpetual frames do not provide execution IDs; distinct received records are retained. Undocumented upstream replays cannot be deduplicated exactly.",
       "History is collected on demand and saved locally. Idle collectors stop after 30 minutes or earlier under capacity pressure; ephemeral hosting may lose local recordings.",
     ];

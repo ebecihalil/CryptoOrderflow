@@ -23,6 +23,18 @@ The user accepted verified available history plus live recording, then clarified
 and gaps, and do not require or invent three months of history. A weekly anchor
 does not prove that a full prior week is already available.
 
+The user requires each CVD candle to open at the previous candle's close.
+Reconnects, newly contributing venues and incomplete coverage must not reset the
+observed cumulative balance or discard executions earlier in the same candle.
+Only the selected calendar anchor boundary resets it.
+
+**Why:** The user reported that candles did not behave like price candles and
+explicitly said "new candle must start at the close of previous candle."
+
+**How to apply:** Carry known signed flow across coverage gaps while marking
+coverage incomplete; leave missing candle periods absent rather than estimating
+trades or creating zero-volume candles.
+
 USD-M Binance trade streams require its routed market endpoint after its 2026
 migration. An unrouted socket can accept a subscription yet never deliver trades.
 BingX perpetual trade messages lack execution IDs; hashing identical records

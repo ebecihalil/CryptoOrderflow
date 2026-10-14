@@ -41,8 +41,11 @@ sequence to produce relative minute OHLC. Higher-timeframe candles concatenate
 those paths; per-exchange extrema are not summed. Cross-venue clocks and tied
 timestamps are not an exact global matching-engine sequence. Extremely late
 executions and safety-buffer overflow are explicitly disclosed as incomplete
-coverage; data is never claimed complete. Coverage changes/downtime reset the
-observed segment. Unknown intervals are not zero-filled. Binance, most other
+coverage; data is never claimed complete. Each observed candle opens at the
+previous observed candle's close within its anchor. Coverage changes/downtime do
+not reset the balance or discard earlier executions within a candle; missing flow
+remains unknown and coverage stays partial. Only UTC calendar anchor boundaries
+reset CVD to zero. Unknown intervals are not zero-filled. Binance, most other
 venues and MEXC protobuf execution IDs are deduplicated without numeric rounding.
 BingX perpetual frames lack execution IDs: unique received records are retained,
 including identical legitimate fills; undocumented upstream replays cannot be

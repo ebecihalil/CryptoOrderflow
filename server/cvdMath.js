@@ -40,7 +40,9 @@ export function buildCvdCandles(minutes, timeframe, anchor, nowSeconds) {
     if (!minute.trades || minute.time > nowSeconds) continue;
     const reset = cvdAnchorStart(minute.time, anchor);
     const time = Math.floor(minute.time / step) * step;
-    if (reset !== previousAnchor || minute.gap) {
+    // Coverage gaps do not erase observed cumulative flow. The next observed
+    // candle opens at the previous close; only calendar anchor changes reset it.
+    if (reset !== previousAnchor) {
       baseline = 0;
       if (current?.time === time) candles.pop();
       current = undefined;
@@ -48,7 +50,7 @@ export function buildCvdCandles(minutes, timeframe, anchor, nowSeconds) {
     if (!current || current.time !== time) {
       current = { time, open: baseline, high: baseline, low: baseline, close: baseline,
         buyValue: 0, sellValue: 0, trades: 0, sourceCount: 0, provisional: time + step > nowSeconds,
-        partial: true, segmentStart: reset !== previousAnchor || minute.gap || candles.length === 0, _sources: new Set() };
+        partial: true, segmentStart: reset !== previousAnchor || candles.length === 0, _sources: new Set() };
       candles.push(current);
     }
     current.high = Math.max(current.high, baseline + minute.high);

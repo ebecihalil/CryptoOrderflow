@@ -113,9 +113,49 @@ test("actual execution sequence produces CVD OHLC, signed totals, gaps and ancho
   assert.equal(c.buyValue, 300); assert.equal(c.sellValue, 260); assert.equal(c.sourceCount, 2);
   const gap = addCvdTrade(newCvdMinute(T / 1000 + 600, true), { exchange: "bybit", side: "buy", value: 5 });
   const candles = buildCvdCandles([m, gap], "5m", "3m", T / 1000 + 800);
-  assert.equal(candles.length, 2); assert.equal(candles[1].open, 0); assert.equal(candles[1].segmentStart, true);
+  assert.equal(candles.length, 2); assert.equal(candles[1].open, 50); assert.equal(candles[1].close, 55);
+  assert.equal(candles[1].segmentStart, false); assert.equal(candles[1].partial, true);
   const feb = addCvdTrade(newCvdMinute(Date.parse("2027-01-01") / 1000), { exchange: "bybit", side: "buy", value: 2 });
   assert.equal(buildCvdCandles([m, feb], "1h", "3m", feb.time + 20)[1].open, 0);
+});
+for (const [timeframe, seconds] of Object.entries({ "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400 })) {
+  test(`CVD ${timeframe}: later observed candle opens at prior close even after a feed gap`, () => {
+    const start = Math.floor(T / 1000 / seconds) * seconds;
+    const a = newCvdMinute(start);
+    addCvdTrade(a, { exchange: "binance", side: "buy", value: 100 });
+    addCvdTrade(a, { exchange: "bybit", side: "sell", value: 25 });
+    const b = newCvdMinute(start + seconds * 2, true);
+    addCvdTrade(b, { exchange: "binance", side: "sell", value: 50 });
+    addCvdTrade(b, { exchange: "okx", side: "buy", value: 10 });
+    const candles = buildCvdCandles([a, b], timeframe, "1w", b.time + seconds);
+    assert.equal(candles.length, 2, "unknown intervals must not produce invented candles");
+    assert.deepEqual([candles[0].open, candles[0].close], [0, 75]);
+    assert.deepEqual([candles[1].open, candles[1].high, candles[1].low, candles[1].close], [75, 75, 25, 35]);
+    assert.equal(candles[1].open, candles[0].close);
+    assert.equal(candles[1].segmentStart, false);
+  });
+}
+test("a mid-candle coverage change preserves earlier executions, extrema and cumulative balance", () => {
+  const start = Math.floor(T / 1000 / 3600) * 3600;
+  const a = addCvdTrade(newCvdMinute(start), { exchange: "binance", side: "buy", value: 100 });
+  const b = addCvdTrade(newCvdMinute(start + 60, true), { exchange: "bybit", side: "sell", value: 150 });
+  const c = addCvdTrade(newCvdMinute(start + 120, true), { exchange: "okx", side: "buy", value: 75 });
+  const d = addCvdTrade(newCvdMinute(start + 3600), { exchange: "binance", side: "buy", value: 10 });
+  const candles = buildCvdCandles([a, b, c, d], "1h", "1w", d.time + 60);
+  assert.deepEqual([candles[0].open, candles[0].high, candles[0].low, candles[0].close], [0, 100, -50, 25]);
+  assert.equal(candles[0].trades, 3);
+  assert.equal(candles[0].buyValue, 175); assert.equal(candles[0].sellValue, 150);
+  assert.equal(candles[0].sourceCount, 3);
+  assert.equal(candles[1].open, 25); assert.equal(candles[1].close, 35);
+  assert.deepEqual(buildCvdCandles([a, b, c, d], "1h", "1w", d.time + 60), candles);
+});
+test("weekly anchor resets only at Monday UTC, not at reconnects", () => {
+  const before = addCvdTrade(newCvdMinute(Date.parse("2026-10-18T23:59:00Z") / 1000), { exchange: "binance", side: "buy", value: 80 });
+  const after = addCvdTrade(newCvdMinute(Date.parse("2026-10-19T00:00:00Z") / 1000, true), { exchange: "bybit", side: "sell", value: 15 });
+  const candles = buildCvdCandles([before, after], "1h", "1w", after.time + 60);
+  assert.equal(candles[0].close, 80);
+  assert.equal(candles[1].open, 0); assert.equal(candles[1].close, -15);
+  assert.equal(candles[1].segmentStart, true);
 });
 test("query validation rejects arrays, invalid markets/anchors and inherited keys", () => {
   assert.equal(validateCvdQuery({ asset: "BTC" }).anchor, "1w");
