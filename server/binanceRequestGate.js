@@ -68,6 +68,7 @@ export class BinanceRequestGate {
             const candleLimit = Number(parsed.searchParams.get("limit") || 500);
             const cost = parsed.pathname.endsWith("/klines")
                 ? (candleLimit < 100 ? 1 : candleLimit < 500 ? 2 : candleLimit <= 1000 ? 5 : 10)
+                : parsed.pathname === "/api/v3/exchangeInfo" ? 20
                 : parsed.pathname.endsWith("/exchangeInfo") ? 5
                 : parsed.pathname.endsWith("/openInterest") ? 1
                 : parsed.searchParams.has("symbol") ? 2 : 50;

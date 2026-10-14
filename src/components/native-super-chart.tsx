@@ -8,6 +8,7 @@ import { LiquidityZonePrimitive } from '@/components/liquidity-zone-primitive';
 import { calculateTechnicalIndicators, type TechnicalSettings } from '@/lib/technical-indicators';
 import type { ChartStudyId } from '@/lib/supercharts';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
+import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 
 type FundingPlot = { points: FundingIndicatorPoint[]; method: FundingIndicatorMethod; threshold: number };
 type Props = {
@@ -22,6 +23,10 @@ type Props = {
   timeframe: string;
   resetKey: string;
   technicalSettings: TechnicalSettings;
+  perpetualCvd: CvdPayload | null;
+  spotCvd: CvdPayload | null;
+  perpetualCvdEnabled: boolean;
+  spotCvdEnabled: boolean;
 };
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
 type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null };
@@ -46,7 +51,14 @@ function priceFormat(candles: Candle[]) {
 
 const toTime = (time: number) => time as UTCTimestamp;
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, technicalSettings }: Props) {
+function compactCvd(value: number) {
+  const magnitude = Math.abs(value);
+  const unit = magnitude >= 1_000_000_000 ? 'B' : magnitude >= 1_000_000 ? 'M' : magnitude >= 1_000 ? 'K' : '';
+  const divisor = unit === 'B' ? 1_000_000_000 : unit === 'M' ? 1_000_000 : unit === 'K' ? 1_000 : 1;
+  return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
+}
+
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -238,13 +250,35 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       fund.createPriceLine({ price: -funding.threshold, color: '#4e9c6880', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '−' });
       fund.createPriceLine({ price: 0, color: '#89928a70', lineWidth: 1, lineStyle: 0, axisLabelVisible: false });
     }
+    const addCvdPane = (payload: CvdPayload | null, enabled: boolean, key: string) => {
+      if (!enabled) return;
+      const pane = nextPane();
+      const series = pushSeries(chart.addSeries(CandlestickSeries, {
+        priceFormat: { type: 'custom', formatter: compactCvd, minMove: 0.01 },
+        upColor: '#4e9c68', downColor: '#c76b61', borderVisible: false,
+        wickUpColor: '#4e9c68', wickDownColor: '#c76b61', priceLineVisible: false,
+      }, pane));
+      series.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } });
+      // Missing timestamps stay missing; cumulative values are never carried across gaps.
+      series.setData((payload?.candles ?? []).map((bar) => ({
+        time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+        color: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
+        wickColor: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
+        borderColor: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
+      })));
+      series.applyOptions({ title: `${key === 'perpetual-cvd' ? 'Perpetual CVD' : 'Spot CVD'} · ${(payload?.anchor ?? '1w').toUpperCase()}` });
+    };
+    addCvdPane(perpetualCvd, perpetualCvdEnabled, 'perpetual-cvd');
+    addCvdPane(spotCvd, spotCvdEnabled, 'spot-cvd');
     // Set proportions together after every pane exists. Sequential pixel-height
     // changes during add/remove can progressively squeeze sibling panes.
     const lowerPanes = [
       ...(showVolume ? [{ key: 'volume', height: 88 }] : []),
-      ...(studies.includes('rsi') ? [{ key: 'rsi', height: 110 }] : []),
-      ...(studies.includes('macd') ? [{ key: 'macd', height: 130 }] : []),
+      ...(studies.includes('rsi') && studyData.rsi.length ? [{ key: 'rsi', height: 110 }] : []),
+      ...(studies.includes('macd') && studyData.macd.histogram.length ? [{ key: 'macd', height: 130 }] : []),
       ...(funding ? [{ key: 'funding', height: 112 }] : []),
+      ...(perpetualCvdEnabled ? [{ key: 'perpetual-cvd', height: 142 }] : []),
+      ...(spotCvdEnabled ? [{ key: 'spot-cvd', height: 142 }] : []),
     ];
     const priceHeight = Math.max(260, (mountRef.current?.clientHeight ?? 650) -
       lowerPanes.reduce((sum, pane) => sum + pane.height, 0) - 30);
@@ -281,7 +315,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         animationFrameRef.current = null;
       }
     };
-  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey]);
+  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled]);
 
   return (
     <div className="native-chart-wrap">
@@ -299,6 +333,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         {showVolume && <span><i className="legend-volume" /> Volume</span>}{studies.includes('ema') && <span><i className="legend-ema" /> EMA</span>}
         {studies.includes('sma') && <span><i className="legend-sma" /> SMA</span>}{studies.includes('bb') && <span><i className="legend-bb" /> Bollinger</span>}
         {studies.includes('rsi') && <span>RSI · 30 / 70</span>}{studies.includes('macd') && <span>MACD</span>}{funding && <span>Funding · normalized 8h</span>}
+         {perpetualCvdEnabled && <span>Perpetual CVD · signed trade flow</span>}{spotCvdEnabled && <span>Spot CVD · signed trade flow</span>}
       </div>
     </div>
   );

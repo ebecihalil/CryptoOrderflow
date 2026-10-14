@@ -3,6 +3,7 @@ import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
 import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
 import { fundingIndicatorService } from "./server/fundingIndicator.js";
+import { cvdIndicatorService } from "./server/cvdIndicator.js";
 import { marketContractService } from "./server/marketContracts.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +49,13 @@ app.get("/api/indicators/funding", (req, res) => {
   try { res.json(fundingIndicatorService.get(req.query)); }
   catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
     ? error.message : "Funding indicator data is currently unavailable." }); }
+});
+
+app.get("/api/indicators/cvd", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(cvdIndicatorService.get(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "CVD collection is currently unavailable. Please retry later." }); }
 });
 
 app.get("/api/market/funding", (req, res) => {
@@ -124,6 +132,20 @@ app.get(/.*/, (_req, res, next) => {
   });
 });
 
-app.listen(port, "0.0.0.0", () => {
+const httpServer = app.listen(port, "0.0.0.0", () => {
   console.info(`Crypto Orderflow listening on port ${port}`);
 });
+
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  httpServer.close();
+  const deadline = setTimeout(() => process.exit(1), 10_000);
+  deadline.unref();
+  await cvdIndicatorService.close();
+  clearTimeout(deadline);
+  process.exit(0);
+}
+process.once("SIGTERM", shutdown);
+process.once("SIGINT", shutdown);

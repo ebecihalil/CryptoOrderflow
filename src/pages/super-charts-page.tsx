@@ -8,10 +8,12 @@ import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
 import '@/styles/super-charts.css';
 
 type MenuId = 'technical' | 'orderflow' | null;
-type OrderflowId = 'liquidity' | 'funding';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd';
 const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'liquidity', label: 'Liquidity Zones' },
   { id: 'funding', label: 'Aggregated Funding Rate' },
+  { id: 'perpetual-cvd', label: 'Perpetual CVD' },
+  { id: 'spot-cvd', label: 'Spot CVD' },
 ];
 const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 

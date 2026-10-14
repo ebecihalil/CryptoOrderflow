@@ -3,6 +3,8 @@ import { ExchangeCooldownError } from "./exchangeRequestGate.js";
 
 const wait = delay => new Promise(resolve => setTimeout(resolve, delay));
 const HOSTS = {
+    "api.binance.com": "binance", "api.kucoin.com": "kucoin",
+    "api.kraken.com": "kraken", "api.huobi.pro": "htx",
     "fapi.binance.com": "binance", "dapi.binance.com": "binance",
     "api.bybit.com": "bybit", "api2.bybit.com": "bybit", "www.okx.com": "okx",
     "api.gateio.ws": "gate", "api.bitget.com": "bitget", "api.toobit.com": "toobit",
@@ -44,7 +46,8 @@ export function createExchangeHttpClient({ gates, fetchImpl = fetch, sleep = wai
                     throw Object.assign(new Error(body.msg || `Exchange error ${body.code}`), { retryable: false });
                 if (body.retCode !== undefined && String(body.retCode) !== "0")
                     throw Object.assign(new Error(body.retMsg || `Exchange error ${body.retCode}`), { retryable: String(body.retCode) === "10016" });
-                if (body.success === false || body.result === "error" || body.error)
+                if (body.success === false || body.result === "error" ||
+                    (Array.isArray(body.error) ? body.error.length > 0 : body.error))
                     throw Object.assign(new Error(body.message || body.error?.message || String(body.error || "Exchange returned an error")), { retryable: false });
                 return body;
             } catch (error) {

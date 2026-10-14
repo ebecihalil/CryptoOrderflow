@@ -64,3 +64,22 @@ Binance's legacy reference exposes the numeric history rule. Bitget's classic
 official search-index entry states the 1-request/second rule; this rule is also
 consistent with its currently documented UTA account-ratio endpoint, but this app
 continues to use the classic endpoint, not UTA.
+
+## Public CVD streaming
+
+CVD does not continuously poll recent-trade REST endpoints. Market catalogues are
+coalesced and cached for an hour (failed lookups for five minutes) through the
+existing shared exchange HTTP gates. Spot Binance exchangeInfo reserves its
+20-unit weight. New spot REST hostnames map to the same gates as their derivatives
+counterparts. KuCoin public connection-token POSTs also use its shared limiter.
+
+All CVD asset/market collectors share per-venue connection admission: at least two
+seconds between starts, maximum four active asset/market cohorts (40 sockets),
+on-demand only. Repeated browser refreshes reuse them. Heartbeats are typically
+20 seconds (KuCoin uses its advertised interval), one subscription per socket.
+Retries use 30-second exponential backoff capped at 15 minutes plus jitter;
+existing persisted HTTP cooldowns prohibit new connects. Handshake 429/403/418
+responses enter the shared cooldown handling. There is no proxy/IP rotation or
+cooldown bypass. Rotate 24-hour-limited streams early and disclose the gap.
+These conservative application bounds do not guarantee a provider will never
+restrict a shared hosting IP. Current source failures remain visible.

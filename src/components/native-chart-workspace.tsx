@@ -7,13 +7,14 @@ import {
   normalizeFundingAsset, useFundingIndicator, type FundingIndicatorMethod, type FundingIndicatorTimeframe,
   type FundingIndicatorWindow, type FundingIndicatorPoint,
 } from '@/hooks/use-funding-indicator';
+import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload } from '@/hooks/use-cvd-indicator';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
 import { DEFAULT_TECHNICAL_SETTINGS, type TechnicalSettings } from '@/lib/technical-indicators';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd';
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[] };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = [
@@ -25,6 +26,10 @@ const DEFAULT_LIQUIDITY_SETTINGS: LiquiditySettings = { backBars: 300, volMult: 
 const DEFAULT_ZONE_COLORS: ThemeColors = { resistance: '#ff0000', support: '#008000', inside: '#808080', transparency: 35 };
 const METHOD_NAMES: Record<FundingIndicatorMethod, string> = { mean: 'Simple mean', median: 'Median', weighted: 'OI-weighted' };
 const EMPTY_CANDLES: Candle[] = [];
+const CVD_ANCHORS: Array<{ value: CvdAnchor; label: string }> = [
+  { value: '1d', label: '1D' }, { value: '1w', label: '1W' }, { value: '1m', label: '1M' },
+  { value: '3m', label: '3M' }, { value: '6m', label: '6M' }, { value: '1y', label: '1Y' },
+];
 
 function fmtTime(time: number) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
@@ -71,6 +76,8 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
   const [zoneColors, setZoneColors] = useState(DEFAULT_ZONE_COLORS);
   const hasLiquidity = indicators.includes('liquidity');
   const hasFunding = indicators.includes('funding');
+  const hasPerpetualCvd = indicators.includes('perpetual-cvd');
+  const hasSpotCvd = indicators.includes('spot-cvd');
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -103,6 +110,64 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
   const [fundingMethod, setFundingMethod] = useState<FundingIndicatorMethod>('mean');
   const [fundingMode, setFundingMode] = useState<'settled' | 'recordedLive'>('settled');
   const [fundingThreshold, setFundingThreshold] = useState(0.08);
+  const [perpetualAnchor, setPerpetualAnchor] = useState<CvdAnchor>('1w');
+  const [spotAnchor, setSpotAnchor] = useState<CvdAnchor>('1w');
+  const canonicalAsset = contract.asset.toUpperCase();
+  const perpetualCvd = useCvdIndicator(canonicalAsset, 'perpetual', timeframe, perpetualAnchor, hasPerpetualCvd);
+  const spotCvd = useCvdIndicator(canonicalAsset, 'spot', timeframe, spotAnchor, hasSpotCvd);
+
+  const cvdControls = (market: CvdMarket, enabled: boolean, anchor: CvdAnchor, setAnchor: (value: CvdAnchor) => void,
+    feed: ReturnType<typeof useCvdIndicator>) => {
+    if (!enabled) return null;
+    const payload = feed.payload && feed.payload.asset.toUpperCase() === canonicalAsset &&
+      feed.payload.market === market && feed.payload.timeframe === timeframe && feed.payload.anchor === anchor
+      ? feed.payload : null;
+    const marketLabel = market === 'spot' ? 'Spot CVD' : 'Perpetual CVD';
+    const activeSourceCount = payload?.sources.filter((source) => source.status === 'live').length ?? 0;
+    const tradeCount = payload?.candles.reduce((sum, candle) => sum + candle.trades, 0) ?? 0;
+    const recordedSources = payload?.candles.reduce((maximum, candle) => Math.max(maximum, candle.sourceCount), 0) ?? 0;
+    const actualStart = payload?.historyStart ? new Date(payload.historyStart).toLocaleString() : null;
+    return <section className="native-cvd-controls" key={market} aria-label={`${marketLabel} controls`}>
+      <div className="native-cvd-heading">
+        <div><span className="module-kicker">SIGNED EXECUTED FLOW / USD-EQUIVALENT</span><h2>{marketLabel}</h2></div>
+        <span className="native-cvd-source-total">{activeSourceCount}/{payload?.sources.length ?? 10} live venues · up to {recordedSources} per bar</span>
+      </div>
+      <div className="native-cvd-control-row">
+        <div className="native-cvd-anchors" role="group" aria-label={`${marketLabel} anchor period`}>
+          <span>Anchor</span>{CVD_ANCHORS.map((item) => <button key={item.value} type="button"
+            className={anchor === item.value ? 'active' : ''} aria-pressed={anchor === item.value}
+            onClick={() => setAnchor(item.value)}>{item.label}</button>)}
+        </div>
+        <span className="native-cvd-count">{payload ? `${tradeCount.toLocaleString()} trades · ${payload.candles.length.toLocaleString()} bars` : 'Awaiting recorded trades'}</span>
+        <button type="button" className="native-tool-button" onClick={feed.refresh} disabled={feed.loading}>
+          <RefreshCw size={12} aria-hidden="true" /> Refresh
+        </button>
+      </div>
+      {feed.loading && !payload && <p className="native-cvd-status" role="status">Loading recorded {market} trade history…</p>}
+      {feed.error && <div className="native-cvd-status is-error" role="alert">
+        <span>{payload ? `Refresh issue: ${feed.error} Cached recorded candles remain visible.` : feed.error}</span>
+        <button type="button" onClick={feed.refresh}>Retry</button>
+      </div>}
+      {payload && <>
+        <div className="native-cvd-history" role="status">
+          <span>{actualStart ? `Actual history starts ${actualStart}` : 'No recorded history start yet'}</span>
+          <span>{payload.completeAnchor ? 'Anchor history complete' : `Partial anchor · recording began ${new Date(payload.recordingStartedAt).toLocaleString()}`}</span>
+          {payload.candles.length === 0 && <span>No trades recorded for this market and interval.</span>}
+        </div>
+        <div className="native-cvd-sources" aria-label={`${marketLabel} venue status`}>
+          {payload.sources.map((source) => <span key={source.exchange} className={`status-${source.status}`}
+            title={[source.symbol, source.lastTradeAt ? `Last trade ${source.lastTradeAt}` : null].filter(Boolean).join(' · ') || source.status}>
+            <i aria-hidden="true" />{source.exchange.toUpperCase()} · {source.status.replace('_', ' ')}
+          </span>)}
+        </div>
+        <details className="native-cvd-method"><summary>Method &amp; coverage notes</summary>
+          {payload.warnings.map((warning, index) => <p className="native-cvd-warning" key={`${index}-${warning}`}>{warning}</p>)}
+        </details>
+      </>}
+      <p className="native-cvd-method">CVD is the signed USD-equivalent value of executed buys minus sells—not open-interest weighted. Only recorded trade history is shown; gaps and pre-recording history are not filled.</p>
+      {!feed.loading && !feed.error && !payload && <p className="native-cvd-status" role="status">No recorded {market} history is available yet.</p>}
+    </section>;
+  };
 
   const frameButtons = <div className="super-chart-timeframes" role="group" aria-label="Chart timeframe">
     {FRAMES.map((frame) => <button key={frame.value} type="button" className={timeframe === frame.value ? 'active' : ''}
@@ -211,7 +276,9 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
       {nativeFeed.loading && !nativePayloadCurrent ? <div className="native-chart-skeleton" aria-label="Loading exchange candles"><i /><i /><i /><i /><i /></div>
         : candles.length ? <NativeSuperChart candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
           liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
-          resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings} />
+           resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings}
+           perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
+           perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}
@@ -224,6 +291,8 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
       </p>}
       {settingsPanel}
       {technicalControls}
+      {cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd)}
+      {cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd)}
       {hasLiquidity && volumeBasis === 'aggregated' && aggregateRequested && !aggregatePayloadCurrent && <p className="native-volume-warning" role="status">
         Liquidity Zones are waiting for a matching aggregate-volume feed. Native price/technical candles remain available; zones are not calculated with substitute venue volume.
       </p>}
@@ -241,7 +310,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         <span>i</span><p>Prices and OHLC are from the selected native exchange contract. {volumeBasis === 'aggregated'
           ? 'Volume sums exactly matched underlying-coin volume from up to four venues; it is not open-interest weighted.'
           : 'Volume is from the selected venue only.'}
-          {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Feeds refresh on roughly 30-second snapshot polling and may be served from exchange/server caches; this is not tick-realtime data.</p>
+          {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD records public executed-trade streams and updates its chart snapshot roughly every five seconds.</p>
       </div>
     </>
   );

@@ -1,3 +1,5 @@
+.native-cvd-method { margin-top: 10px; color: var(--text-muted); font-size: 12px; }
+.native-cvd-method summary { cursor: pointer; }
 .native-workspace { margin-top:5px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
 .native-symbol-strip { display:flex;align-items:center;gap:22px;min-height:61px;padding:10px 14px;border-bottom:1px solid var(--lsar-border); }
 .native-symbol-strip > div:first-child { display:flex;align-items:baseline;gap:10px;flex:1;min-width:0;color:var(--lsar-muted);font:9px var(--app-font-mono); }
@@ -92,6 +94,27 @@
 .native-funding-venues > span > span { font:inherit; }
 .native-funding-venues .exchange-logo { width:16px;height:16px;flex:none;object-fit:contain;border-radius:50%; }
 .native-funding-venues i { width:5px;height:5px;border-radius:50%;background:var(--lsar-muted); }.native-funding-venues .is-live i { background:var(--lsar-positive); }
+.native-cvd-controls { padding:15px 14px;border-top:1px solid var(--lsar-border);background:var(--lsar-page); }
+.native-cvd-heading { display:flex;align-items:flex-end;justify-content:space-between;gap:12px; }
+.native-cvd-heading h2 { margin:5px 0 0;color:var(--lsar-strong);font-size:15px;letter-spacing:-.02em; }
+.native-cvd-source-total,.native-cvd-count,.native-cvd-history,.native-cvd-status,.native-cvd-warning { color:var(--lsar-muted);font:9px/1.55 var(--app-font-mono); }
+.native-cvd-control-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px; }
+.native-cvd-anchors { display:flex;align-items:center;gap:4px; }
+.native-cvd-anchors > span { margin-right:5px;color:var(--lsar-muted);font:9px var(--app-font-mono); }
+.native-cvd-anchors button { min-width:35px;height:27px;border:1px solid var(--lsar-control-border);background:var(--lsar-surface);color:var(--lsar-muted);font:9px var(--app-font-mono);cursor:pointer; }
+.native-cvd-anchors button.active { border-color:var(--lsar-accent);color:var(--lsar-strong);background:var(--lsar-accent-soft); }
+.native-cvd-count { margin-right:auto;color:var(--lsar-strong); }
+.native-cvd-history { display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:10px; }
+.native-cvd-sources { display:flex;gap:5px;flex-wrap:wrap;margin-top:9px; }
+.native-cvd-sources > span { display:inline-flex;align-items:center;gap:5px;padding:4px 6px;border:1px solid var(--lsar-border);color:var(--lsar-muted);font:8px var(--app-font-mono); }
+.native-cvd-sources i { width:5px;height:5px;border-radius:50%;background:var(--lsar-muted); }
+.native-cvd-sources .status-live i { background:var(--lsar-positive); }
+.native-cvd-sources .status-reconnecting i,.native-cvd-sources .status-loading i { background:var(--lsar-accent); }
+.native-cvd-status { display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 0;padding:8px 9px;border:1px solid var(--lsar-border); }
+.native-cvd-status.is-error { color:var(--lsar-warning-ink,var(--lsar-muted)); }
+.native-cvd-status button { border:1px solid var(--lsar-control-border);padding:5px 8px;background:var(--lsar-surface);color:var(--lsar-strong);font:9px var(--app-font-mono);cursor:pointer; }
+.native-cvd-warning { margin:8px 0 0;padding:7px 8px;border-left:2px solid var(--lsar-accent);background:var(--lsar-surface); }
+.native-cvd-method { margin:9px 0 0;color:var(--lsar-muted);font:9px/1.55 var(--app-font-mono); }
 @keyframes native-bars { from { opacity:.34;transform:translateY(4px); } to { opacity:.8;transform:translateY(-3px); } }
 @media(max-width:760px) {
  .native-symbol-strip { flex-wrap:wrap;gap:8px 12px; }.native-symbol-strip > div:first-child { flex-basis:100%; }
@@ -103,4 +126,5 @@
  .native-signals { grid-template-columns:1fr;gap:10px; }.native-signals ul { grid-template-columns:1fr; }
  .native-funding-controls-row { display:grid;grid-template-columns:1fr 1fr; }.native-funding-controls-row .super-chart-control { min-width:0; }
  .native-funding-current { margin:0;grid-column:1/-1; }.native-chart-readout { gap:8px; }
+  .native-cvd-control-row { align-items:flex-start; }.native-cvd-anchors { width:100%; }.native-cvd-count { margin-right:0; }
 }
