@@ -66,7 +66,12 @@ export function normalizeFundingAsset(input: string): string {
   return base;
 }
 
-export function useFundingIndicator(asset: string, timeframe: FundingIndicatorTimeframe, historyWindow: FundingIndicatorWindow) {
+export function useFundingIndicator(
+  asset: string,
+  timeframe: FundingIndicatorTimeframe,
+  historyWindow: FundingIndicatorWindow,
+  enabled = true,
+) {
   const [state, setState] = useState<FeedState>({ payload: null, error: null, loading: true, stale: false });
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshingRef = useRef(false);
@@ -78,6 +83,14 @@ export function useFundingIndicator(asset: string, timeframe: FundingIndicatorTi
     let timer: number | undefined;
     let controller: AbortController | null = null;
     let nextRefreshing = false;
+    if (!enabled) {
+      setState({ payload: null, error: null, loading: false, stale: false });
+      return () => {
+        active = false;
+        controller?.abort();
+        globalThis.window.clearTimeout(timer);
+      };
+    }
     const load = async (initial: boolean) => {
       controller = new AbortController();
       if (initial) setState((previous) => ({ ...previous, loading: true, error: null }));
@@ -114,7 +127,7 @@ export function useFundingIndicator(asset: string, timeframe: FundingIndicatorTi
       controller?.abort();
       globalThis.window.clearTimeout(timer);
     };
-  }, [asset, timeframe, historyWindow, refreshIndex]);
+  }, [asset, timeframe, historyWindow, refreshIndex, enabled]);
 
   return { ...state, refresh };
 }

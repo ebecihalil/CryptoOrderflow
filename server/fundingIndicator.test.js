@@ -78,16 +78,16 @@ test("unknown history does not fetch, while verified history observes cooldown a
   assert.equal(calls, 1);
 });
 
-test("Orderflow picker preserves Liquidity Zones and funding is separate from hosted Technical Indicators", () => {
+test("native chart combines Liquidity Zones and funding without a hosted widget", () => {
   const picker = readFileSync(new URL("../src/pages/super-charts-page.tsx", import.meta.url), "utf8");
-  const ui = readFileSync(new URL("../src/components/aggregated-funding-indicator.tsx", import.meta.url), "utf8");
+  const ui = readFileSync(new URL("../src/components/native-chart-workspace.tsx", import.meta.url), "utf8");
   assert.match(picker, /Liquidity Zones/);
   assert.match(picker, /Aggregated Funding Rate/);
-  assert.match(picker, /<OrderflowIndicators/);
+  assert.match(picker, /<NativeChartWorkspace/);
   assert.match(ui, /useState\(0\.08\)/);
-  assert.match(ui, /method === 'weighted' \? 'recordedLive'/);
-  assert.match(ui, /normalized 8-hour/);
-  assert.match(ui, /key=\{`\$\{payload\?\.asset\}:\$\{timeframe\}:\$\{window\}:\$\{plotMode\}`\}/);
+  assert.match(ui, /props\.method === 'weighted' \? 'recordedLive'/);
+  assert.match(ui, /8-hour/);
+  assert.match(ui, /payload\.historyWindow === props\.window/);
   const hook = readFileSync(new URL("../src/hooks/use-funding-indicator.ts", import.meta.url), "utf8");
   assert.match(hook, /historyWindow: FundingIndicatorWindow/);
   assert.doesNotMatch(hook, /window: FundingIndicatorWindow/);

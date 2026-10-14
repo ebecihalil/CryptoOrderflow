@@ -18,15 +18,15 @@ test("LSAR and Funding search suggestions derive from existing snapshots", () =>
     assert.match(source, /setSearch/);
   }
 });
-test("shared market drives price symbol and both orderflow panels with independent timeframes", () => {
+test("verified shared market drives a native chart and synchronized orderflow layers", () => {
   const page = read("pages/super-charts-page.tsx");
-  assert.match(page, /market\?\.tvExchange/);
-  assert.match(page, /market\?\.symbol/);
+  assert.match(page, /market\.symbol/);
   assert.match(page, /market\?\.asset/);
-  assert.match(page, /independent/i);
-  const liquidity = read("components/orderflow-indicators.tsx");
-  const funding = read("components/aggregated-funding-indicator.tsx");
-  assert.match(liquidity, /sharedExchange/); assert.match(liquidity, /sharedSymbol/);
-  assert.match(funding, /sharedAsset/);
+  assert.match(page, /contract=\{market\}/);
+  const workspace = read("components/native-chart-workspace.tsx");
+  assert.match(workspace, /useLiquidityCandles/);
+  assert.match(workspace, /useFundingIndicator/);
+  assert.match(workspace, /payload\.timeframe === props\.timeframe/);
+  assert.match(workspace, /normalizeFundingAsset/);
   assert.match(read("hooks/use-market-contracts.ts"), /let inFlight/);
 });

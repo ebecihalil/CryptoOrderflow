@@ -2,8 +2,8 @@
 
 Super Charts → Orderflow Indicators has an indicator selector. Liquidity Zones
 remains intact; Aggregated Funding Rate adapts the user's uploaded Pine v6
-script. It is an app-native chart, not a Pine script executed inside the hosted
-TradingView Technical Indicators widget.
+script. It now shares the native Super Charts time axis with price, technical
+studies and Liquidity Zones. There is no hosted TradingView widget or Pine runtime.
 
 ## Current values
 

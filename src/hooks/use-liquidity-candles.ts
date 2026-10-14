@@ -40,6 +40,7 @@ export function useLiquidityCandles(
   symbol: string,
   timeframe: LiquidityTimeframe,
   volumeMode: LiquidityVolumeMode = 'aggregated',
+  enabled = true,
 ) {
   const [state, setState] = useState<LiquidityFeedState>({ payload: null, error: null, loading: true });
   const [refreshIndex, setRefreshIndex] = useState(0);
@@ -49,6 +50,14 @@ export function useLiquidityCandles(
     let active = true;
     let controller: AbortController | null = null;
     let timer: number | undefined;
+    if (!enabled) {
+      setState({ payload: null, error: null, loading: false });
+      return () => {
+        active = false;
+        controller?.abort();
+        window.clearTimeout(timer);
+      };
+    }
     const load = async (initial: boolean) => {
       controller = new AbortController();
       if (initial) setState((previous) => ({ ...previous, loading: true, error: null }));
@@ -80,7 +89,7 @@ export function useLiquidityCandles(
       controller?.abort();
       window.clearTimeout(timer);
     };
-  }, [exchange, symbol, timeframe, volumeMode, refreshIndex]);
+  }, [exchange, symbol, timeframe, volumeMode, refreshIndex, enabled]);
 
   return { ...state, refresh };
 }

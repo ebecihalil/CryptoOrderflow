@@ -1,86 +1,61 @@
 ---
 name: Super Charts integration
-description: Shared hosted TradingView workspace, direct exchange-data panels and custom indicator semantics.
+description: User's native-chart choice, volume aggregation and truthful funding-history rules.
 ---
 
-Keep separate Technical Indicators and Orderflow Indicators dropdown menus
-with multiple selections. The user approved retaining the current hosted
-TradingView price chart with custom exchange-data panels below it on one page,
-not injecting custom indicators into the iframe.
+Use one app-native exchange-fed chart for technical and orderflow indicators.
+The user said “we will use only one chart and we dont need any tradingview app
+at all,” replacing the previous hosted-chart/separate-panels decision.
 
-**Why:** after discussing Advanced Charts access requirements and the hosted
-widget's limitations, the user approved keeping the existing widget plus
-separate custom plots on the same screen.
+**Why:** the user wants their own exchange-fed orderflow indicators and technical
+indicators together, without the hosted widget's custom-data restrictions.
 
-**How to apply:** do not silently replace the widget, require a proprietary SDK,
-or promise custom iframe overlays or synchronized internal controls. Shared app
-market search can drive the widget and custom panels; the widget's internal
-symbol/timeframe changes cannot drive those panels. Preserve supplied indicator
-semantics, with no invented formulas or fake orderflow charts.
+**How to apply:** do not restore the hosted TradingView widget or re-request an
+Advanced Charts company agreement. Keep open-source chart-library attribution.
+Coinglass is a concept reference, not permission to claim feature parity.
 
-Contract search should offer coin/exchange autocomplete rather than a separate
-exchange selector, covering Binance, Gate.io, OKX, Bybit, MEXC, Bitget and BingX.
-Funding Rate and LSAR asset search should also offer matching suggestions.
+Chart updates must preserve all other previously agreed application and indicator
+rules.
 
-**Why:** the user requested these seven chart venues and predictive asset search.
+**Why:** the user explicitly asked, “Please make sure all other rules are the same.”
 
-**How to apply:** show actual supported contracts, including exchange identity,
-without invented listings or requests that bypass shared exchange limits.
+**How to apply:** a chart presentation change is not permission to change existing
+calculations, indicator logic, exchange-request safeguards or market inclusion rules.
 
-Liquidity Zones volume may aggregate Binance, OKX, Gate.io and Bybit, but prices
-remain from the selected chart exchange. Do not replace the traded-volume sum
-with OI weighting or silently zero-fill missing venue candles.
+Liquidity Zones volume must sum Binance, OKX, Gate.io and Bybit in comparable
+underlying-coin units with matching candle timestamps; prices remain native to
+the selected exchange. Do not OI-weight traded volume or zero-fill absent data.
 
-**Why:** the user explicitly requested these four exchanges' combined volume
-for the volume-dependent indicator.
+**Why:** the user explicitly requested these four exchanges' combined volume.
 
-**How to apply:** align candle times and underlying-coin units, including
-multiplier contracts, and disclose participating venues/partial coverage.
+**How to apply:** preserve multiplier matching, disclose partial/cohort coverage
+and keep price/technical studies usable when aggregate volume fails.
 
-For the aggregated funding indicator, the user approved live quotes with all
-aggregation methods plus settled mean/median history; historical OI-weighted
-points must come from recorded contemporaneous observations, never today's OI.
+Funding supports live aggregation and settled mean/median history; historical
+OI-weighted points require recorded contemporaneous observations, never today's
+OI applied retroactively. Missing history is not zero funding.
 
-**Why:** the user chose “Live indicator + settled history” after being told that
+**Why:** the user chose “Live indicator + settled history” after learning that
 historical OI coverage varies across exchanges.
 
-**How to apply:** distinguish paid settlements from historical forecasts, label
-partial coverage, and do not manufacture pre-tracking weighted chart history.
+**How to apply:** distinguish settlements from live forecasts and observed
+weighted history; disclose fallback and do not invent pre-tracking records.
 
-Native custom charts should reset their timeline when switching data domains
-(asset, timeframe, history window or settled/live mode), but retain zoom on polls.
+The shared price viewport resets for market/timeframe changes, but persists
+through polling and indicator toggles/settings changes.
 
-**Why:** changing from a single recorded-live point to a full settled series can
-retain a very narrow viewport and make real history look like a flat line.
+**Why:** the user now uses one combined analysis chart, not independent plots.
 
-**How to apply:** distinguish an explicit dataset switch from a same-series refresh.
+**How to apply:** changing a funding method cannot silently move the whole price
+timeline; avoid remounting the chart when enabling a data-dependent pane.
 
-The hosted widget can remove its bootstrap script after creating its iframe.
-For initial symbol/config verification, inspect the iframe URL, not a script
-element that may no longer exist; this does not expose its internal chart state.
+Bundling is not proof the chart renders. Browser checks must inspect console
+errors as well as uncaught exceptions because React can catch a render failure
+and display a recovery page. Cached diagnostics can reference old source.
 
-**Why:** the real embed replaced the initialization script during live checks.
+**Why:** an undefined render identifier passed Vite bundling/static tests and was
+only exposed by a real browser check; cached diagnostics described old imports.
 
-**How to apply:** verify rendered iframe configuration without assuming bootstrap
-DOM lifetime or claiming cross-origin access to interactive chart state.
-The hosted widget cannot consume our custom exchange data; use a separate chart
-library or approved Advanced Charts access for that future work. Do not treat
-TradingView's chart-control APIs as downloadable market-data APIs.
-
-The official embed script changes its container's inline height to 100%.
-
-**Why:** that override collapsed a visually reserved tall chart to the browser's
-default 150px iframe because percentage height had no definite parent height.
-
-**How to apply:** preserve a definite responsive container height that takes
-precedence over the injected inline value. An iframe load event alone does not
-prove quotes are available; keep loading/error descriptions truthful.
-
-Pending TradingView scripts can execute even after being removed from the DOM.
-
-**Why:** rapid indicator changes produced errors when a late script found that
-its parent had been removed individually.
-
-**How to apply:** isolate each embed in its own container, debounce insertion
-and detach the entire subtree during cleanup so pending scripts retain their
-parent. Do not reuse the same inner container for successive configurations.
+**How to apply:** verify the actual loaded chart and console after refactors.
+For dynamic native panes, restore stretch proportions together after creation,
+not sequential heights that can progressively squeeze sibling panes.

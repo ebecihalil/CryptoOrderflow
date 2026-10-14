@@ -4,7 +4,7 @@ Crypto Orderflow is the umbrella project name: the product will not be limited t
 
 The LSAR screen's visible header is **Long Short Account Ratio** with the **LS** mark and **Perpetual Markets** subtitle. Renaming the project/repository does not mean replacing section branding with the umbrella product name.
 
-The home page is the **Crypto Order Flow** module directory. Long Short Account Ratio, Funding Rate and Open Interest are live screeners. Super Charts (Indicators) has a hosted TradingView chart under Technical Indicators and a custom Liquidity Zones chart under Orderflow Indicators. Position Ratio is removed; Liquidations and CVD remain placeholders but are hidden from the home page. Keep the existing visual concept, shared header, light/dark themes, and two-letter section marks. See `docs/super-charts.md` and `docs/liquidity-zones.md` for chart limitations.
+The home page is the **Crypto Order Flow** module directory. Long Short Account Ratio, Funding Rate and Open Interest are live screeners. Super Charts (Indicators) uses one native exchange-fed chart with technical overlays, Liquidity Zones and synchronized funding panes, not a hosted TradingView widget. Position Ratio is removed; Liquidations and CVD remain placeholders but are hidden from the home page. Keep the existing visual concept, shared header, light/dark themes, and two-letter section marks. See `docs/super-charts.md` and `docs/liquidity-zones.md` for chart behavior.
 
 Liquidity Zones defaults to summed Binance/OKX/Gate.io/Bybit USDT-perpetual volume
 in underlying-coin units while keeping the selected exchange's OHLC prices.
@@ -19,10 +19,10 @@ OI applied retrospectively. It reuses all verified funding-provider inventory
 without changing the Funding screener's global cutoff. See
 `docs/funding-indicator.md` for data limitations and local-cache retention.
 
-Super Charts retains the hosted TradingView widget with multiple custom panels
-below it, separate technical/orderflow dropdowns and seven-venue contract
-autocomplete. Internal TradingView controls cannot synchronize app panels; shared
-app selection does. Funding/LSAR predictive search uses existing snapshots.
+Super Charts combines technical/orderflow indicators in one app-native chart,
+with separate selection dropdowns, a shared timeframe, and seven-venue contract
+autocomplete. Native prices are independent of aggregate-volume availability.
+Funding/LSAR predictive search uses existing snapshots.
 See `docs/chart-workspace.md` for native candle adapters and request protections.
 
 Leave the home page area below the module navigation empty for now: the user intends to fill it with other information later, rather than adding content there ahead of that request.

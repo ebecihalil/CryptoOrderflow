@@ -1,6 +1,6 @@
 # Liquidity Zones
 
-The Orderflow Indicators tab in `/super-charts` implements the supplied Pine v6
+The Orderflow Indicators menu in `/super-charts` implements the supplied Pine v6
 Liquidity Zones indicator, attributed to its original author under MPL 2.0.
 The adapted source is `src/lib/liquidity-zones.ts`; preserve its licence header.
 Its preferred unminified form is publicly available from the linked
@@ -31,10 +31,11 @@ The user-supplied original remains in `attached_assets/`.
 
 ## Data and limitations
 
-The hosted TradingView Technical Indicators widget remains unchanged. Our custom
-chart uses TradingView Lightweight Charts with Binance USD-M or Bybit linear
-USDT perpetual price candles. It does not run Pine inside the TradingView embed, and
-does not download TradingView data. No account, key or order-book data is used.
+The native Super Charts workspace uses the open-source Lightweight Charts library
+with verified perpetual OHLC from seven exchanges. Liquidity zones overlay its
+price series alongside technical studies; funding uses a synchronized pane.
+There is no hosted TradingView embed or TradingView data download. No account,
+key or order-book data is used.
 
 The server validates perpetual metadata and verified crypto identity, retrieves
 up to 1,000 candles, rejects malformed or gapped histories and distinguishes
