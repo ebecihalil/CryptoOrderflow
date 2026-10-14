@@ -16,6 +16,18 @@ connection and storage load.
 symbol spelling. Switching the preferred price venue must reuse recorded flow.
 Protect watched cohorts from idle eviction and preserve independent indicators.
 
+Each watched coin must restore its own selected indicators, all indicator
+parameters (including Aggressive bubbles minimum USD), timeframe, zoom, scroll,
+price scale and pane sizes exactly as left when switching away and returning.
+
+**Why:** The user said resetting their chart conditions wastes time and explicitly
+requested independent settings for every watchlist coin.
+
+**How to apply:** Keep personal UI preferences separate from the shared recording
+queue. Settings follow canonical underlying identity; chart views are specific
+to the native price contract and timeframe to avoid mixing incompatible price
+scales. Persist in the user's browser, not as shared global server settings.
+
 The recording list is currently server-wide rather than private per-browser.
 
 **Why:** The app has no accounts, and an unlimited background collector set per

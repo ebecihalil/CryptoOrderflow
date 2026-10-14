@@ -84,7 +84,7 @@ test("native chart combines Liquidity Zones and funding without a hosted widget"
   assert.match(picker, /Liquidity Zones/);
   assert.match(picker, /Aggregated Funding Rate/);
   assert.match(picker, /<NativeChartWorkspace/);
-  assert.match(ui, /useState\(0\.08\)/);
+  assert.match(ui, /useCoinChartSetting\(asset, 'fundingThreshold', 0\.08\)/);
   assert.match(ui, /props\.method === 'weighted' \? 'recordedLive'/);
   assert.match(ui, /8-hour/);
   assert.match(ui, /payload\.historyWindow === props\.window/);

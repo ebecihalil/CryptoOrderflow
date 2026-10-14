@@ -6,6 +6,7 @@ import { MarketAutocomplete, type AutocompleteOption } from '@/components/market
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
 import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
+import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import '@/styles/super-charts.css';
 
 type MenuId = 'technical' | 'orderflow' | null;
@@ -20,10 +21,12 @@ const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
 const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 
 export function SuperChartsPage() {
-  const [studies, setStudies] = useState<ChartStudyId[]>(['rsi']);
-  const [indicators, setIndicators] = useState<OrderflowId[]>(['liquidity']);
   const [menu, setMenu] = useState<MenuId>(null);
   const [market, setMarket] = useState<MarketContract | null>(null);
+  const [studies, setStudies] = useCoinChartSetting<ChartStudyId[]>(market?.asset ?? '', 'studies', ['rsi'],
+    value => Array.isArray(value) && value.every(id => CHART_STUDIES.some(study => study.id === id)));
+  const [indicators, setIndicators] = useCoinChartSetting<OrderflowId[]>(market?.asset ?? '', 'indicators', ['liquidity'],
+    value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
   const [marketDraft, setMarketDraft] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
   const catalogue = useMarketContracts();

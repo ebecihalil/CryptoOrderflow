@@ -13,6 +13,8 @@ import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
 import { DEFAULT_TECHNICAL_SETTINGS, type TechnicalSettings } from '@/lib/technical-indicators';
+import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
+import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles';
@@ -65,16 +67,20 @@ export function NativeChartWorkspace(props: Props) {
       <p>Chart feeds are not requested for symbols outside the verified catalogue.</p>
     </section>;
   }
-  return <WorkspaceWithContract contract={props.contract} studies={props.studies} indicators={props.indicators} />;
+  return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
+    contract={props.contract} studies={props.studies} indicators={props.indicators} />;
 }
 
 function WorkspaceWithContract({ contract, studies, indicators }: Props & { contract: MarketContract }) {
-  const [timeframe, setTimeframe] = useState<LiquidityTimeframe>('1h');
-  const [volumeBasis, setVolumeBasis] = useState<LiquidityVolumeMode>('aggregated');
-  const [showVolume, setShowVolume] = useState(true);
-  const [technicalSettings, setTechnicalSettings] = useState<TechnicalSettings>({ ...DEFAULT_TECHNICAL_SETTINGS });
-  const [liquiditySettings, setLiquiditySettings] = useState(DEFAULT_LIQUIDITY_SETTINGS);
-  const [zoneColors, setZoneColors] = useState(DEFAULT_ZONE_COLORS);
+  const asset = contract.asset.toUpperCase();
+  const [timeframe, setTimeframe] = useCoinChartSetting<LiquidityTimeframe>(asset, 'timeframe', '1h',
+    value => FRAMES.some(frame => frame.value === value));
+  const [volumeBasis, setVolumeBasis] = useCoinChartSetting<LiquidityVolumeMode>(asset, 'volumeBasis', 'aggregated',
+    value => value === 'single' || value === 'aggregated');
+  const [showVolume, setShowVolume] = useCoinChartSetting(asset, 'showVolume', true);
+  const [technicalSettings, setTechnicalSettings] = useCoinChartSetting<TechnicalSettings>(asset, 'technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
+  const [liquiditySettings, setLiquiditySettings] = useCoinChartSetting(asset, 'liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
+  const [zoneColors, setZoneColors] = useCoinChartSetting(asset, 'zoneColors', DEFAULT_ZONE_COLORS);
   const hasLiquidity = indicators.includes('liquidity');
   const hasFunding = indicators.includes('funding');
   const hasPerpetualCvd = indicators.includes('perpetual-cvd');
@@ -108,15 +114,22 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
   const liquidityCandles = volumeBasis === 'single' ? candles : contiguousTail(aggregateVolumes, timeframe);
   const liquidity = useMemo(() => calculateLiquidityZones(liquidityCandles, liquiditySettings), [liquidityCandles, liquiditySettings]);
   const current = candles.at(-1);
-  const [fundingWindow, setFundingWindow] = useState<FundingIndicatorWindow>('7d');
-  const [fundingMethod, setFundingMethod] = useState<FundingIndicatorMethod>('mean');
-  const [fundingMode, setFundingMode] = useState<'settled' | 'recordedLive'>('settled');
-  const [fundingThreshold, setFundingThreshold] = useState(0.08);
-  const [perpetualAnchor, setPerpetualAnchor] = useState<CvdAnchor>('1w');
-  const [spotAnchor, setSpotAnchor] = useState<CvdAnchor>('1w');
-  const [bubbleMarket, setBubbleMarket] = useState<AggressiveBubblesMarket>('both');
-  const [bubbleMinDraft, setBubbleMinDraft] = useState('10000');
-  const [bubbleMinValue, setBubbleMinValue] = useState(10000);
+  const [fundingWindow, setFundingWindow] = useCoinChartSetting<FundingIndicatorWindow>(asset, 'fundingWindow', '7d',
+    value => ['1d', '7d', '30d'].includes(String(value)));
+  const [fundingMethod, setFundingMethod] = useCoinChartSetting<FundingIndicatorMethod>(asset, 'fundingMethod', 'mean',
+    value => ['mean', 'median', 'weighted'].includes(String(value)));
+  const [fundingMode, setFundingMode] = useCoinChartSetting<'settled' | 'recordedLive'>(asset, 'fundingMode', 'settled',
+    value => value === 'settled' || value === 'recordedLive');
+  const [fundingThreshold, setFundingThreshold] = useCoinChartSetting(asset, 'fundingThreshold', 0.08);
+  const [perpetualAnchor, setPerpetualAnchor] = useCoinChartSetting<CvdAnchor>(asset, 'perpetualAnchor', '1w',
+    value => CVD_ANCHORS.some(anchor => anchor.value === value));
+  const [spotAnchor, setSpotAnchor] = useCoinChartSetting<CvdAnchor>(asset, 'spotAnchor', '1w',
+    value => CVD_ANCHORS.some(anchor => anchor.value === value));
+  const [bubbleMarket, setBubbleMarket] = useCoinChartSetting<AggressiveBubblesMarket>(asset, 'bubbleMarket', 'both',
+    value => ['spot', 'perpetual', 'both'].includes(String(value)));
+  const [bubbleMinValue, setBubbleMinValue] = useCoinChartSetting(asset, 'bubbleMinValue', 10000,
+    value => Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
+  const [bubbleMinDraft, setBubbleMinDraft] = useCoinChartSetting(asset, 'bubbleMinDraft', String(bubbleMinValue));
   const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);
   const canonicalAsset = contract.asset.toUpperCase();
   const perpetualCvd = useCvdIndicator(canonicalAsset, 'perpetual', timeframe, perpetualAnchor, hasPerpetualCvd);
@@ -300,7 +313,9 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
           </>}
       </div>
       {nativeFeed.loading && !nativePayloadCurrent ? <div className="native-chart-skeleton" aria-label="Loading exchange candles"><i /><i /><i /><i /><i /></div>
-        : candles.length ? <NativeSuperChart candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
+        : candles.length ? <NativeSuperChart key={`${contract.exchange}:${contract.symbol}:${timeframe}`}
+          viewKey={chartViewKey(asset, contract.exchange, contract.symbol, timeframe)}
+          candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
           liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}

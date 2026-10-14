@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries,
+  CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, MismatchDirection,
   type IChartApi, type ISeriesApi, type Time, type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, LiquidityZone, LiquiditySettings } from '@/lib/liquidity-zones';
@@ -11,6 +11,7 @@ import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
 import { AggressiveBubblesPrimitive, type PlottedAggressiveBubble } from '@/components/aggressive-bubbles-primitive';
+import { readChartPreference, writeChartPreference, validChartView, shiftedChartRange } from '@/lib/chart-preferences.js';
 
 type FundingPlot = { points: FundingIndicatorPoint[]; method: FundingIndicatorMethod; threshold: number };
 type Props = {
@@ -24,6 +25,7 @@ type Props = {
   showVolume: boolean;
   timeframe: string;
   resetKey: string;
+  viewKey: string;
   technicalSettings: TechnicalSettings;
   perpetualCvd: CvdPayload | null;
   spotCvd: CvdPayload | null;
@@ -35,6 +37,10 @@ type Props = {
 };
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
 type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null };
+type SavedView = {
+  from: number; to: number; anchorTime: number; anchorLogical: number;
+  panes: Record<string, { weight: number; autoScale: boolean; range: { from: number; to: number } | null }>;
+};
 
 function themeColors(element: HTMLElement): Theme {
   const styles = getComputedStyle(element);
@@ -63,7 +69,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, priceDivisor }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, priceDivisor }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -73,6 +79,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const resetKeyRef = useRef(resetKey);
   const hasChartDataRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
+  const restoringRef = useRef(true);
+  const savedViewRef = useRef<SavedView | null>(readChartPreference(viewKey, null, validChartView));
+  const captureViewRef = useRef<() => void>(() => {});
   const [hover, setHover] = useState<Candle | null>(null);
   const [bubbleHover, setBubbleHover] = useState<PlottedAggressiveBubble | null>(null);
   const plottedBubbles = useMemo(() => (aggressiveBubbles?.points ?? [])
@@ -124,6 +133,42 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       wickUpColor: palette.positive, wickDownColor: '#c76b61', priceLineVisible: false,
     }, 0);
     bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null, bubblePrimitive: null };
+    const captureView = () => {
+      if (restoringRef.current || !hasChartDataRef.current) return;
+      const range = chart.timeScale().getVisibleLogicalRange();
+      if (!range) return;
+      const anchor = candleSeries.dataByIndex(Math.floor((range.from + range.to) / 2), MismatchDirection.NearestLeft)
+        ?? candleSeries.dataByIndex(0, MismatchDirection.NearestRight);
+      if (!anchor || typeof anchor.time !== 'number') return;
+      const coordinate = chart.timeScale().timeToCoordinate(anchor.time);
+      const logical = coordinate === null ? null : chart.timeScale().coordinateToLogical(coordinate);
+      if (logical === null) return;
+      const panes: SavedView['panes'] = { ...savedViewRef.current?.panes };
+      chart.panes().forEach((pane, index) => {
+        const key = paneKeysRef.current[index];
+        if (!key) return;
+        const scale = chart.priceScale('right', index);
+        const options = scale.options();
+        const visible = scale.getVisibleRange();
+        panes[key] = { weight: pane.getStretchFactor(), autoScale: options.autoScale || !visible, range: visible };
+      });
+      const view = { ...range, anchorTime: anchor.time, anchorLogical: logical, panes };
+      if (!validChartView(view)) return;
+      savedViewRef.current = view;
+      writeChartPreference(viewKey, view);
+    };
+    captureViewRef.current = captureView;
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleSave = () => {
+      if (saveTimer !== null) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => { saveTimer = null; captureView(); }, 150);
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(scheduleSave);
+    // Price-axis dragging and pane resizing have no range subscription.
+    // Capture after their gestures too, and synchronously before unmount.
+    window.addEventListener('pointerup', scheduleSave);
+    mount.addEventListener('wheel', scheduleSave, { passive: true });
+    window.addEventListener('pagehide', captureView);
     const root = document.documentElement;
     const observer = new MutationObserver(() => {
       const next = themeColors(mount);
@@ -150,6 +195,12 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     const fitHandler = () => chart.timeScale().fitContent();
     window.addEventListener('native-chart-fit', fitHandler);
     return () => {
+      captureView();
+      if (saveTimer !== null) clearTimeout(saveTimer);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(scheduleSave);
+      window.removeEventListener('pointerup', scheduleSave);
+      mount.removeEventListener('wheel', scheduleSave);
+      window.removeEventListener('pagehide', captureView);
       observer.disconnect();
       resize.disconnect();
       chart.unsubscribeCrosshairMove(crosshairHandler);
@@ -165,7 +216,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       chart.remove();
       bundleRef.current = null;
     };
-  }, []);
+  }, [viewKey]);
 
   useEffect(() => {
     if (resetKeyRef.current !== resetKey) {
@@ -183,6 +234,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       animationFrameRef.current = null;
     }
     const { chart, candleSeries } = bundle;
+    captureViewRef.current();
+    restoringRef.current = true;
+    const savedView = savedViewRef.current;
     const range = chart.timeScale().getVisibleLogicalRange();
     const previousWeights = new Map(paneKeysRef.current.map((key, index) =>
       [key, chart.panes()[index]?.getStretchFactor()] as const));
@@ -303,7 +357,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     chart.panes().forEach((pane, index) => {
       const allocation = allocations[index];
       if (!allocation) return;
-      const previous = previousWeights.get(allocation.key);
+      const previous = savedView?.panes[allocation.key]?.weight ?? previousWeights.get(allocation.key);
       pane.setStretchFactor(previous && Number.isFinite(previous) ? previous : allocation.height);
     });
     paneKeysRef.current = allocations.map(pane => pane.key);
@@ -325,14 +379,45 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       resetKeyRef.current = resetKey;
       hasChartDataRef.current = true;
       if (shouldFit) animationFrameRef.current = requestAnimationFrame(() => {
-        chart.timeScale().fitContent();
+        if (!restoreView()) chart.timeScale().fitContent();
+        restoringRef.current = false;
+        captureViewRef.current();
         animationFrameRef.current = null;
       });
       else if (range) animationFrameRef.current = requestAnimationFrame(() => {
-        chart.timeScale().setVisibleLogicalRange(range);
+        if (!restoreView()) chart.timeScale().setVisibleLogicalRange(range);
+        restoringRef.current = false;
+        captureViewRef.current();
         animationFrameRef.current = null;
       });
     } else hasChartDataRef.current = false;
+    function restoreView() {
+      if (!savedView) return false;
+      chart.panes().forEach((_, index) => {
+        const pane = savedView.panes[paneKeysRef.current[index]];
+        if (!pane) return;
+        const scale = chart.priceScale('right', index);
+        scale.applyOptions({ autoScale: pane.autoScale });
+        if (!pane.autoScale && pane.range) scale.setVisibleRange(pane.range);
+      });
+      // Find the same timestamp in the new snapshot rather than assuming
+      // candle indexes are stable when live bars or indicator history arrive.
+      const coordinate = chart.timeScale().timeToCoordinate(toTime(savedView.anchorTime));
+      const anchor = coordinate === null ? null : chart.timeScale().coordinateToLogical(coordinate);
+      if (anchor !== null) {
+        chart.timeScale().setVisibleLogicalRange(shiftedChartRange(savedView, anchor));
+      } else {
+        // If the saved anchor has aged outside the provider's history, retain
+        // the zoom width at the closest available timestamp.
+        const closest = candles.reduce((best, bar) =>
+          Math.abs(bar.time - savedView.anchorTime) < Math.abs(best.time - savedView.anchorTime) ? bar : best, candles[0]);
+        const x = chart.timeScale().timeToCoordinate(toTime(closest.time));
+        const index = x === null ? null : chart.timeScale().coordinateToLogical(x);
+        if (index === null) return false;
+        chart.timeScale().setVisibleLogicalRange(shiftedChartRange(savedView, index));
+      }
+      return true;
+    }
     return () => {
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);

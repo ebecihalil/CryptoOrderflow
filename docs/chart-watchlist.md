@@ -1,3 +1,22 @@
+## Individual chart settings
+
+Each underlying coin has separate selected technical/orderflow indicators,
+indicator parameters, timeframe, volume visibility and volume basis. Switching
+through the watchlist or contract search restores that coin's own settings.
+Aggressive bubbles minimum USD and market selection are included.
+
+Zoom, horizontal position, manual price scales and pane proportions are saved
+for each native exchange contract and timeframe. The view uses a timestamp
+anchor so live snapshots dropping older bars do not silently move the saved
+position to different candles. If the saved timestamp is no longer available
+from the provider, the nearest available timestamp is used with the same zoom.
+
+Preferences are personal to the browser and saved locally, independently of the
+shared server recording list. They survive page reloads, but clearing browser
+storage removes them; blocked storage supports same-session switching only.
+Only the active coin's chart is mounted, so restoring views does not keep extra
+client polling loops or exchange feeds open.
+
 # Super Charts watchlist
 
 The right-hand desktop watchlist (stacked on narrow screens) saves up to **five
