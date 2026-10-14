@@ -88,13 +88,17 @@ export class AggressiveBubblesPrimitive implements ISeriesPrimitive<Time> {
                 context.strokeStyle = point.side === 'buy' ? 'rgba(190,238,204,.88)' : 'rgba(255,205,198,.88)';
               }
               context.stroke();
-              if (radius >= 13) {
-                context.fillStyle = point.side === 'buy' ? '#e1f3e5' : '#ffe8e4';
-                context.font = '8px var(--app-font-mono), monospace';
-                context.textAlign = 'center';
-                context.textBaseline = 'middle';
-                context.fillText(point.market === 'spot' ? 'S' : 'P', x, y);
-              }
+              // Label every bubble, including the smallest qualifying trades.
+              // A contrasting outline keeps letters legible on both themes.
+              const label = point.market === 'spot' ? 'S' : 'P';
+              context.font = `600 ${Math.max(8, Math.min(11, radius * 0.65))}px monospace`;
+              context.textAlign = 'center';
+              context.textBaseline = 'middle';
+              context.lineWidth = 2;
+              context.strokeStyle = 'rgba(13,30,26,.9)';
+              context.strokeText(label, x, y);
+              context.fillStyle = '#f5fff7';
+              context.fillText(label, x, y);
             }
             context.restore();
           });

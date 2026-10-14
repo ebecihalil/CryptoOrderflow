@@ -46,6 +46,15 @@ Keep opposite-side activity visible even when net CVD is zero. Reuse shared trad
 collectors; never reconstruct price-level bubbles from cumulative CVD candles.
 Do not call bubbles an order-book heatmap or proof of institutional activity.
 
+Spot bubbles must show a centered S and Perpetual bubbles a centered P, including
+small bubbles rather than labeling only the largest ones.
+
+**Why:** The user explicitly asked to distinguish the two markets by a letter
+in the middle of each bubble.
+
+**How to apply:** Preserve these labels when changing bubble sizing or styles;
+keep the letters legible in both light and dark themes.
+
 USD-M Binance trade streams require its routed market endpoint after its 2026
 migration. An unrouted socket can accept a subscription yet never deliver trades.
 BingX perpetual trade messages lack execution IDs; hashing identical records
