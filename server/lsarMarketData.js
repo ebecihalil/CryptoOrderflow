@@ -700,3 +700,11 @@ export function getLsarMarketSummary(timeframe) {
             : null,
     };
 }
+
+export function getLsarChartReadings(asset, exchanges) {
+    getLsarMarketSnapshot();
+    return exchanges.flatMap(exchange => (sourceReadings[exchange] ?? [])
+        .filter(reading => reading.asset === asset)
+        .map(reading => ({ exchange, symbol: reading.symbol, points: reading.points,
+            longWindowPoints: reading.longWindowPoints ?? [] })));
+}

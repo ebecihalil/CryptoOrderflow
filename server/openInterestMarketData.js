@@ -122,3 +122,17 @@ export function getOpenInterestSnapshot(timeframe = "1h", selection = [], compar
                 : `CME is not contributing to totals: ${states.cme.error ?? "An authorized daily report/feed is required."}`,
         ] };
 }
+
+// Reuse the screener's observations and fair backfill queue; chart refreshes
+// never create an independent all-symbol OI scanner.
+export function getOiChartInputs(asset, exchanges) {
+    const snapshot = getOpenInterestSnapshot("1h");
+    const now = Date.now(), states = inventoryAndSamples(now);
+    const contracts = Object.entries(states).filter(([exchange]) => exchanges.includes(exchange))
+        .flatMap(([exchange, state]) => state.readings
+            .filter(item => item.asset === asset && now - item.fetchedAt <= 900_000 && coinSize(item) !== null)
+            .map(item => ({ ...item, key: `${exchange}:${item.symbol}`, oiCoin: coinSize(item),
+                points: [...(histories.get(`${exchange}:${item.symbol}`) ?? [])] })));
+    return { contracts, sources: Object.entries(states).filter(([exchange]) => exchanges.includes(exchange))
+        .map(([exchange, state]) => ({ exchange, status: state.status })), refreshing: snapshot.isRefreshing };
+}
