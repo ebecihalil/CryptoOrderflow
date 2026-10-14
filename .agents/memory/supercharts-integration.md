@@ -1,18 +1,29 @@
 ---
 name: Super Charts integration
-description: Approved technical versus custom orderflow scope and hosted-widget limitations.
+description: Shared Advanced Charts direction, direct exchange feeds and custom indicator semantics.
 ---
 
-Keep Super Charts split into Technical Indicators and Orderflow Indicators.
-The first uses TradingView's official hosted widget; the second hosts our custom
-exchange-data indicators, starting with the approved Liquidity Zones adaptation.
+Keep separate Technical Indicators and Orderflow Indicators selection menus,
+but allow multiple selections to apply concurrently to the same chart. The user
+chose TradingView Advanced Charts to preserve the full TradingView interface,
+with price and custom indicator data supplied directly by exchanges.
 
-**Why:** the user approved launching standard TradingView charts first, with a
-separate area for custom exchange-data indicators. They subsequently supplied
-Liquidity Zones and approved adding it with its existing rules.
+**Why:** the user changed the earlier separate-chart approach and explicitly
+selected “Keep the full TradingView interface” over an app-native shared chart.
 
-**How to apply:** preserve supplied indicator semantics rather than silently
-"improving" them. Do not invent additional formulas or fake orderflow charts.
+**How to apply:** use authorized Advanced Charts access, not the restricted hosted
+widget or a silent Lightweight Charts replacement. Preserve supplied indicator
+semantics; do not invent additional formulas or fake orderflow charts. TradingView
+prohibits putting its proprietary library in public repositories.
+
+Contract search should offer coin/exchange autocomplete rather than a separate
+exchange selector, covering Binance, Gate.io, OKX, Bybit, MEXC, Bitget and BingX.
+Funding Rate and LSAR asset search should also offer matching suggestions.
+
+**Why:** the user requested these seven chart venues and predictive asset search.
+
+**How to apply:** show actual supported contracts, including exchange identity,
+without invented listings or requests that bypass shared exchange limits.
 
 Liquidity Zones volume may aggregate Binance, OKX, Gate.io and Bybit, but prices
 remain from the selected chart exchange. Do not replace the traded-volume sum
