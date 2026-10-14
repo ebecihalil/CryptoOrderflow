@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import { gzipSync, gunzipSync } from "node:zlib";
+import { gzip, gunzipSync } from "node:zlib";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { canonicalAsset } from "./assetIdentity.js";
@@ -20,12 +21,15 @@ const timeOrder = (a, b) => {
 const initialSources = () => CVD_EXCHANGES.map(exchange => ({
   exchange, status: "loading", symbol: null, tradeCount: 0, lastTradeAt: null,
 }));
+const compress = promisify(gzip);
 
 export function createCvdIndicatorService({
   resolver = createCvdMarketResolver(), streams = createCvdStreamFactory(), now = Date.now,
-  storageDir = fileURLToPath(new URL("../.cache/cvd-recordings/", import.meta.url)), timers = true,
+  storageDir = process.env.WATCHLIST_DATA_DIR || fileURLToPath(new URL("../.cache/cvd-recordings/", import.meta.url)), timers = true,
 } = {}) {
   const groups = new Map();
+  const pinned = new Set();
+  let saveQueue = Promise.resolve();
   const file = group => path.join(storageDir, `${group.market}-${group.asset}.json.gz`);
   function markGap(group, at = now()) {
     group.gaps.add(Math.floor(at / 60000) * 60);
@@ -74,18 +78,21 @@ export function createCvdIndicatorService({
     if (!storageDir || !group.loaded || !group.dirty) return;
     group.saving = true;
     group.dirty = false;
-    group.saveTask = (async () => {
+    group.saveTask = saveQueue.then(async () => {
     try {
       const payload = { version: 1, asset: group.asset, market: group.market, startedAt: group.startedAt,
-        lastProcessedTime: group.lastProcessedTime, gaps: [...group.gaps], minutes: [...group.minutes.values()] };
+        lastProcessedTime: group.lastProcessedTime, gaps: [...group.gaps],
+        minutes: [...group.minutes.values()].map(r => ({ ...r, sources: [...r.sources] })),
+        bubbles: group.bubbles.serialize() };
       await mkdir(storageDir, { recursive: true });
       const temporary = `${file(group)}.tmp`;
-      await writeFile(temporary, gzipSync(JSON.stringify(payload)));
+      await writeFile(temporary, await compress(JSON.stringify(payload)));
       await rename(temporary, file(group));
       group.storageFailed = false;
     } catch { group.storageFailed = true; group.dirty = true; }
     finally { group.saving = false; }
-    })();
+    });
+    saveQueue = group.saveTask.catch(() => {});
     return group.saveTask;
   }
   async function load(group) {
@@ -104,6 +111,7 @@ export function createCvdIndicatorService({
       group.startedAt = body.startedAt;
       group.lastProcessedTime = Number.isFinite(body.lastProcessedTime) ? body.lastProcessedTime : 0;
       if (Array.isArray(body.gaps)) body.gaps.filter(Number.isSafeInteger).forEach(t => group.gaps.add(t));
+      if (body.bubbles) group.bubbles.restore(body.bubbles, CVD_EXCHANGES);
       if (group.minutes.size) markGap(group); // downtime is unknown, not zero volume
     } catch (error) {
       if (error.code !== "ENOENT") group.storageFailed = true;
@@ -148,19 +156,27 @@ export function createCvdIndicatorService({
     const { asset, market, timeframe, anchor } = parsed;
     const key = `${market}:${asset}`;
     let group = groups.get(key);
-    if (!group) {
+    if (!group || !group.active) {
+      const activeCount = () => [...groups.values()].filter(g => g.active).length;
       for (const [oldKey, old] of groups) {
+        if (oldKey === key) continue;
+        if (pinned.has(old.asset)) continue;
         if (now() - old.lastUsed > IDLE_MS && old.active) stopGroup(old);
         // Pause a genuinely unviewed LRU cohort under pressure, not a collector
         // another tab is still polling. Its recorded history remains on disk.
-        if (groups.size >= MAX_GROUPS && old.active && now() - old.lastUsed > 15_000) stopGroup(old);
+        if (activeCount() >= MAX_GROUPS + pinned.size * 2 && old.active && now() - old.lastUsed > 15_000) stopGroup(old);
         if (!old.active && !old.saving) groups.delete(oldKey);
       }
-      if (groups.size >= MAX_GROUPS) throw Object.assign(new Error("Live CVD capacity is busy. Existing collectors are retained; please retry later."), { status: 503 });
+      if (activeCount() >= MAX_GROUPS + pinned.size * 2) throw Object.assign(new Error("Live CVD capacity is busy. Existing collectors are retained; please retry later."), { status: 503 });
+    }
+    if (!group) {
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
         sources: initialSources(), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
         handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false };
-      group.bubbles = createAggressiveBubbleLedger({ market, now });
+      // Smallest supported frame is 5m: compact base cells without losing any
+      // displayed price/side/value detail on any supported chart timeframe.
+      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 7 * 86400,
+        maxCells: 150_000, bucketSeconds: 300 });
       groups.set(key, group);
       group.ready = initialize(group);
     } else if (!group.active) {
@@ -180,7 +196,7 @@ export function createCvdIndicatorService({
       "CVD sums taker-buy value minus taker-sell value; there is no open-interest weighting. Anchor resets use UTC calendar boundaries.",
       "Trade extrema use exchange timestamp order with a 2.5-second reorder buffer; cross-venue clocks can differ. Coverage gaps stay incomplete, but the observed CVD balance carries forward until its calendar anchor resets.",
       "BingX perpetual frames do not provide execution IDs; distinct received records are retained. Undocumented upstream replays cannot be deduplicated exactly.",
-      "History is collected on demand and saved locally. Idle collectors stop after 30 minutes or earlier under capacity pressure; ephemeral hosting may lose local recordings.",
+      "History is saved locally. Watchlisted coins continue recording server-side; other idle collectors stop after 30 minutes or under capacity pressure. Ephemeral hosting may lose local recordings.",
     ];
     if (group.late) warnings.push("Late/out-of-order trades exceeded the reorder buffer and were excluded; affected coverage is incomplete.");
     if (group.dropped) warnings.push("The live event safety buffer was exceeded; affected coverage is incomplete.");
@@ -194,10 +210,15 @@ export function createCvdIndicatorService({
   }
   const tick = timers ? setInterval(() => {
     for (const group of groups.values()) {
-      if (group.active && now() - group.lastUsed > IDLE_MS) stopGroup(group);
-      else if (group.active) { flush(group); void save(group); }
+      if (group.active && !pinned.has(group.asset) && now() - group.lastUsed > IDLE_MS) stopGroup(group);
+      else if (group.active) {
+        flush(group);
+        if (!group.lastSaveAttempt || now() - group.lastSaveAttempt >= 15_000) {
+          group.lastSaveAttempt = now(); void save(group);
+        }
+      }
     }
-  }, 15_000) : null;
+  }, 1000) : null;
   tick?.unref?.();
   function getBubbles(query) {
     const parsed = validateAggressiveBubblesQuery(query);
@@ -215,14 +236,15 @@ export function createCvdIndicatorService({
     const firsts = snapshots.map(s => s.ledger.first).filter(t => t !== null);
     const lasts = snapshots.map(s => s.ledger.last).filter(t => t !== null);
     const warnings = [
-      "Live executed trades only. Previous CVD OHLC does not retain execution prices and cannot reconstruct historical bubbles.",
+      "Recorded executed trades only. Price-level recordings are restored from disk; previous CVD OHLC alone cannot reconstruct historical bubbles.",
       "Bubbles group same-side executions by chart candle and 0.05% underlying-price band. Size is gross traded USD-equivalent value, never net CVD or OI weighting.",
       "Buy and sell flow and Spot/Perpetual markets remain separate. Aggressive means market-taking, not proof of institutional activity.",
       "Prices are underlying-coin prices; bundled contract charts scale them into their native price units. USD/USDT/USDC use a parity assumption.",
-      "The bounded live buffer retains roughly two hours, without fabricated pre-recording trades. Missing sources and periods remain incomplete.",
+      "Price-level history retains up to seven days with a bounded cell limit, without fabricated pre-recording trades. Missing sources and downtime remain incomplete.",
       "At most the 500 largest matching bubbles are displayed. This is an executed-trade overlay, not an order-book liquidity heatmap.",
     ];
     if (snapshots.some(s => s.ledger.truncated)) warnings.push("The price-level safety limit trimmed older activity; available bubble history is incomplete.");
+    if (snapshots.some(s => s.cvd.warnings.some(w => /Local history/.test(w)))) warnings.push("History storage failed; recording is not guaranteed to survive a restart.");
     if (snapshots.some(s => s.cvd.warnings.some(w => /Late\/out-of-order|safety buffer/.test(w)))) {
       warnings.push("Some executions were excluded by the shared reorder/safety buffer; affected coverage is incomplete.");
     }
@@ -234,7 +256,40 @@ export function createCvdIndicatorService({
       warnings, aggregation: { priceBandPercent: 0.05, time: "chart_candle" },
       isLoading: snapshots.some(s => s.cvd.isLoading), generatedAt: new Date(now()).toISOString() };
   }
-  return { get, getBubbles, async close() {
+  function pinAsset(input) {
+    const asset = canonicalAsset(input).asset;
+    if (!isCryptoAsset(asset)) throw Object.assign(new Error("Only crypto coins can be watched."), { status: 400 });
+    if (!pinned.has(asset) && pinned.size >= 5) throw Object.assign(new Error("The server watchlist is limited to five coins."), { status: 409 });
+    const existed = pinned.has(asset);
+    pinned.add(asset);
+    try {
+      for (const market of ["spot", "perpetual"]) get({ asset, market, timeframe: "1h", anchor: "1w" });
+    } catch (e) { if (!existed) pinned.delete(asset); throw e; }
+  }
+  function unpinAsset(input) {
+    const asset = canonicalAsset(input).asset;
+    pinned.delete(asset);
+    for (const market of ["spot", "perpetual"]) {
+      const group = groups.get(`${market}:${asset}`);
+      if (group?.active) stopGroup(group);
+    }
+  }
+  function recordingStatus(asset) {
+    const cohorts = ["spot", "perpetual"].map(m => groups.get(`${m}:${asset}`)).filter(Boolean);
+    const sources = cohorts.flatMap(g => g.sources);
+    const liveSources = sources.filter(s => s.status === "live").length;
+    const loading = sources.some(s => s.status === "loading");
+    const infos = cohorts.map(g => g.bubbles.info());
+    const first = infos.map(i => i.first).filter(t => t !== null);
+    const last = infos.map(i => i.last).filter(t => t !== null);
+    const incomplete = cohorts.some(g => g.late || g.dropped) || infos.some(i => i.truncated);
+    return { liveSources, totalSources: CVD_EXCHANGES.length * 2,
+      status: liveSources ? liveSources === CVD_EXCHANGES.length * 2 && !incomplete ? "recording" : "partial" : loading ? "starting" : "unavailable",
+      historyStart: first.length ? new Date(Math.min(...first)).toISOString() : null,
+      historyEnd: last.length ? new Date(Math.max(...last)).toISOString() : null,
+      storageFailed: cohorts.some(g => g.storageFailed === true) };
+  }
+  return { get, getBubbles, pinAsset, unpinAsset, recordingStatus, storageDir, async close() {
     clearInterval(tick);
     groups.forEach(stopGroup);
     await Promise.all([...groups.values()].map(async group => {

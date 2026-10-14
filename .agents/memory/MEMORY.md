@@ -11,3 +11,4 @@
 - [Crypto-only screener scope](crypto-only-market-scope.md) — exclude stocks/ETFs from LSAR and Funding; OI rankings stay crypto-only.
 - [Super Charts integration](supercharts-integration.md) — use one native exchange-fed chart for technical/orderflow layers; preserve volume units and truthful funding history.
 - [Trade-flow indicators](cvd-trade-semantics.md) — real taker flow, weekly CVD continuity and independently selectable Aggressive bubbles; never infer history from price candles.
+- [Chart watchlist](chart-watchlist.md) — five underlying coins record in the background; preserve shared collector limits and disclose hosting durability/uptime.

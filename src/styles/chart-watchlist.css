@@ -1,0 +1,296 @@
+.chart-watchlist {
+  min-width: 0;
+  align-self: start;
+  border: 1px solid var(--lsar-border);
+  background: var(--lsar-surface);
+  color: var(--lsar-strong);
+}
+
+.super-chart-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 278px);
+  align-items: start;
+  gap: 17px;
+  min-width: 0;
+}
+
+.super-chart-workspace-main {
+  min-width: 0;
+}
+
+.chart-watchlist-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 14px 12px;
+  border-bottom: 1px solid var(--lsar-border);
+}
+
+.chart-watchlist-eyebrow,
+.chart-watchlist-stat-label {
+  color: var(--lsar-muted);
+  font: 9px/1.5 var(--app-font-mono);
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+
+.chart-watchlist-heading {
+  margin: 5px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.035em;
+}
+
+.chart-watchlist-count {
+  display: grid;
+  place-items: center;
+  min-width: 31px;
+  height: 27px;
+  padding: 0 6px;
+  border: 1px solid var(--lsar-border);
+  background: var(--lsar-page);
+  color: var(--lsar-accent);
+  font: 10px var(--app-font-mono);
+}
+
+.chart-watchlist-intro {
+  margin: 0;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--lsar-border);
+  color: var(--lsar-muted);
+  font: 9px/1.65 var(--app-font-mono);
+}
+
+.chart-watchlist-add {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  width: calc(100% - 24px);
+  min-height: 37px;
+  margin: 12px;
+  padding: 0 10px;
+  border: 1px solid var(--lsar-accent);
+  background: var(--lsar-accent);
+  color: var(--lsar-page);
+  font: 10px var(--app-font-mono);
+  text-align: left;
+  cursor: pointer;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.chart-watchlist-add:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.chart-watchlist-add:disabled {
+  border-color: var(--lsar-border);
+  background: var(--lsar-page);
+  color: var(--lsar-muted);
+  cursor: not-allowed;
+}
+
+.chart-watchlist-capacity {
+  margin: -4px 12px 11px;
+  color: var(--lsar-muted);
+  font: 8px/1.5 var(--app-font-mono);
+}
+
+.chart-watchlist-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0 10px 11px;
+  list-style: none;
+}
+
+.chart-watchlist-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: stretch;
+  border: 1px solid var(--lsar-border);
+  background: var(--lsar-page);
+}
+
+.chart-watchlist-item.is-active {
+  border-color: var(--lsar-accent);
+  box-shadow: inset 2px 0 0 var(--lsar-accent);
+}
+
+.chart-watchlist-select {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px 10px 11px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chart-watchlist-select:hover {
+  background: var(--lsar-row-hover);
+}
+
+.chart-watchlist-asset-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.chart-watchlist-asset {
+  overflow: hidden;
+  color: var(--lsar-strong);
+  font: 600 13px var(--app-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-watchlist-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--lsar-muted);
+  font: 8px var(--app-font-mono);
+  white-space: nowrap;
+}
+
+.chart-watchlist-status::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lsar-muted);
+  content: "";
+}
+
+.chart-watchlist-status.is-recording::before {
+  background: var(--lsar-positive);
+}
+
+.chart-watchlist-status.is-partial::before,
+.chart-watchlist-status.is-starting::before {
+  background: var(--lsar-warning-ink, var(--lsar-accent));
+}
+
+.chart-watchlist-contract,
+.chart-watchlist-coverage {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--lsar-muted);
+  font: 8px/1.45 var(--app-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-watchlist-remove {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 27px;
+  height: 27px;
+  margin-right: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--lsar-muted);
+  cursor: pointer;
+}
+
+.chart-watchlist-remove:hover:not(:disabled) {
+  background: var(--lsar-row-hover);
+  color: var(--lsar-warning-ink, var(--lsar-accent));
+}
+
+.chart-watchlist-remove:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
+.chart-watchlist-empty,
+.chart-watchlist-loading,
+.chart-watchlist-error {
+  margin: 0 10px 11px;
+  padding: 13px 11px;
+  border: 1px dashed var(--lsar-border);
+  color: var(--lsar-muted);
+  font: 9px/1.65 var(--app-font-mono);
+}
+
+.chart-watchlist-empty strong,
+.chart-watchlist-loading strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--lsar-strong);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.chart-watchlist-loading {
+  position: relative;
+  overflow: hidden;
+  border-style: solid;
+}
+
+.chart-watchlist-loading::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 15%, var(--lsar-row-hover) 50%, transparent 85%);
+  opacity: .65;
+  transform: translateX(-100%);
+  animation: chart-watchlist-sheen 1.5s ease-in-out infinite;
+  content: "";
+}
+
+.chart-watchlist-error,
+.chart-watchlist-storage {
+  border-color: var(--lsar-warning-border, var(--lsar-border));
+  color: var(--lsar-warning-ink, var(--lsar-muted));
+}
+
+.chart-watchlist-storage {
+  margin: 0 10px 11px;
+  padding: 9px 10px;
+  border: 1px solid;
+  font: 8px/1.6 var(--app-font-mono);
+}
+
+.chart-watchlist-footer {
+  padding: 9px 12px 11px;
+  border-top: 1px solid var(--lsar-border);
+  color: var(--lsar-muted);
+  font: 8px/1.65 var(--app-font-mono);
+}
+
+@keyframes chart-watchlist-sheen {
+  to { transform: translateX(100%); }
+}
+
+.chart-watchlist button:focus-visible {
+  outline: 2px solid var(--lsar-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-watchlist-loading::after { animation: none; }
+  .chart-watchlist-add { transition: none; }
+}
+
+@media (max-width: 1080px) {
+  .super-chart-workspace-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chart-watchlist {
+    width: 100%;
+  }
+
+  .chart-watchlist-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
+  }
+}

@@ -25,6 +25,8 @@ idle/capacity rules still apply.
 Preserve both buying and selling even when their net CVD cancels. Separate Spot
 from Perpetual. Group executions into minute cells by side and 0.05% logarithmic
 underlying-price band, then combine those cells into the selected chart candle.
+The background recorder compacts base cells to five minutes, the smallest
+supported chart frame, preserving the same outputs for all supported timeframes.
 Price is underlying-quantity-weighted execution price, value is summed gross
 traded notional, and source counts are distinct contributing venues. Apply the
 minimum value to the combined bubble, not to individual fills before aggregation.
@@ -42,11 +44,12 @@ Only newly recorded executions have price-level information. Previously recorded
 CVD minute OHLC cannot reconstruct bubbles and is never used to invent them.
 Actual bubble recording/history starts and source status are shown.
 
-An in-memory buffer retains approximately two hours, capped to 12,000 minute/
-price-band/side cells per market collector. Older cells may be trimmed earlier
-under capacity pressure, with an explicit warning. Restart loses the bubble
-buffer; CVD's separate persisted minute history is unchanged. This is not promised
-weekly bubble history or historical archive backfill.
+Price-level history retains up to seven days, capped to 150,000 base-time/price-band/
+side cells per market collector. Older cells may be trimmed earlier under capacity
+pressure, with an explicit warning. These original price-level aggregates are now
+saved alongside CVD minute history and restored on restart. This requires the
+hosting environment to preserve the recording directory; it does not add an
+external historical archive backfill or recreate pre-recording trades.
 
 Inherited CVD feed scope, taker-side validation, deduplication and reorder/safety
 limitations remain in effect. Aggressive identifies **market-taking executions**,
@@ -56,3 +59,6 @@ a separate sequenced depth feed.
 API: `/api/indicators/aggressive-bubbles?asset=BTC&market=both&timeframe=1h&minValue=10000`.
 The overlay is a price-series primitive: it follows native pan/zoom, resizing,
 theme and scaling without recreating the chart or adding a new indicator pane.
+
+The Super Charts server watchlist pins up to five underlying coins for continuous
+Spot and Perpetual recording. See [Watchlist recording](chart-watchlist.md).

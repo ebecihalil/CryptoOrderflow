@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, RotateCw, X } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
+import { ChartWatchlist } from '@/components/chart-watchlist';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
@@ -59,6 +60,10 @@ export function SuperChartsPage() {
     setMarketDraft(value);
     const selected = contracts.find((contract) => contract.label === value);
     if (selected) setMarket(selected);
+  };
+  const selectWatchlistContract = (contract: MarketContract) => {
+    setMarket(contract);
+    setMarketDraft(contract.label);
   };
   const toggleStudy = (id: ChartStudyId) => setStudies((current) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
@@ -147,7 +152,12 @@ export function SuperChartsPage() {
             <button type="button" aria-label={`Remove ${ORDERFLOW_ITEMS.find((item) => item.id === id)?.label}`} onClick={() => toggleIndicator(id)}><X size={12} /></button></span>)}
           {!studies.length && !indicators.length && <span className="super-chart-no-studies">No studies selected</span>}
         </div>
-        <NativeChartWorkspace contract={market} studies={studies} indicators={indicators} />
+        <div className="super-chart-workspace-layout">
+          <div className="super-chart-workspace-main">
+            <NativeChartWorkspace contract={market} studies={studies} indicators={indicators} />
+          </div>
+          <ChartWatchlist currentContract={market} onSelectContract={selectWatchlistContract} />
+        </div>
       </main>
     </div>
   );

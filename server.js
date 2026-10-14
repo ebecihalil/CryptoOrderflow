@@ -4,6 +4,7 @@ import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
 import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
 import { fundingIndicatorService } from "./server/fundingIndicator.js";
 import { cvdIndicatorService } from "./server/cvdIndicator.js";
+import { chartWatchlistService } from "./server/chartWatchlist.js";
 import { marketContractService } from "./server/marketContracts.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,7 @@ import {
 } from "./server/lsarMarketData.js";
 
 const app = express();
+void chartWatchlistService.start();
 const port = Number(process.env.PORT || 10000);
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const staticDir = path.join(rootDir, "dist");
@@ -20,6 +22,25 @@ const timeframes = new Set(["5m", "15m", "30m", "1h", "4h", "24h"]);
 
 app.disable("x-powered-by");
 app.use(express.json());
+
+app.get("/api/chart/watchlist", async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(await chartWatchlistService.get());
+});
+const watchMutation = operation => async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) {
+      return res.status(403).json({ error: "Watchlist changes must come from this app." });
+    }
+    res.json(await operation(req));
+  } catch (error) {
+    res.status([400, 409, 503].includes(error.status) ? error.status : 503)
+      .json({ error: error.status ? error.message : "Watchlist could not be updated. Please retry." });
+  }
+};
+app.post("/api/chart/watchlist", watchMutation(req => chartWatchlistService.add(req.body)));
+app.delete("/api/chart/watchlist/:asset", watchMutation(req => chartWatchlistService.remove(req.params.asset)));
 
 app.get("/api/healthz", (_req, res) => {
   res.json({ status: "ok" });
@@ -150,6 +171,7 @@ async function shutdown() {
   httpServer.close();
   const deadline = setTimeout(() => process.exit(1), 10_000);
   deadline.unref();
+  await chartWatchlistService.close();
   await cvdIndicatorService.close();
   clearTimeout(deadline);
   process.exit(0);
