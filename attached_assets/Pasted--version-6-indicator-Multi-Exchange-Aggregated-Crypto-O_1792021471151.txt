@@ -1,0 +1,1557 @@
+//@version=6
+indicator("Multi-Exchange Aggregated Crypto Open Interest", format=format.volume, precision=0, dynamic_requests=true)
+
+// ---------- Coin / current chart info ----------
+_base    = str.upper(syminfo.basecurrency)
+detected = _base == "XBT" ? "BTC" : _base
+coin     = detected
+
+chartEx     = syminfo.prefix
+chartTicker = syminfo.tickerid
+
+endsWith(s, suf) =>
+    sl = str.length(s)
+    pl = str.length(suf)
+    sl >= pl and str.substring(s, sl - pl) == suf
+
+isUsdtChart = endsWith(chartTicker, "USDT.P") or endsWith(chartTicker, "USDT")
+
+// ---------- Inputs ----------
+showTotals  = input.bool(true, "Show Totals", group="Display")
+upCol       = input.color(#3b82f6, "Up color", group="Display")
+dnCol       = input.color(#ef4444, "Down color", group="Display")
+stateColors = input.bool(true, "Color OI candles by Market Driver", group="Display")
+
+// ---------- Market Driver source settings ----------
+flowMultInput = input.string(
+     "Auto",
+     "Meme Multiplier Override",
+     options=["Auto", "None", "1000", "10000", "100000", "1000000"],
+     group="Market Driver")
+
+useFlowBinance = input.bool(true, "Use Binance flow/liquidations", group="Market Driver")
+useFlowBybit   = input.bool(true, "Use Bybit flow/liquidations", group="Market Driver")
+useFlowOkx     = input.bool(true, "Use OKX flow/liquidations", group="Market Driver")
+
+flatBodyPct = input.float(
+     15.0,
+     "Flat candle body threshold (%)",
+     minval=0.0,
+     maxval=100.0,
+     group="Market Driver",
+     tooltip="A candle is considered flat when its body is no more than this percentage of its full high-low range.")
+
+flatActivityLength = input.int(
+     20,
+     "Low-activity average length",
+     minval=1,
+     group="Market Driver",
+     tooltip="A candle is also considered flat when its absolute change is small relative to this moving average.")
+
+flatActivityFactor = input.float(
+     3.0,
+     "Low-activity factor",
+     minval=1.0,
+     step=0.5,
+     group="Market Driver",
+     tooltip="Low activity means the current absolute change is this many times smaller than its moving average.")
+
+pinbarBodyPct = input.float(
+     10.0,
+     "Pinbar body threshold (%)",
+     minval=0.0,
+     maxval=100.0,
+     group="Market Driver",
+     tooltip="A pinbar must have a body no larger than this percentage of its full high-low range.")
+
+pinbarWickPct = input.float(
+     50.0,
+     "Pinbar dominant wick threshold (%)",
+     minval=0.0,
+     maxval=100.0,
+     group="Market Driver",
+     tooltip="The dominant wick must cover at least this percentage of the full candle range.")
+
+pinbarWickRatio = input.float(
+     2.0,
+     "Pinbar wick dominance ratio",
+     minval=1.0,
+     step=0.1,
+     group="Market Driver",
+     tooltip="The dominant wick must be at least this many times larger than the opposite wick.")
+
+// ---------- Last-candle long / short account-ratio confirmation ----------
+showLsrDriver = input.bool(
+     true,
+     "Use long/short account ratio in Market Driver",
+     group="Market Driver",
+     tooltip="Adds account-ratio direction to the second Market Driver line. The ratio is weighted by the existing Binance and Bybit OI values.")
+
+// ---------- Perpetual CVD internal defaults ----------
+const string cvdAnchorPeriod = "1D"
+const bool useCustomCvdIntrabar = false
+const string customCvdIntrabar = "1"
+const string perpetualQuote = "USDT"
+
+// ---------- Market Driver Colors ----------
+colLongBuild = input.color(
+     #3b82f6,
+     "Aggressive Longs Openings",
+     group="Market Driver Colors",
+     tooltip="Buyers are stepping in with force, aggressively buying up contracts and aggressively pushing the market higher. New money is rushing into long positions.")
+
+colShortBuild = input.color(
+     #f23645,
+     "Aggressive Shorts Openings",
+     group="Market Driver Colors",
+     tooltip="Sellers are taking control, aggressively hammering the market to open new short positions and forcing the price downward.")
+
+colLimBuyAbsorb = input.color(
+     #22c55e,
+     "Limit Buy Absorption (Open)",
+     group="Market Driver Colors",
+     tooltip="Sellers are trying hard to push the market down with heavy selling, but big institutional buyers have placed massive hidden buy orders underneath, causing the price to rise.")
+
+colLimSellAbsorb = input.color(
+     #f97316,
+     "Limit Sell Absorption (Open)",
+     group="Market Driver Colors",
+     tooltip="Buyers are aggressively trying to break prices upward, but heavy wall-like limit sell orders sit above them, absorbing buying and forcing the price to drop.")
+
+colShortExitLiq = input.color(
+     #facc15,
+     "Short Exits & Liquidations",
+     group="Market Driver Colors",
+     tooltip="Used for Short Exit, Short Liquidation, Short Exit while absorbed, and Short Liquidation while absorbed.")
+
+colLongExitLiq = input.color(
+     #a855f7,
+     "Long Exits & Liquidations",
+     group="Market Driver Colors",
+     tooltip="Used for Long Exit, Long Liquidation, Long Exit while absorbed, and Long Liquidation while absorbed.")
+
+colNeutral = input.color(
+     #737373,
+     "Neutral / Choppy",
+     group="Market Driver Colors",
+     tooltip="Conditions do not match any defined directional expansion, liquidation, or absorption cluster.")
+
+// ---------- Helper functions ----------
+nz0(x) =>
+    na(x) ? 0.0 : x
+
+f_pinbarFlags(
+     float candleOpen,
+     float candleHigh,
+     float candleLow,
+     float candleClose,
+     float bodyThreshold,
+     float wickThreshold,
+     float wickRatio) =>
+
+    float candleRange = candleHigh - candleLow
+    float candleBody = math.abs(candleClose - candleOpen)
+    float upperWick = candleHigh - math.max(candleOpen, candleClose)
+    float lowerWick = math.min(candleOpen, candleClose) - candleLow
+    float bodyPct =
+         candleRange > 0 ?
+         candleBody / candleRange * 100 :
+         100
+
+    bool smallBody =
+         candleRange > 0 and
+         bodyPct <= bodyThreshold
+
+    bool bullishPinbar =
+         smallBody and
+         lowerWick / candleRange * 100 >= wickThreshold and
+         lowerWick >= upperWick * wickRatio
+
+    bool bearishPinbar =
+         smallBody and
+         upperWick / candleRange * 100 >= wickThreshold and
+         upperWick >= lowerWick * wickRatio
+
+    [bullishPinbar or bearishPinbar, bullishPinbar, bearishPinbar]
+
+fhlc(sym) =>
+    [h, l, c] = request.security(
+         sym,
+         timeframe.period,
+         [high, low, close],
+         ignore_invalid_symbol=true)
+
+    [nz0(h), nz0(l), nz0(c)]
+
+linHLC(sym) =>
+    fhlc(sym + "_OI")
+
+okxLinHLC(sym) =>
+    [oiHigh, oiLow, oiClose] = fhlc(sym + "_OI")
+    [priceHigh, priceLow, priceClose] = fhlc(sym)
+
+    [priceHigh > 0 ? oiHigh / priceHigh : 0.0,
+         priceLow > 0 ? oiLow / priceLow : 0.0,
+         priceClose > 0 ? oiClose / priceClose : 0.0]
+
+linVolD(sym) =>
+    [v, vMa] = request.security(
+         sym,
+         "D",
+         [volume, ta.sma(volume, 20)],
+         ignore_invalid_symbol=true,
+         lookahead=barmerge.lookahead_on)
+
+    [nz0(v), nz0(vMa)]
+
+usdVolD(sym) =>
+    [v, vMa] = request.security(
+         sym,
+         "D",
+         [
+             close > 0 ? volume / close : 0.0,
+             ta.sma(close > 0 ? volume / close : 0.0, 20)
+         ],
+         ignore_invalid_symbol=true,
+         lookahead=barmerge.lookahead_on)
+
+    [nz0(v), nz0(vMa)]
+
+exSym(prefix, isMatch, builtSym) =>
+    chartEx == prefix and isMatch ? str.replace(chartTicker, "_OI", "") : builtSym
+
+// ==============================================================================
+// === SYMBOL RESOLUTION
+// ==============================================================================
+
+bin_s = exSym("BINANCE", isUsdtChart, "BINANCE:" + coin + "USDT.P")
+byb_s = exSym("BYBIT", isUsdtChart, "BYBIT:" + coin + "USDT.P")
+okx_s = exSym("OKX", isUsdtChart, "OKX:" + coin + "USDT.P")
+
+// ==============================================================================
+// === OPEN INTEREST DATA
+// ==============================================================================
+
+// Binance OI
+[bin_h, bin_l, bin_c] = linHLC(bin_s)
+
+// Bybit OI
+[byb_h, byb_l, byb_c] = linHLC(byb_s)
+
+// OKX OI
+[okx_h, okx_l, okx_c] = okxLinHLC(okx_s)
+
+// ============================================================================== 
+// === ACCOUNT-SIDE CONFIRMATION FOR MARKET DRIVER
+// ==============================================================================
+
+// The account-ratio feed is available for Binance and Bybit in the supplied
+// source indicator. The existing OI values above are reused as weights, so
+// this does not create a second OI calculation or change the OI candle logic.
+string lsrBase = str.upper(coin)
+if str.startswith(lsrBase, "1000000")
+    lsrBase := str.substring(lsrBase, 7)
+else if str.startswith(lsrBase, "100000")
+    lsrBase := str.substring(lsrBase, 6)
+else if str.startswith(lsrBase, "10000")
+    lsrBase := str.substring(lsrBase, 5)
+else if str.startswith(lsrBase, "1000")
+    lsrBase := str.substring(lsrBase, 4)
+
+lsrV0(baseName, exchangeName) =>
+    request.security(
+         exchangeName + ":" + baseName + "USDT.P_LSR",
+         timeframe.period,
+         close,
+         ignore_invalid_symbol=true)
+
+firstValid(v0, v1, v2, v3) =>
+    not na(v0) ? v0 : not na(v1) ? v1 : not na(v2) ? v2 : v3
+
+aggregatedExchangeLsr(exchangeName, baseName) =>
+    float v0 = lsrV0(baseName, exchangeName)
+    float v1 = lsrV0("1000" + baseName, exchangeName)
+    float v2 = lsrV0("10000" + baseName, exchangeName)
+    float v3 = lsrV0("100000" + baseName, exchangeName)
+    firstValid(v0, v1, v2, v3)
+
+binLSR = aggregatedExchangeLsr("BINANCE", lsrBase)
+bybLSR = aggregatedExchangeLsr("BYBIT", lsrBase)
+
+binLsrWeight = not na(binLSR) ? (nz0(bin_c) > 0 ? bin_c : 1.0) : 0.0
+bybLsrWeight = not na(bybLSR) ? (nz0(byb_c) > 0 ? byb_c : 1.0) : 0.0
+lsrWeightTotal = binLsrWeight + bybLsrWeight
+
+aggLSR =
+     lsrWeightTotal > 0 ?
+     ((nz0(binLSR) * binLsrWeight) + (nz0(bybLSR) * bybLsrWeight)) /
+     lsrWeightTotal :
+     na
+
+lsrHasData = not na(aggLSR)
+
+// Only the latest completed chart candle is used. A flat ratio is neutral.
+lsrRising =
+     showLsrDriver and
+     lsrHasData and
+     not na(aggLSR[1]) and
+     aggLSR > aggLSR[1]
+
+lsrFalling =
+     showLsrDriver and
+     lsrHasData and
+     not na(aggLSR[1]) and
+     aggLSR < aggLSR[1]
+
+// ==============================================================================
+// === VOLUME DATA
+// ==============================================================================
+
+// Binance volume
+[bin_v, bin_vMa] = linVolD(bin_s)
+
+// Bybit volume
+[byb_v, byb_vMa] = linVolD(byb_s)
+
+// OKX volume
+[okx_v, okx_vMa] = usdVolD(okx_s)
+
+// ==============================================================================
+// === AGGREGATION
+// ==============================================================================
+
+totalH = bin_h + byb_h + okx_h
+totalL = bin_l + byb_l + okx_l
+totalC = bin_c + byb_c + okx_c
+
+totalVol   = bin_v + byb_v + okx_v
+totalVolMA = bin_vMa + byb_vMa + okx_vMa
+
+oiDollar = totalC * close
+
+// ==============================================================================
+// === MARKET FLOW / LIQUIDATION ENGINE
+// ==============================================================================
+
+var string flow_raw_base = syminfo.basecurrency
+var float flow_chart_mult = 1.0
+
+if str.startswith(syminfo.basecurrency, "1000000")
+    flow_raw_base := str.substring(syminfo.basecurrency, 7)
+    flow_chart_mult := 1000000.0
+else if str.startswith(syminfo.basecurrency, "100000")
+    flow_raw_base := str.substring(syminfo.basecurrency, 6)
+    flow_chart_mult := 100000.0
+else if str.startswith(syminfo.basecurrency, "10000")
+    flow_raw_base := str.substring(syminfo.basecurrency, 5)
+    flow_chart_mult := 10000.0
+else if str.startswith(syminfo.basecurrency, "1000")
+    flow_raw_base := str.substring(syminfo.basecurrency, 4)
+    flow_chart_mult := 1000.0
+
+var string flow_prefix_base = flow_raw_base
+var float flow_target_prefix_mult = 1.0
+
+if flowMultInput == "Auto"
+    if flow_chart_mult > 1.0
+        flow_prefix_base := syminfo.basecurrency
+        flow_target_prefix_mult := flow_chart_mult
+    else
+        if flow_raw_base == "SHIB" or flow_raw_base == "LUNC" or flow_raw_base == "XEC" or flow_raw_base == "FLOKI" or flow_raw_base == "BONK"
+            flow_prefix_base := "1000" + flow_raw_base
+            flow_target_prefix_mult := 1000.0
+        else if flow_raw_base == "PEPE" or flow_raw_base == "SATS" or flow_raw_base == "RATS"
+            flow_prefix_base := "1000000" + flow_raw_base
+            flow_target_prefix_mult := 1000000.0
+
+else if flowMultInput == "1000"
+    flow_prefix_base := "1000" + flow_raw_base
+    flow_target_prefix_mult := 1000.0
+
+else if flowMultInput == "10000"
+    flow_prefix_base := "10000" + flow_raw_base
+    flow_target_prefix_mult := 10000.0
+
+else if flowMultInput == "100000"
+    flow_prefix_base := "100000" + flow_raw_base
+    flow_target_prefix_mult := 100000.0
+
+else if flowMultInput == "1000000"
+    flow_prefix_base := "1000000" + flow_raw_base
+    flow_target_prefix_mult := 1000000.0
+
+liqUSDT(string exchangeName, string baseName, float multiplier) =>
+    buyLiquidations = nz0(request.security(
+         exchangeName + ":" + baseName + "USDT.P_LQBUY",
+         timeframe.period,
+         volume,
+         ignore_invalid_symbol=true,
+         gaps=barmerge.gaps_on)) * multiplier
+
+    sellLiquidations = nz0(request.security(
+         exchangeName + ":" + baseName + "USDT.P_LQSELL",
+         timeframe.period,
+         volume,
+         ignore_invalid_symbol=true,
+         gaps=barmerge.gaps_on)) * multiplier
+
+    [buyLiquidations, sellLiquidations]
+
+// Binance liquidation data
+[flowBinB, flowBinS] = if useFlowBinance
+    liqUSDT("BINANCE", flow_prefix_base, flow_target_prefix_mult)
+else
+    [0.0, 0.0]
+
+// Bybit liquidation data
+[flowBybB, flowBybS] = if useFlowBybit
+    liqUSDT("BYBIT", flow_prefix_base, flow_target_prefix_mult)
+else
+    [0.0, 0.0]
+
+// OKX liquidation data
+[flowOkxB, flowOkxS] = if useFlowOkx
+    liqUSDT("OKX", flow_raw_base, 1.0)
+else
+    [0.0, 0.0]
+
+aggShortLiq = (flowBinB + flowBybB + flowOkxB) / flow_chart_mult
+aggLongLiq  = (flowBinS + flowBybS + flowOkxS) / flow_chart_mult
+
+// ==============================================================================
+// === AGGREGATED PERPETUAL CVD ENGINE
+// ==============================================================================
+
+f_normalizeCvdBase(string source) =>
+    string result = source
+
+    if na(result) or str.length(result) == 0
+        result := syminfo.ticker
+
+    if str.startswith(result, "100000")
+        result := str.substring(result, 6, str.length(result))
+    else if str.startswith(result, "10000")
+        result := str.substring(result, 5, str.length(result))
+    else if str.startswith(result, "1000")
+        result := str.substring(result, 4, str.length(result))
+    else if str.startswith(result, "100")
+        result := str.substring(result, 3, str.length(result))
+    else if str.startswith(result, "10")
+        result := str.substring(result, 2, str.length(result))
+
+    if str.endswith(result, "100000")
+        result := str.substring(result, 0, str.length(result) - 6)
+    else if str.endswith(result, "10000")
+        result := str.substring(result, 0, str.length(result) - 5)
+    else if str.endswith(result, "1000")
+        result := str.substring(result, 0, str.length(result) - 4)
+    else if str.endswith(result, "100")
+        result := str.substring(result, 0, str.length(result) - 3)
+    else if str.endswith(result, "10")
+        result := str.substring(result, 0, str.length(result) - 2)
+
+    result
+
+cvdChartBase = f_normalizeCvdBase(syminfo.basecurrency)
+
+f_cvdPerpetualSymbol(
+     string exchangeName,
+     string baseName,
+     string quoteName) =>
+    exchangeName + ":" + baseName + quoteName + ".P"
+
+cvdBinanceSymbol = f_cvdPerpetualSymbol("BINANCE", cvdChartBase, perpetualQuote)
+cvdBybitSymbol   = f_cvdPerpetualSymbol("BYBIT", cvdChartBase, perpetualQuote)
+cvdOkxSymbol     = f_cvdPerpetualSymbol("OKX", cvdChartBase, perpetualQuote)
+cvdGateioSymbol  = f_cvdPerpetualSymbol("GATEIO", cvdChartBase, perpetualQuote)
+cvdBitmexBase    = cvdChartBase == "BTC" ? "XBT" : cvdChartBase
+cvdBitmexSymbol  = "BITMEX:" + cvdBitmexBase + "USD.P"
+cvdBitgetSymbol  = f_cvdPerpetualSymbol("BITGET", cvdChartBase, perpetualQuote)
+
+cvdAutomaticIntrabar =
+     timeframe.isseconds ? "1S" :
+     timeframe.isintraday ? "1" :
+     timeframe.isdaily ? "5" :
+     "60"
+
+cvdIntrabarTimeframe =
+     useCustomCvdIntrabar ? customCvdIntrabar : cvdAutomaticIntrabar
+
+f_requestCvd(string symbol) =>
+    request.security_lower_tf(
+         symbol,
+         cvdIntrabarTimeframe,
+         [open, close, volume, close[1]],
+         ignore_invalid_symbol=true,
+         ignore_invalid_timeframe=true)
+
+// Binance CVD
+[cvdBinanceOpens,
+     cvdBinanceCloses,
+     cvdBinanceVolumes,
+     cvdBinancePriorCloses] = f_requestCvd(cvdBinanceSymbol)
+
+// Bybit CVD
+[cvdBybitOpens,
+     cvdBybitCloses,
+     cvdBybitVolumes,
+     cvdBybitPriorCloses] = f_requestCvd(cvdBybitSymbol)
+
+// OKX CVD
+[ cvdOkxOpens,
+     cvdOkxCloses,
+     cvdOkxVolumes,
+     cvdOkxPriorCloses] = f_requestCvd(cvdOkxSymbol)
+
+// Gate.io CVD
+[cvdGateioOpens,
+      cvdGateioCloses,
+      cvdGateioVolumes,
+      cvdGateioPriorCloses] = f_requestCvd(cvdGateioSymbol)
+
+// BitMEX CVD
+[cvdBitmexOpens,
+      cvdBitmexCloses,
+      cvdBitmexVolumes,
+      cvdBitmexPriorCloses] = f_requestCvd(cvdBitmexSymbol)
+
+// Bitget CVD
+[cvdBitgetOpens,
+      cvdBitgetCloses,
+      cvdBitgetVolumes,
+      cvdBitgetPriorCloses] = f_requestCvd(cvdBitgetSymbol)
+
+// ---------- Process CVD ----------
+f_processCvd(
+     array<float> opens,
+     array<float> closes,
+     array<float> volumes,
+     array<float> priorCloses,
+     int previousDirection) =>
+
+    float running = 0.0
+    float aggressiveBuyVolume = 0.0
+    float aggressiveSellVolume = 0.0
+    float cvdRunHigh = 0.0
+    float cvdRunLow = 0.0
+    int count = 0
+    int direction = previousDirection
+
+    if not na(closes)
+        count := array.size(closes)
+
+        if count > 0
+            for i = 0 to count - 1
+                float intrabarOpen = array.get(opens, i)
+                float intrabarClose = array.get(closes, i)
+                float intrabarVolume = nz(array.get(volumes, i), 0.0)
+                float previousClose = na
+
+                if i == 0
+                    previousClose := array.get(priorCloses, i)
+                else
+                    previousClose := array.get(closes, i - 1)
+
+                // Candle direction first, then close-to-close for flat candles.
+                if intrabarClose > intrabarOpen
+                    direction := 1
+                else if intrabarClose < intrabarOpen
+                    direction := -1
+                else if not na(previousClose) and intrabarClose > previousClose
+                    direction := 1
+                else if not na(previousClose) and intrabarClose < previousClose
+                    direction := -1
+
+                running += direction * intrabarVolume
+
+                if direction > 0
+                    aggressiveBuyVolume += intrabarVolume
+                else if direction < 0
+                    aggressiveSellVolume += intrabarVolume
+
+                cvdRunHigh := math.max(cvdRunHigh, running)
+                cvdRunLow := math.min(cvdRunLow, running)
+
+    [running, aggressiveBuyVolume, aggressiveSellVolume, cvdRunHigh, cvdRunLow, count, direction]
+
+// ---------- Persistent CVD directions ----------
+var int cvdBinanceDirection = 0
+var int cvdBybitDirection = 0
+var int cvdOkxDirection = 0
+var int cvdGateioDirection = 0
+var int cvdBitmexDirection = 0
+var int cvdBitgetDirection = 0
+
+// ---------- Calculate CVD ----------
+[cvdBinanceFlow,
+      cvdBinanceBuyVolume,
+      cvdBinanceSellVolume,
+     cvdBinanceHigh,
+     cvdBinanceLow,
+     cvdBinanceCount,
+     nextCvdBinanceDirection] = f_processCvd(
+     cvdBinanceOpens,
+     cvdBinanceCloses,
+     cvdBinanceVolumes,
+     cvdBinancePriorCloses,
+     cvdBinanceDirection)
+
+[cvdBybitFlow,
+      cvdBybitBuyVolume,
+      cvdBybitSellVolume,
+     cvdBybitHigh,
+     cvdBybitLow,
+     cvdBybitCount,
+     nextCvdBybitDirection] = f_processCvd(
+     cvdBybitOpens,
+     cvdBybitCloses,
+     cvdBybitVolumes,
+     cvdBybitPriorCloses,
+     cvdBybitDirection)
+
+[cvdOkxFlow,
+      cvdOkxBuyVolume,
+      cvdOkxSellVolume,
+     cvdOkxHigh,
+     cvdOkxLow,
+     cvdOkxCount,
+     nextCvdOkxDirection] = f_processCvd(
+     cvdOkxOpens,
+     cvdOkxCloses,
+     cvdOkxVolumes,
+     cvdOkxPriorCloses,
+     cvdOkxDirection)
+
+[cvdGateioFlow,
+      cvdGateioBuyVolume,
+      cvdGateioSellVolume,
+      cvdGateioHigh,
+      cvdGateioLow,
+      cvdGateioCount,
+      nextCvdGateioDirection] = f_processCvd(
+      cvdGateioOpens,
+      cvdGateioCloses,
+      cvdGateioVolumes,
+      cvdGateioPriorCloses,
+      cvdGateioDirection)
+
+[cvdBitmexFlow,
+      cvdBitmexBuyVolume,
+      cvdBitmexSellVolume,
+      cvdBitmexHigh,
+      cvdBitmexLow,
+      cvdBitmexCount,
+      nextCvdBitmexDirection] = f_processCvd(
+      cvdBitmexOpens,
+      cvdBitmexCloses,
+      cvdBitmexVolumes,
+      cvdBitmexPriorCloses,
+      cvdBitmexDirection)
+
+[cvdBitgetFlow,
+      cvdBitgetBuyVolume,
+      cvdBitgetSellVolume,
+      cvdBitgetHigh,
+      cvdBitgetLow,
+      cvdBitgetCount,
+      nextCvdBitgetDirection] = f_processCvd(
+      cvdBitgetOpens,
+      cvdBitgetCloses,
+      cvdBitgetVolumes,
+      cvdBitgetPriorCloses,
+      cvdBitgetDirection)
+
+// ---------- Update persistent directions ----------
+cvdBinanceDirection := nextCvdBinanceDirection
+cvdBybitDirection := nextCvdBybitDirection
+cvdOkxDirection := nextCvdOkxDirection
+cvdGateioDirection := nextCvdGateioDirection
+cvdBitmexDirection := nextCvdBitmexDirection
+cvdBitgetDirection := nextCvdBitgetDirection
+
+// ---------- Aggregate CVD ----------
+float aggregateCvdFlow =
+     cvdBinanceFlow +
+     cvdBybitFlow +
+     cvdOkxFlow +
+     cvdGateioFlow +
+     cvdBitmexFlow +
+     cvdBitgetFlow
+
+float aggregateCvdBuyVolume =
+     cvdBinanceBuyVolume +
+     cvdBybitBuyVolume +
+     cvdOkxBuyVolume +
+     cvdGateioBuyVolume +
+     cvdBitmexBuyVolume +
+     cvdBitgetBuyVolume
+
+float aggregateCvdSellVolume =
+     cvdBinanceSellVolume +
+     cvdBybitSellVolume +
+     cvdOkxSellVolume +
+     cvdGateioSellVolume +
+     cvdBitmexSellVolume +
+     cvdBitgetSellVolume
+
+float aggregateCvdAggressiveVolume =
+     aggregateCvdBuyVolume +
+     aggregateCvdSellVolume
+
+float buyerAggressionPct =
+     aggregateCvdAggressiveVolume > 0 ?
+     aggregateCvdBuyVolume / aggregateCvdAggressiveVolume * 100 :
+     na
+
+float sellerAggressionPct =
+     aggregateCvdAggressiveVolume > 0 ?
+     aggregateCvdSellVolume / aggregateCvdAggressiveVolume * 100 :
+     na
+
+float aggregateCvdHigh =
+     cvdBinanceHigh +
+     cvdBybitHigh +
+     cvdOkxHigh +
+     cvdGateioHigh +
+     cvdBitmexHigh +
+     cvdBitgetHigh
+
+float aggregateCvdLow =
+     cvdBinanceLow +
+     cvdBybitLow +
+     cvdOkxLow +
+     cvdGateioLow +
+     cvdBitmexLow +
+     cvdBitgetLow
+
+int aggregateCvdIntrabars =
+     cvdBinanceCount +
+     cvdBybitCount +
+     cvdOkxCount +
+     cvdGateioCount +
+     cvdBitmexCount +
+     cvdBitgetCount
+
+bool hasCvdIntrabars = aggregateCvdIntrabars > 0
+
+// ---------- Build anchored CVD candle ----------
+var float lastCvdClose = 0.0
+var float cvdOpen = na
+var float cvdHigh = na
+var float cvdLow = na
+var float cvdClose = na
+
+bool startsNewCvdAnchor =
+     barstate.isfirst or timeframe.change(cvdAnchorPeriod)
+
+if hasCvdIntrabars
+    float cvdPeriodOpen =
+         startsNewCvdAnchor ? 0.0 : lastCvdClose
+
+    cvdOpen := cvdPeriodOpen
+    cvdHigh := cvdPeriodOpen + aggregateCvdHigh
+    cvdLow := cvdPeriodOpen + aggregateCvdLow
+    cvdClose := cvdPeriodOpen + aggregateCvdFlow
+    lastCvdClose := cvdClose
+else
+    cvdOpen := na
+    cvdHigh := na
+    cvdLow := na
+    cvdClose := na
+
+// Use the current CVD candle's delta for market-driver classification.
+vol_delta = hasCvdIntrabars ? aggregateCvdFlow : na
+
+// ==============================================================================
+// === CORE STATE DEFINITIONS
+// ==============================================================================
+
+totalOI_prev = nz(totalC[1], totalC)
+oi_delta = totalC - totalOI_prev
+
+// ---------- Candle-shape measurements ----------
+// OI uses the same candle that is plotted below. The body is compared with the
+// complete high-low range so a small body with a large wick is treated as flat.
+oiOpen = nz(totalC[1], totalC)
+oiClose = totalC
+oiHigh = math.max(oiOpen, oiClose, totalH)
+oiLow = math.min(oiOpen, oiClose, totalL)
+
+oiRange = oiHigh - oiLow
+oiBody = math.abs(oiClose - oiOpen)
+oiBodyPct =
+     oiRange > 0 ?
+     oiBody / oiRange * 100 :
+     0
+
+// Low-activity checks compare absolute changes, so positive and negative
+// candles do not cancel each other in the moving average.
+oiActivity = math.abs(oi_delta)
+oiActivityAvg = ta.sma(oiActivity, flatActivityLength)
+oi_is_low_activity =
+     not na(oiActivityAvg) and
+     oiActivityAvg > 0 and
+     oiActivity <= oiActivityAvg / flatActivityFactor
+
+oi_is_flat =
+     oiRange == 0 or
+     oiBodyPct <= flatBodyPct or
+     oi_is_low_activity
+
+// Pinbar detection is intentionally stricter than flat detection. A pinbar
+// is still flat by the 25% rule, but it additionally needs one dominant wick.
+[oi_is_pinbar, oi_is_bullish_pinbar, oi_is_bearish_pinbar] =
+     f_pinbarFlags(
+         oiOpen,
+         oiHigh,
+         oiLow,
+         oiClose,
+         pinbarBodyPct,
+         pinbarWickPct,
+         pinbarWickRatio)
+
+// CVD flatness uses the current anchored CVD candle's body and range.
+cvdRange =
+     not na(cvdHigh) and not na(cvdLow) ?
+     cvdHigh - cvdLow :
+     na
+
+cvdBody =
+     not na(cvdClose) and not na(cvdOpen) ?
+     math.abs(cvdClose - cvdOpen) :
+     na
+
+cvdBodyPct =
+     not na(cvdRange) and cvdRange > 0 ?
+     cvdBody / cvdRange * 100 :
+     0
+
+cvdActivity = not na(vol_delta) ? math.abs(vol_delta) : na
+cvdActivityAvg = ta.sma(cvdActivity, flatActivityLength)
+cvd_is_low_activity =
+     not na(cvdActivity) and
+     not na(cvdActivityAvg) and
+     cvdActivityAvg > 0 and
+     cvdActivity <= cvdActivityAvg / flatActivityFactor
+
+cvd_is_flat =
+     hasCvdIntrabars and
+     (cvdRange == 0 or cvdBodyPct <= flatBodyPct or cvd_is_low_activity)
+
+[cvd_is_pinbar_raw, cvd_is_bullish_pinbar, cvd_is_bearish_pinbar] =
+     f_pinbarFlags(
+         cvdOpen,
+         cvdHigh,
+         cvdLow,
+         cvdClose,
+         pinbarBodyPct,
+         pinbarWickPct,
+         pinbarWickRatio)
+
+cvd_is_pinbar =
+     hasCvdIntrabars and
+     cvd_is_pinbar_raw
+
+// Price flatness follows the same body-to-range rule.
+priceRange = high - low
+priceBody = math.abs(close - open)
+priceBodyPct =
+     priceRange > 0 ?
+     priceBody / priceRange * 100 :
+     0
+
+priceActivityAvg = ta.sma(priceBody, flatActivityLength)
+price_is_low_activity =
+     not na(priceActivityAvg) and
+     priceActivityAvg > 0 and
+     priceBody <= priceActivityAvg / flatActivityFactor
+
+price_is_flat =
+     priceRange == 0 or
+     priceBodyPct <= flatBodyPct or
+     price_is_low_activity
+
+[price_is_pinbar, price_is_bullish_pinbar, price_is_bearish_pinbar] =
+     f_pinbarFlags(
+         open,
+         high,
+         low,
+         close,
+         pinbarBodyPct,
+         pinbarWickPct,
+         pinbarWickRatio)
+
+// A flat price candle must not be allowed to fall into the bullish branch just
+// because close equals open. It has its own absorption/rotation matrix below.
+price_up = not price_is_flat and close > open
+price_dn = not price_is_flat and close < open
+
+cvd_up = not na(vol_delta) and vol_delta > 0
+cvd_dn = not na(vol_delta) and vol_delta < 0
+
+// Directional states used only by the new flat-OI matrix. The legacy states
+// above remain unchanged so the existing color behavior is preserved.
+flat_price_up = not price_is_flat and close > open
+flat_price_dn = not price_is_flat and close < open
+
+flat_cvd_up = cvd_up and not cvd_is_flat
+flat_cvd_dn = cvd_dn and not cvd_is_flat
+
+// OI directions used when CVD is flat. A flat OI candle is handled by the
+// dedicated flat-OI matrix below instead of being treated as rising/falling.
+flat_oi_up = not oi_is_flat and oi_delta > 0
+flat_oi_dn = not oi_is_flat and oi_delta < 0
+
+// Explicit price-flat matrix. For example, rising OI + rising CVD + flat price
+// means aggressive buying is being absorbed by sell-side liquidity.
+priceFlatVariationName =
+     not oi_is_flat and not cvd_is_flat and oi_delta > 0 and cvd_up ?
+         "Limit Sell Absorption" :
+     not oi_is_flat and not cvd_is_flat and oi_delta > 0 and cvd_dn ?
+         "Limit Buy Absorption" :
+     not oi_is_flat and not cvd_is_flat and oi_delta < 0 and cvd_up ?
+          "Short Exit while absorbed" :
+     not oi_is_flat and not cvd_is_flat and oi_delta < 0 and cvd_dn ?
+          "Long Exit while absorbed" :
+     "Price Flat / Mixed Rotation"
+
+isPriceFlatVariation =
+     price_is_flat and
+     not oi_is_flat and
+     not cvd_is_flat and
+     (oi_delta != 0) and
+     (cvd_up or cvd_dn)
+
+hasLongLiq =
+     aggLongLiq > ta.sma(aggLongLiq, 20) * 0.2 and
+     aggLongLiq > 0
+
+hasShortLiq =
+     aggShortLiq > ta.sma(aggShortLiq, 20) * 0.2 and
+     aggShortLiq > 0
+
+// ---------- Group 1: OI Increases ----------
+isLongBuild = oi_delta > 0 and cvd_up and price_up
+
+isShortBuild = oi_delta > 0 and cvd_dn and price_dn
+
+isLimBuyAbsorb = oi_delta > 0 and cvd_dn and price_up
+
+isLimSellAbsorb = oi_delta > 0 and cvd_up and price_dn
+
+// ---------- Group 2: OI Decreases ----------
+isShortLiq =
+     oi_delta < 0 and
+     cvd_up and
+     price_up and
+     hasShortLiq
+
+isShortCover =
+     oi_delta < 0 and
+     cvd_up and
+     price_up and
+     not hasShortLiq
+
+isLongLiq =
+     oi_delta < 0 and
+     cvd_dn and
+     price_dn and
+     hasLongLiq
+
+isLongCover =
+     oi_delta < 0 and
+     cvd_dn and
+     price_dn and
+     not hasLongLiq
+
+// ---------- Group 3: Passive exits / absorption ----------
+isPasvShortCover =
+     oi_delta < 0 and
+     cvd_dn and
+     price_up and
+     not hasLongLiq
+
+isLongLiqAbsorb =
+     oi_delta < 0 and
+     cvd_dn and
+     price_up and
+     hasLongLiq
+
+isPasvLongCover =
+     oi_delta < 0 and
+     cvd_up and
+     price_dn and
+     not hasShortLiq
+
+isShortLiqAbsorb =
+     oi_delta < 0 and
+     cvd_up and
+     price_dn and
+     hasShortLiq
+
+// ---------- Flat OI variations ----------
+// Flat OI means position turnover is occurring without a meaningful net
+// increase or decrease in open interest. Wick-heavy and small-body OI candles
+// use this same flat-OI classification.
+flatOiVariationName =
+     flat_cvd_up and flat_price_up ? "Aggressive Long Rotation" :
+     flat_cvd_dn and flat_price_dn ? "Aggressive Short Rotation" :
+     flat_cvd_dn and flat_price_up ? "Long Limit Absorption" :
+     flat_cvd_up and flat_price_dn ? "Sell Limit Absorption" :
+     flat_cvd_up and price_is_flat ? "Sell Limit Absorption" :
+     flat_cvd_dn and price_is_flat ? "Long Limit Absorption" :
+     "Mixed Position Rotation"
+
+// These names explicitly identify both flat conditions.
+flatOiAndCvdFlatName =
+     flat_price_up ? "Thin Sell Limit Wall" :
+     flat_price_dn ? "Thin Buy Limit Wall" :
+     "Balanced Position Rotation"
+
+// CVD-flat variations when OI itself is not flat.
+flatCvdVariationName =
+     flat_oi_up and flat_price_up ? "Thick Buy Limit Wall" :
+     flat_oi_up and flat_price_dn ? "Thick Sell Limit Wall" :
+     flat_oi_up and price_is_flat ? "OI Expansion" :
+     flat_oi_dn and flat_price_up ? "Thin Sell Limit Wall" :
+     flat_oi_dn and flat_price_dn ? "Thin Buy Limit Wall" :
+     flat_oi_dn and price_is_flat ? "OI Reduction" :
+     "CVD Flat / Mixed Position Rotation"
+
+isFlatOiVariation =
+     oi_is_flat and hasCvdIntrabars
+
+isFlatOiAndCvdFlat =
+     isFlatOiVariation and cvd_is_flat
+
+isFlatCvdVariation =
+     cvd_is_flat and not oi_is_flat
+
+// ==============================================================================
+// === MARKET STATE COLORS
+// ==============================================================================
+
+marketStateColor =
+     isLongBuild      ? colLongBuild :
+     isShortBuild     ? colShortBuild :
+     isLimBuyAbsorb   ? colLimBuyAbsorb :
+     isLimSellAbsorb  ? colLimSellAbsorb :
+     isPriceFlatVariation and oi_delta > 0 and cvd_up ? colLimSellAbsorb :
+     isPriceFlatVariation and oi_delta > 0 and cvd_dn ? colLimBuyAbsorb :
+     isPriceFlatVariation and oi_delta < 0 and cvd_up and hasShortLiq ? colShortExitLiq :
+     isPriceFlatVariation and oi_delta < 0 and cvd_up ? colShortExitLiq :
+     isPriceFlatVariation and oi_delta < 0 and cvd_dn and hasLongLiq ? colLongExitLiq :
+     isPriceFlatVariation and oi_delta < 0 and cvd_dn ? colLongExitLiq :
+     isShortLiq       ? colShortExitLiq :
+     isShortCover     ? colShortExitLiq :
+     isLongLiq        ? colLongExitLiq :
+     isLongCover      ? colLongExitLiq :
+     isPasvShortCover ? colLongExitLiq :
+     isLongLiqAbsorb  ? colLongExitLiq :
+     isPasvLongCover  ? colShortExitLiq :
+     isShortLiqAbsorb ? colShortExitLiq :
+     colNeutral
+
+// ==============================================================================
+// === MARKET STATE LABEL
+// ==============================================================================
+
+// The L/S interpretation is deliberately separated from the base state. The
+// first table line is the OI/CVD/price driver and the second line is the
+// latest-candle L/S interpretation.
+f_lsrComment(bool rising, bool falling, string risingText, string fallingText) =>
+     rising ? risingText :
+     falling ? fallingText :
+     ""
+
+lsrMarketDriverNote =
+     not showLsrDriver or not lsrHasData or (not lsrRising and not lsrFalling) ? "" :
+     isFlatOiAndCvdFlat ?
+         flat_price_up ?
+              f_lsrComment(lsrRising, lsrFalling, "Retail Long Accumulation", "Whale Long Accumulation") :
+         flat_price_dn ?
+              f_lsrComment(lsrRising, lsrFalling, "Whale Short Accumulation", "Retail Short Accumulation") :
+              f_lsrComment(lsrRising, lsrFalling, "Retail replaces Whales", "Whale Replaces Retail") :
+     isFlatOiVariation ?
+         flat_cvd_up and flat_price_up ?
+              f_lsrComment(lsrRising, lsrFalling, "Whale Dumps(Distribution)", "Whale replace Retail(Accumulation)") :
+         flat_cvd_dn and flat_price_dn ?
+              f_lsrComment(lsrRising, lsrFalling, "Whale replace Retail(Accumulation)", "Whale Dumps(Distribution)") :
+         flat_cvd_dn and flat_price_up ?
+              f_lsrComment(lsrRising, lsrFalling, "Short Retail is Out", "Long Whale Accumulation") :
+         flat_cvd_up and flat_price_dn ?
+              f_lsrComment(lsrRising, lsrFalling, "Short Whale Accumulation", "Long Retail is Out") :
+         flat_cvd_up and price_is_flat ?
+              f_lsrComment(lsrRising, lsrFalling, "Short Whale Accumulation", "Long Retail is Out") :
+         flat_cvd_dn and price_is_flat ?
+              f_lsrComment(lsrRising, lsrFalling, "Short Retail is Out", "Long Whale Accumulation") :
+             f_lsrComment(lsrRising, lsrFalling, "Retail position rotation", "Whale position rotation") :
+     isFlatCvdVariation ?
+         flat_oi_up and flat_price_up ?
+              f_lsrComment(lsrRising, lsrFalling, "Retail Long Accumulation", "Whale Long Accumulation") :
+         flat_oi_up and flat_price_dn ?
+              f_lsrComment(lsrRising, lsrFalling, "Whale Short Accumulation", "Retail Short Accumulation") :
+         flat_oi_up and price_is_flat ?
+              f_lsrComment(lsrRising, lsrFalling, "Retail Long vs Whale Short CVD", "Whale Long vs Retail Short") :
+         flat_oi_dn and flat_price_up ?
+              f_lsrComment(lsrRising, lsrFalling, "Whale Longs Exit", "Retail Longs Exit") :
+         flat_oi_dn and flat_price_dn ?
+              f_lsrComment(lsrRising, lsrFalling, "Retail Shorts Exit", "Whale Shorts Exit") :
+         flat_oi_dn and price_is_flat ?
+              f_lsrComment(lsrRising, lsrFalling, "Short Retail vs Long Whale", "Long Retail vs Short Whale") :
+              f_lsrComment(lsrRising, lsrFalling, "Retail CVD Bias", "Whale CVD Bias") :
+     isPriceFlatVariation ?
+         oi_delta > 0 and cvd_up ?
+             f_lsrComment(lsrRising, lsrFalling, "Retail Longs Trapped", "Fragile Sell Limit Wall") :
+         oi_delta > 0 and cvd_dn ?
+             f_lsrComment(lsrRising, lsrFalling, "Fragile Long Limit Wall", "Short Retails Trapped") :
+         oi_delta < 0 and cvd_up ?
+              f_lsrComment(lsrRising, lsrFalling, "Complex dynamics", "Retail Short Exit") :
+          f_lsrComment(lsrRising, lsrFalling, "Complex dynamics", "Retail Long Exit") :
+     isLongBuild ?
+         f_lsrComment(lsrRising, lsrFalling, "Retail accumulation", "Whale accumulation") :
+     isShortBuild ?
+         f_lsrComment(lsrRising, lsrFalling, "Whale Accumulation", "Retail Accumulation") :
+     isLimBuyAbsorb ?
+         f_lsrComment(lsrRising, lsrFalling, "Fragile Long Limit Wall", "Short Retails Trapped") :
+     isLimSellAbsorb ?
+         f_lsrComment(lsrRising, lsrFalling, "Long Retails Trapped", "Fragile Sell Limit Wall") :
+     isShortLiq ?
+          f_lsrComment(lsrRising, lsrFalling, "Retail Shorts Wiped off", "Retail Longs exit with profit") :
+     isShortCover ?
+          f_lsrComment(lsrRising, lsrFalling, "Retail Shorts exit with Loss", "Retail Longs exit with profit") :
+     isLongLiq ?
+          f_lsrComment(lsrRising, lsrFalling, "Retail Longs build the dip", "Long Retails flushed out") :
+     isLongCover ?
+          f_lsrComment(lsrRising, lsrFalling, "Retail Longs trapped", "Retail Longs Exit") :
+     isPasvShortCover ?
+          f_lsrComment(lsrRising, lsrFalling, "Complex dynamics", "Retail Long Exit") :
+     isLongLiqAbsorb ?
+          f_lsrComment(lsrRising, lsrFalling, "Complex dynamics", "Retail Long Liquidation") :
+     isPasvLongCover ?
+          f_lsrComment(lsrRising, lsrFalling, "Complex dynamics", "Retail Short Exit") :
+     isShortLiqAbsorb ?
+          f_lsrComment(lsrRising, lsrFalling, "Complex dynamics", "Retail Short Liquidation") :
+         f_lsrComment(lsrRising, lsrFalling, "Retail bias", "Whale bias")
+
+string marketState =
+     isFlatOiAndCvdFlat ? "Flat OI + CVD Flat: " + flatOiAndCvdFlatName :
+     isFlatOiVariation ? "Flat OI: " + flatOiVariationName :
+     isFlatCvdVariation ? "CVD Flat: " + flatCvdVariationName :
+     isPriceFlatVariation ? priceFlatVariationName :
+     isLongBuild      ? "Aggressive Longs Openings" :
+     isShortBuild     ? "Aggressive Shorts Openings" :
+     isLimBuyAbsorb   ? "Limit Buy Absorption (Open)" :
+     isLimSellAbsorb  ? "Limit Sell Absorption (Open)" :
+     isShortLiq       ? "Short Liquidation" :
+     isShortCover     ? "Short Exit" :
+     isLongLiq        ? "Long Liquidation" :
+     isLongCover      ? "Long Exit" :
+     isPasvShortCover ? "Long Exit while absorbed" :
+     isLongLiqAbsorb  ? "Long Liquidation while absorbed" :
+     isPasvLongCover  ? "Short Exit while absorbed" :
+     isShortLiqAbsorb ? "Short Liquidation while absorbed" :
+     "Neutral / Choppy"
+
+marketDriverSeparator = str.pos(marketState, " - ")
+marketDriverTop =
+     not na(marketDriverSeparator) ?
+     str.substring(marketState, 0, marketDriverSeparator) :
+     marketState
+
+marketDriverBottom =
+     not na(marketDriverSeparator) ?
+     str.substring(marketState, marketDriverSeparator + 3) :
+     ""
+
+marketDriverBottomWithLsr =
+     lsrMarketDriverNote != "" ?
+     lsrMarketDriverNote :
+     marketDriverBottom
+
+// ==============================================================================
+// === PLOT OI CANDLES
+// ==============================================================================
+
+o = oiOpen
+c = oiClose
+h = oiHigh
+l = oiLow
+
+col = stateColors ? marketStateColor : c >= o ? upCol : dnCol
+
+plotcandle(
+     o,
+     h,
+     l,
+     c,
+     title="OI",
+     color=col,
+     wickcolor=col,
+     bordercolor=col)
+
+// ---------- Latest-candle CVD aggression ----------
+var label cvdAggressionLabel = na
+
+if barstate.islast
+    if not na(cvdAggressionLabel)
+        label.delete(cvdAggressionLabel)
+        cvdAggressionLabel := na
+
+    if hasCvdIntrabars and aggregateCvdAggressiveVolume > 0
+        aggressionText =
+             "Buy " + str.tostring(buyerAggressionPct, "#.##") + "%\n" +
+             "Sell " + str.tostring(sellerAggressionPct, "#.##") + "%"
+
+        aggressionColor =
+             buyerAggressionPct >= sellerAggressionPct ?
+             color.new(#15803d, 0) :
+             color.new(#b91c1c, 0)
+
+        cvdAggressionLabel := label.new(
+             x=bar_index + 1,
+             y=c,
+             text=aggressionText,
+             color=aggressionColor,
+             textcolor=color.white,
+             style=label.style_label_left,
+             yloc=yloc.price,
+             size=size.normal)
+
+// ==============================================================================
+// === TABLE
+// ==============================================================================
+
+var table rtbl = table.new(
+     position.top_right,
+     2,
+     7,
+     bgcolor=color.new(#0b0e14, 10),
+     border_width=1,
+     border_color=color.new(color.gray, 70))
+
+if barstate.islast
+    int row = 0
+
+    if showTotals
+        table.cell(
+             rtbl,
+             0,
+             row,
+             "TOTALS",
+             text_color=color.gray,
+             text_size=size.small,
+             text_halign=text.align_left)
+
+        table.cell(
+             rtbl,
+             1,
+             row,
+             "",
+             bgcolor=color.new(color.gray, 90))
+
+        row += 1
+
+        table.cell(
+             rtbl,
+             0,
+             row,
+             "Total OI",
+             text_color=color.new(color.white, 30),
+             text_halign=text.align_left)
+
+        table.cell(
+             rtbl,
+             1,
+             row,
+             str.tostring(totalC, format.volume),
+             text_color=color.white,
+             text_halign=text.align_right)
+
+        row += 1
+
+        table.cell(
+             rtbl,
+             0,
+             row,
+             "Daily Vol",
+             text_color=color.new(color.white, 30),
+             text_halign=text.align_left)
+
+        table.cell(
+             rtbl,
+             1,
+             row,
+             str.tostring(totalVol, format.volume),
+             text_color=color.white,
+             text_halign=text.align_right)
+
+        row += 1
+
+        table.cell(
+             rtbl,
+             0,
+             row,
+             "20D Avg Vol",
+             text_color=color.new(color.white, 30),
+             text_halign=text.align_left)
+
+        table.cell(
+             rtbl,
+             1,
+             row,
+             str.tostring(totalVolMA, format.volume),
+             text_color=color.white,
+             text_halign=text.align_right)
+
+        row += 1
+
+        table.cell(
+             rtbl,
+             0,
+             row,
+             "OI Value ($)",
+             text_color=color.new(color.white, 30),
+             text_halign=text.align_left)
+
+        table.cell(
+             rtbl,
+             1,
+             row,
+             str.tostring(oiDollar, format.volume),
+             text_color=color.white,
+             text_halign=text.align_right)
+
+        row += 1
+
+    table.cell(
+         rtbl,
+         0,
+         row,
+         "Market Driver",
+         text_color=color.new(color.white, 30),
+         text_halign=text.align_left)
+
+    table.cell(
+         rtbl,
+         1,
+         row,
+          marketDriverTop,
+         text_color=marketStateColor,
+         text_halign=text.align_right,
+         text_size=size.normal)
+
+    row += 1
+
+    table.cell(
+         rtbl,
+         0,
+         row,
+         "",
+         text_color=color.new(color.white, 30),
+         text_halign=text.align_left)
+
+    table.cell(
+         rtbl,
+         1,
+         row,
+         marketDriverBottomWithLsr,
+         text_color=marketStateColor,
+         text_halign=text.align_right,
+         text_size=size.normal)
+
+// ==============================================================================
+// === WHALE OI SPIKE & CONTINUATION SIGNAL
+// ==============================================================================
+
+spikeMult = input.float(
+     5.0,
+     "Spike Multiplier (x)",
+     group="Whale Signals",
+     tooltip="Threshold multiplier applied to the average OI candle body size to detect a single-bar volume/OI spike.")
+
+avgLength = input.int(
+     50,
+     "Average Length",
+     group="Whale Signals")
+
+maxSidewaysBars = input.int(
+     10,
+     "Max Sideways Bars to Reset",
+     group="Whale Signals")
+
+pbAlert1 = input.float(
+     10.0,
+     "Pullback Alert 1 (%)",
+     group="Whale Signals")
+
+pbAlert2 = input.float(
+     20.0,
+     "Pullback Alert 2 (%)",
+     group="Whale Signals")
+
+oi_body_delta = c - o
+avg_oi_delta = ta.sma(math.abs(oi_body_delta), avgLength)
+
+var int green_streak = 0
+green_streak := c > o ? green_streak + 1 : 0
+
+var bool inSpikeSeq = false
+var float initial_open_oi = na
+
+// A sequence has its own peak. This is deliberately independent of the
+// TradingView alert object: creating an alert must never establish the peak.
+var float cumulative_high_oi = na
+var int cumulative_high_bar_index = na
+var int bars_since_new_high = 0
+var label active_lbl = na
+
+// These flags are only per-peak guards. They are re-armed when OI makes a
+// higher high, so pullback percentages are always measured from that high.
+var bool alert1_fired = false
+var bool alert2_fired = false
+
+bool trigger_alert1 = false
+bool trigger_alert2 = false
+
+is_single_spike =
+     not inSpikeSeq and
+     oi_body_delta > 0 and
+     oi_body_delta >= spikeMult * nz(avg_oi_delta[1], avg_oi_delta)
+
+is_10_green_spike =
+     not inSpikeSeq and
+     green_streak == 10
+
+is_initial_spike =
+     is_single_spike or is_10_green_spike
+
+if is_initial_spike
+    inSpikeSeq := true
+    initial_open_oi := is_10_green_spike ? o[9] : o
+
+    cumulative_high_oi := h
+    cumulative_high_bar_index := bar_index
+
+    bars_since_new_high := 0
+    alert1_fired := false
+    alert2_fired := false
+
+    peak_cum_change = cumulative_high_oi - initial_open_oi
+    peak_pct_change =
+         initial_open_oi > 0 ?
+         peak_cum_change / initial_open_oi * 100 :
+         0
+
+    lbl_text = str.tostring(peak_pct_change, "#.##") + "%"
+    lbl_color =
+         peak_pct_change > 30.0 ?
+         color.new(#b91c1c, 0) :
+         color.new(#15803d, 0)
+
+    lbl_y = cumulative_high_oi + avg_oi_delta * 0.3
+
+    active_lbl := label.new(
+         x=cumulative_high_bar_index,
+         y=lbl_y,
+         text=lbl_text,
+         color=lbl_color,
+         textcolor=color.white,
+         style=label.style_label_down,
+         yloc=yloc.price,
+         size=size.normal)
+
+else if inSpikeSeq
+    // Update the sequence peak BEFORE calculating pullback. The current
+    // candle's high therefore becomes the reference immediately, including
+    // when the same candle later closes lower.
+    bool made_new_sequence_high = h > cumulative_high_oi
+
+    if made_new_sequence_high
+        cumulative_high_oi := h
+        cumulative_high_bar_index := bar_index
+        bars_since_new_high := 0
+
+        // A new peak starts a new pullback measurement.
+        alert1_fired := false
+        alert2_fired := false
+    else
+        bars_since_new_high += 1
+
+    peak_cum_change = cumulative_high_oi - initial_open_oi
+    peak_pct_change =
+         initial_open_oi > 0 ?
+         peak_cum_change / initial_open_oi * 100 :
+         0
+
+    lbl_text = str.tostring(peak_pct_change, "#.##") + "%"
+    lbl_color =
+         peak_pct_change > 30.0 ?
+         color.new(#b91c1c, 0) :
+         color.new(#15803d, 0)
+
+    lbl_y = cumulative_high_oi + avg_oi_delta * 0.3
+
+    label.set_xy(active_lbl, cumulative_high_bar_index, lbl_y)
+    label.set_text(active_lbl, lbl_text)
+    label.set_color(active_lbl, lbl_color)
+
+if inSpikeSeq
+    // The pullback is a retracement of the active OI expansion, not a
+    // percentage of the absolute OI value.
+    //
+    // Example:
+    //   qualifying OI = 510M
+    //   highest OI    = 592M
+    //   active spike  = 82M
+    //   10% pullback  = 8.2M
+    //
+    // Therefore the 10% threshold is 583.8M, not 532.8M.
+    spike_range =
+         cumulative_high_oi - initial_open_oi
+
+    pullback_amount =
+         cumulative_high_oi - c
+
+    pullback_ratio =
+         spike_range > 0 ?
+         pullback_amount / spike_range * 100 :
+         0
+
+    // Always use the sequence's highest OI, never the OI at the moment
+    // the TradingView alert was created.
+    if pullback_ratio >= pbAlert1 and not alert1_fired
+        alert1_fired := true
+        trigger_alert1 := true
+
+    if pullback_ratio >= pbAlert2 and not alert2_fired
+        alert2_fired := true
+        trigger_alert2 := true
+
+    // Expire the sequence after alerts are evaluated on this bar. This
+    // prevents the reset candle from suppressing a valid pullback alert.
+    sequence_expired =
+         bars_since_new_high >= maxSidewaysBars or
+         c < initial_open_oi
+
+    if sequence_expired
+        inSpikeSeq := false
+        cumulative_high_oi := na
+        cumulative_high_bar_index := na
+        bars_since_new_high := 0
+        alert1_fired := false
+        alert2_fired := false
+
+// ==============================================================================
+// === ALERTS
+// ==============================================================================
+
+alertcondition(
+     trigger_alert1,
+     title="10% Pullback Alert",
+     message="OI Pullback Triggered! (10% retracement of active OI expansion)")
+
+alertcondition(
+     trigger_alert2,
+     title="20% Pullback Alert",
+     message="OI Pullback Triggered! (20% retracement of active OI expansion)")

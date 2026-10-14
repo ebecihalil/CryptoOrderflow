@@ -12,3 +12,4 @@
 - [Super Charts integration](supercharts-integration.md) — use one native exchange-fed chart for technical/orderflow layers; preserve volume units and truthful funding history.
 - [Trade-flow indicators](cvd-trade-semantics.md) — real taker flow, weekly CVD continuity and separate Aggressive Volume Bubbles; never infer history from price candles.
 - [Chart watchlist](chart-watchlist.md) — five underlying coins record in the background; preserve shared collector limits and disclose hosting durability/uptime.
+- [OI market-driver indicator](oi-market-driver.md) — preserve the supplied rules with exchange-fed inputs; liquidation/OI below 0.5% is not liquidation-triggered.
