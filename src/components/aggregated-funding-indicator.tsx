@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { FundingIndicatorChart } from '@/components/funding-indicator-chart';
@@ -39,14 +39,21 @@ function formatTime(value: string | null) {
   return Number.isNaN(date.getTime()) ? 'Update time unavailable' : `Updated ${new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(date)} UTC`;
 }
 
-export function AggregatedFundingIndicator() {
-  const [assetDraft, setAssetDraft] = useState('BTC');
-  const [asset, setAsset] = useState('BTC');
+export function AggregatedFundingIndicator({ asset: sharedAsset }: { asset?: string } = {}) {
+  const [assetDraft, setAssetDraft] = useState(sharedAsset ?? 'BTC');
+  const [asset, setAsset] = useState(normalizeFundingAsset(sharedAsset ?? 'BTC'));
   const [timeframe, setTimeframe] = useState<FundingIndicatorTimeframe>('1h');
   const [window, setWindow] = useState<FundingIndicatorWindow>('7d');
   const [method, setMethod] = useState<FundingIndicatorMethod>('mean');
   const [chartMode, setChartMode] = useState<'settled' | 'recordedLive'>('settled');
   const [threshold, setThreshold] = useState(0.08);
+  useEffect(() => {
+    if (sharedAsset) {
+      const normalized = normalizeFundingAsset(sharedAsset);
+      setAsset(normalized);
+      setAssetDraft(normalized);
+    }
+  }, [sharedAsset]);
   const feed = useFundingIndicator(asset, timeframe, window);
   const payloadMatches = !!feed.payload && normalizeFundingAsset(feed.payload.asset) === asset &&
     feed.payload.timeframe === timeframe && feed.payload.historyWindow === window;
@@ -100,13 +107,13 @@ export function AggregatedFundingIndicator() {
 
       <div className="funding-indicator-toolbar">
         <div className="funding-indicator-market">
-          <form className="funding-indicator-symbol-form" onSubmit={applyAsset}>
-            <label className="super-chart-control"><span>Perpetual asset</span>
-              <input value={assetDraft} onChange={(event) => setAssetDraft(event.target.value)}
-                aria-label="Funding asset" autoCapitalize="characters" spellCheck={false} placeholder="BTC" />
-            </label>
-            <button type="submit" className="funding-indicator-apply">Apply</button>
-          </form>
+          {!sharedAsset && <form className="funding-indicator-symbol-form" onSubmit={applyAsset}>
+              <label className="super-chart-control"><span>Perpetual asset</span>
+                <input value={assetDraft} onChange={(event) => setAssetDraft(event.target.value)}
+                  aria-label="Funding asset" autoCapitalize="characters" spellCheck={false} placeholder="BTC" />
+              </label>
+              <button type="submit" className="funding-indicator-apply">Apply</button>
+            </form>}
           <label className="super-chart-control"><span>Calculation</span>
             <select value={method} onChange={(event) => setMethodValue(event.target.value as FundingIndicatorMethod)} aria-label="Funding calculation">
               <option value="mean">Simple mean</option><option value="median">Median</option><option value="weighted">OI-weighted</option>

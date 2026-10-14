@@ -3,6 +3,7 @@ import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
 import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
 import { fundingIndicatorService } from "./server/fundingIndicator.js";
+import { marketContractService } from "./server/marketContracts.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -21,6 +22,11 @@ app.use(express.json());
 
 app.get("/api/healthz", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/market/contracts", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(marketContractService.get());
 });
 
 app.get("/api/market/candles", async (req, res) => {

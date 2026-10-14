@@ -398,6 +398,13 @@
 .searchbox input { width:205px;height:36px;padding:0 10px 0 33px;border:1px solid #d8d5ca;background:#f8f6ef;border-radius:4px;outline:0;color:#28383a;font:12px var(--app-font-mono); }
 .searchbox input:focus,.select-control:focus { border-color:#398373;box-shadow:0 0 0 2px #3983731a; }
 .searchbox input::placeholder { color:#a3aaa5; }
+.market-autocomplete { position:relative;min-width:0; }
+.market-autocomplete-list { position:absolute;top:calc(100% + 4px);right:0;left:0;z-index:30;max-height:280px;overflow:auto;margin:0;padding:4px;border:1px solid var(--lsar-control-border);background:var(--lsar-surface);box-shadow:0 10px 24px rgba(29,42,38,.16);list-style:none; }
+.market-autocomplete-list li { display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-height:34px;padding:8px 9px;color:var(--lsar-strong);font:10px var(--app-font-mono);cursor:pointer; }
+.market-autocomplete-list li small { color:var(--lsar-muted);font-size:8px;text-align:right; }
+.market-autocomplete-list li:hover,.market-autocomplete-list li.is-active { background:var(--lsar-row-hover);color:var(--lsar-accent); }
+.searchbox.market-autocomplete { width:205px;height:36px; }
+.searchbox.market-autocomplete input { width:100%; }
 .select-control { height:36px;border:1px solid #d8d5ca;background:#f8f6ef;border-radius:4px;padding:0 30px 0 11px;color:#475956;font:11px var(--app-font-mono);outline:0; }
 .price-filter { display:flex;align-items:center;gap:7px; }
 .price-input-wrap { display:flex;align-items:center;gap:5px;width:94px;height:36px;padding:0 9px;border:1px solid #d8d5ca;background:#f8f6ef;border-radius:4px;color:#87928f;font:11px var(--app-font-mono); }

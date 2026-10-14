@@ -9,4 +9,4 @@
 - [Funding display](funding-display.md) — positive funding is red; negative funding is green, without reversing LSAR or source-status colours.
 - [Open Interest conventions](open-interest-conventions.md) — include authorized daily CME OI in totals, not intraday changes; sum comparable underlying-coin units.
 - [Crypto-only screener scope](crypto-only-market-scope.md) — exclude stocks/ETFs from LSAR and Funding; OI rankings stay crypto-only.
-- [Super Charts integration](supercharts-integration.md) — user chose shared Advanced Charts with direct exchange feeds; requires authorized SDK access, not the hosted widget.
+- [Super Charts integration](supercharts-integration.md) — keep hosted TradingView plus multiple custom exchange-data panels on one page; no custom iframe overlays or internal-control sync.

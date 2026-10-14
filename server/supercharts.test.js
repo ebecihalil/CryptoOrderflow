@@ -16,7 +16,10 @@ test("charts use perpetual symbols, preserving exchange multiplier prefixes", ()
   assert.equal(buildChartSymbol("BYBIT", "1000PEPEUSDT"), "BYBIT:1000PEPEUSDT.P");
   assert.equal(buildChartSymbol("OKX", "ETHUSDT"), "OKX:ETHUSDT.P");
   assert.equal(normalizePerpetualTicker(""), "BTCUSDT");
-  assert.equal(CHART_EXCHANGES.length, 3);
+  assert.equal(CHART_EXCHANGES.length, 7);
+  assert.equal(buildChartSymbol("GATEIO", "BTCUSDT"), "GATEIO:BTCUSDT.P");
+  assert.deepEqual(new Set(CHART_EXCHANGES.map(exchange => exchange.id)),
+    new Set(["BINANCE", "BYBIT", "OKX", "GATEIO", "MEXC", "BITGET", "BINGX"]));
 });
 
 test("chart config includes only selected studies and changes theme and timeframe", () => {
@@ -38,7 +41,7 @@ test("chart config includes only selected studies and changes theme and timefram
   assert.deepEqual(CHART_INTERVALS.map(item => item.label), ["5m", "15m", "30m", "1h", "4h", "1D"]);
 });
 
-test("Super Charts replaces its placeholder and uses the shared header and accessible tabs", () => {
+test("Super Charts keeps the hosted chart above multiple custom panels and uses dropdown indicator menus", () => {
   const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
   const page = readFileSync(new URL("../src/pages/super-charts-page.tsx", import.meta.url), "utf8");
   assert.match(app, /path="\/super-charts" component=\{SuperChartsPage\}/);
@@ -47,13 +50,15 @@ test("Super Charts replaces its placeholder and uses the shared header and acces
   assert.match(page, /mark="SC"/);
   assert.match(page, /Technical Indicators/);
   assert.match(page, /Orderflow Indicators/);
-  assert.match(page, /role="tablist"/);
-  assert.match(page, /aria-selected/);
-  assert.match(page, /ArrowLeft/);
-  assert.match(page, /<OrderflowIndicatorPanel/);
-  const panel = readFileSync(new URL("../src/components/orderflow-indicator-panel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /LiquidityZonesIndicator/);
-  assert.match(panel, /AggregatedFundingIndicator/);
+  assert.match(page, /aria-expanded/);
+  assert.match(page, /aria-pressed/);
+  assert.match(page, /<SuperChartWidget/);
+  assert.match(page, /indicators\.map/);
+  assert.match(page, /<OrderflowIndicators/);
+  assert.match(page, /<AggregatedFundingIndicator/);
+  assert.ok(page.indexOf("<SuperChartWidget") < page.indexOf("<OrderflowIndicators"));
+  assert.doesNotMatch(page, /type="checkbox"|aria-label="Chart timeframe"|aria-label="Exchange"/);
+  assert.match(page, /<MarketAutocomplete/);
 });
 
 test("widget uses official embedding, theme observation and cleanup without scraping market data", () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { LiquidityZoneChart } from '@/components/liquidity-zone-chart';
 import { useLiquidityCandles, type LiquidityExchange, type LiquidityTimeframe, type LiquidityVolumeMode } from '@/hooks/use-liquidity-candles';
@@ -18,15 +18,32 @@ function formatTimestamp(time: number) {
     .format(new Date(time * 1000)) + ' UTC';
 }
 
-export function OrderflowIndicators() {
-  const [exchange, setExchange] = useState<LiquidityExchange>('binance');
-  const [tickerDraft, setTickerDraft] = useState('BTCUSDT');
-  const [symbol, setSymbol] = useState('BTCUSDT');
+const EXCHANGES: Array<{ value: LiquidityExchange; label: string }> = [
+  { value: 'binance', label: 'Binance' }, { value: 'gate', label: 'Gate.io' }, { value: 'okx', label: 'OKX' },
+  { value: 'bybit', label: 'Bybit' }, { value: 'mexc', label: 'MEXC' }, { value: 'bitget', label: 'Bitget' }, { value: 'bingx', label: 'BingX' },
+];
+
+export function OrderflowIndicators({ exchange: sharedExchange, symbol: sharedSymbol }: {
+  exchange?: LiquidityExchange;
+  symbol?: string;
+} = {}) {
+  const [exchange, setExchange] = useState<LiquidityExchange>(sharedExchange ?? 'binance');
+  const [tickerDraft, setTickerDraft] = useState(sharedSymbol ?? 'BTCUSDT');
+  const [symbol, setSymbol] = useState(sharedSymbol ?? 'BTCUSDT');
   const [timeframe, setTimeframe] = useState<LiquidityTimeframe>('1h');
   const [volumeMode, setVolumeMode] = useState<LiquidityVolumeMode>('aggregated');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [colors, setColors] = useState(DEFAULT_COLORS);
   const [showVolume, setShowVolume] = useState(true);
+  useEffect(() => {
+    if (sharedExchange) setExchange(sharedExchange);
+  }, [sharedExchange]);
+  useEffect(() => {
+    if (sharedSymbol) {
+      setSymbol(sharedSymbol);
+      setTickerDraft(sharedSymbol);
+    }
+  }, [sharedSymbol]);
   const feed = useLiquidityCandles(exchange, symbol, timeframe, volumeMode);
   const payloadModeMatches = feed.payload?.volumeMode === volumeMode ||
     (volumeMode === 'single' && feed.payload?.volumeMode === undefined);
@@ -59,12 +76,11 @@ export function OrderflowIndicators() {
   return (
     <section className="super-chart-panel orderflow-panel" aria-label="Liquidity Zones indicator">
       <div className="liquidity-toolbar">
-        <div className="liquidity-market-controls">
+        {!sharedExchange && !sharedSymbol && <div className="liquidity-market-controls">
           <label className="super-chart-control">
             <span>Exchange</span>
             <select value={exchange} onChange={(event) => setExchange(event.target.value as LiquidityExchange)} aria-label="Orderflow exchange">
-              <option value="binance">Binance</option>
-              <option value="bybit">Bybit</option>
+              {EXCHANGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
           <form className="super-chart-symbol-form" onSubmit={applyTicker}>
@@ -74,7 +90,7 @@ export function OrderflowIndicators() {
             </label>
             <button type="submit" className="super-chart-apply">Apply</button>
           </form>
-        </div>
+        </div>}
         <label className="super-chart-control liquidity-volume-basis">
           <span>Volume basis</span>
           <select value={volumeMode} onChange={(event) => setVolumeMode(event.target.value as LiquidityVolumeMode)}

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw, Search } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw } from 'lucide-react';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { AppHeader } from '@/components/app-header';
+import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { useFundingSnapshot } from '@/hooks/use-funding-snapshot';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
 import { orderFundingSources } from '@/lib/funding-source-order';
@@ -233,6 +234,11 @@ export function FundingPage() {
     () => selectedExchanges === null ? exchanges : selectedExchanges.filter((exchange) => exchanges.includes(exchange)),
     [selectedExchanges, exchanges],
   );
+  const searchOptions = useMemo<AutocompleteOption[]>(() => (snapshot?.rows ?? []).map((row) => ({
+    value: row.asset,
+    label: row.displayAsset || row.asset,
+    detail: [...new Set(Object.values(row.venues).flatMap((venue) => venue.contracts.map((contract) => contract.symbol)))].slice(0, 3).join(' · '),
+  })), [snapshot?.rows]);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -283,11 +289,9 @@ export function FundingPage() {
             </button>)}
           </div>
           <div className="funding-filter-controls">
-            <label className="funding-search">
-              <Search size={15} aria-hidden="true" />
-              <input type="search" value={search} placeholder="Search coin or contract" aria-label="Search coins and contracts"
-                onChange={(event) => { setSearch(event.target.value); setPage(0); }} />
-            </label>
+            <MarketAutocomplete className="funding-search market-autocomplete" inputClassName="funding-search-input"
+              leadingSearch value={search} options={searchOptions} placeholder="Search coin or contract"
+              label="Search coins and contracts" onChange={(value) => { setSearch(value); setPage(0); }} />
             <span className="funding-filter-label">Exchange</span>
             <FundingExchangeFilter exchanges={exchanges} selected={selectedExchanges} onChange={setSelectedExchanges} />
           </div>

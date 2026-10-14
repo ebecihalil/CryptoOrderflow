@@ -79,11 +79,11 @@ test("unknown history does not fetch, while verified history observes cooldown a
 });
 
 test("Orderflow picker preserves Liquidity Zones and funding is separate from hosted Technical Indicators", () => {
-  const picker = readFileSync(new URL("../src/components/orderflow-indicator-panel.tsx", import.meta.url), "utf8");
+  const picker = readFileSync(new URL("../src/pages/super-charts-page.tsx", import.meta.url), "utf8");
   const ui = readFileSync(new URL("../src/components/aggregated-funding-indicator.tsx", import.meta.url), "utf8");
   assert.match(picker, /Liquidity Zones/);
   assert.match(picker, /Aggregated Funding Rate/);
-  assert.match(picker, /LiquidityZonesIndicator/);
+  assert.match(picker, /<OrderflowIndicators/);
   assert.match(ui, /useState\(0\.08\)/);
   assert.match(ui, /method === 'weighted' \? 'recordedLive'/);
   assert.match(ui, /normalized 8-hour/);

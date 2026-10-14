@@ -147,7 +147,8 @@ export function createAggregatedCandleService({
     const task = (async () => {
       try {
         const price = await single.get(query);
-        const identity = canonicalAsset(price.symbol.slice(0, -4));
+        const identity = price.asset ? { asset: price.asset, priceDivisor: price.priceDivisor }
+          : canonicalAsset(price.symbol.slice(0, -4));
         const results = await Promise.all(VOLUME_EXCHANGES.map(async exchange => {
           let instrument = null;
           try {

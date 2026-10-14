@@ -19,6 +19,12 @@ OI applied retrospectively. It reuses all verified funding-provider inventory
 without changing the Funding screener's global cutoff. See
 `docs/funding-indicator.md` for data limitations and local-cache retention.
 
+Super Charts retains the hosted TradingView widget with multiple custom panels
+below it, separate technical/orderflow dropdowns and seven-venue contract
+autocomplete. Internal TradingView controls cannot synchronize app panels; shared
+app selection does. Funding/LSAR predictive search uses existing snapshots.
+See `docs/chart-workspace.md` for native candle adapters and request protections.
+
 Leave the home page area below the module navigation empty for now: the user intends to fill it with other information later, rather than adding content there ahead of that request.
 
 The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.

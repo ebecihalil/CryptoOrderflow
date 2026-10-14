@@ -1,5 +1,8 @@
 import { requestJson, requestGates } from "./exchangeRequests.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
+import { CHART_VENUES, createMarketContractService, marketContractService } from "./marketContracts.js";
+import { fetchVenueCandles } from "./venueCandles.js";
+import { canonicalAsset } from "./assetIdentity.js";
 
 const intervals = {
   "5m": ["5m", "5", 300], "15m": ["15m", "15", 900],
@@ -10,9 +13,10 @@ export function validateCandleQuery(query) {
   const exchange = query.exchange ?? "binance";
   const symbol = query.symbol ?? "BTCUSDT";
   const timeframe = query.timeframe ?? "1h";
-  if (!["binance", "bybit"].includes(exchange) || typeof symbol !== "string" ||
-    !/^[A-Z0-9]{2,30}USDT$/.test(symbol) || typeof timeframe !== "string" || !intervals[timeframe]) {
-    throw Object.assign(new Error("Choose Binance or Bybit, an uppercase USDT perpetual symbol, and a supported timeframe."), { status: 400 });
+  if (typeof exchange !== "string" || !Object.hasOwn(CHART_VENUES, exchange) || typeof symbol !== "string" ||
+    !/^[A-Z0-9_-]{2,45}$/.test(symbol) || (["binance", "bybit"].includes(exchange) && !/^[A-Z0-9]{2,30}USDT$/.test(symbol)) ||
+    typeof timeframe !== "string" || !Object.hasOwn(intervals, timeframe)) {
+    throw Object.assign(new Error("Choose a supported exchange, a verified USDT perpetual symbol, and a supported timeframe."), { status: 400 });
   }
   return { exchange, symbol, timeframe };
 }
@@ -40,11 +44,13 @@ export function parseCandles(exchange, body, timeframe, now = Date.now()) {
 }
 
 /** Shared, bounded per-series cache. Refresh never bypasses the exchange gates. */
-export function createCandleService({ request = requestJson, gates = requestGates, now = Date.now } = {}) {
+export function createCandleService({ request = requestJson, gates = requestGates, now = Date.now, contracts } = {}) {
   const cache = new Map(), pending = new Map(), metadata = new Map();
   let binanceInfo = null, binanceInfoAt = 0, binanceInfoPending = null;
+  const catalogue = contracts ?? (request === requestJson ? marketContractService : createMarketContractService({ request, gates, now }));
   const trim = map => { while (map.size > 100) map.delete(map.keys().next().value); };
   async function validateContract(exchange, symbol) {
+    if (!["binance", "bybit"].includes(exchange)) return catalogue.lookup(exchange, symbol);
     const key = `${exchange}:${symbol}`;
     let instrument = metadata.get(key);
     if (instrument && instrument.expires > now()) return instrument.value;
@@ -88,14 +94,18 @@ export function createCandleService({ request = requestJson, gates = requestGate
     if (pending.size >= 4) throw Object.assign(new Error("Chart requests are busy. Please try again shortly."), { status: 503 });
     const task = (async () => {
       try {
-        await validateContract(exchange, symbol);
+        const instrument = await validateContract(exchange, symbol);
         const [binanceInterval, bybitInterval] = intervals[timeframe];
         const url = exchange === "binance"
           ? `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${binanceInterval}&limit=1000`
           : `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${bybitInterval}&limit=1000`;
-        const body = await request(url);
-        const candles = parseCandles(exchange, body, timeframe, now());
-        const data = { exchange, symbol, timeframe, candles, fetchedAt: new Date(now()).toISOString(), stale: false };
+        const legacy = ["binance", "bybit"].includes(exchange);
+        const body = legacy ? await request(url) : await fetchVenueCandles(request, exchange, instrument, timeframe, now());
+        const candles = parseCandles(legacy ? exchange : "binance", body, timeframe, now());
+        const base = instrument.exchangeAsset ?? instrument.baseAsset ?? instrument.baseCoin;
+        const identity = canonicalAsset(base);
+        const data = { exchange, symbol: instrument.symbol ?? symbol, asset: identity.asset, priceDivisor: identity.priceDivisor,
+          timeframe, candles, fetchedAt: new Date(now()).toISOString(), stale: false };
         cache.set(key, { data, nextAttempt: now() + 30_000 }); trim(cache);
         return data;
       } catch (cause) {

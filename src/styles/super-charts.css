@@ -46,11 +46,53 @@
 .super-orderflow-empty .eyebrow { color:var(--lsar-muted);font:9px var(--app-font-mono);letter-spacing:.1em; }
 .super-orderflow-empty h2 { margin:14px 0 0;color:var(--lsar-ink);font-size:23px;letter-spacing:-.045em; }
 .super-orderflow-empty p { max-width:380px;margin:9px 0 0;color:var(--lsar-muted);font-size:12px;line-height:1.6; }
+.super-chart-marketbar { display:flex;align-items:center;gap:20px;min-height:84px;padding:14px 17px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
+.super-chart-market-copy { display:flex;min-width:150px;flex-direction:column;gap:4px; }
+.super-chart-market-kicker,.super-chart-contract-field > span { color:var(--lsar-muted);font:9px var(--app-font-mono);letter-spacing:.07em;text-transform:uppercase; }
+.super-chart-market-copy strong { color:var(--lsar-strong);font:600 15px var(--app-font-mono); }
+.super-chart-market-copy small { color:var(--lsar-muted);font:9px var(--app-font-mono); }
+.super-chart-contract-field { display:flex;min-width:260px;flex:1;flex-direction:column;gap:6px; }
+.super-chart-contract-combo { width:100%; }
+.super-chart-contract-input { width:100%;height:36px;padding:0 11px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong);font:11px var(--app-font-mono); }
+.super-chart-catalogue-alert,.super-chart-catalogue-loading { display:flex;align-items:center;gap:9px;color:var(--lsar-warning-ink,var(--lsar-muted));font:9px/1.5 var(--app-font-mono); }
+.super-chart-catalogue-alert button { display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong);font:inherit;cursor:pointer; }
+.super-chart-menu-bar { position:relative;z-index:5;display:flex;align-items:center;gap:9px;margin-top:15px;padding:10px 12px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
+.super-chart-dropdown { position:relative; }
+.super-chart-menu-trigger { display:flex;align-items:center;gap:8px;min-height:34px;padding:0 10px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong);font:10px var(--app-font-mono);cursor:pointer; }
+.super-chart-menu-trigger:hover,.super-chart-menu-trigger[aria-expanded="true"] { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.super-chart-selection-count { display:grid;place-items:center;min-width:17px;height:17px;padding:0 3px;background:var(--lsar-accent-soft);color:var(--lsar-accent);font-size:8px; }
+.super-chart-menu { position:absolute;top:calc(100% + 6px);left:0;z-index:10;min-width:230px;padding:5px;border:1px solid var(--lsar-control-border);background:var(--lsar-surface);box-shadow:0 10px 24px rgba(29,42,38,.13); }
+.super-chart-menu button { display:flex;align-items:center;gap:9px;width:100%;min-height:34px;padding:0 8px;border:0;background:transparent;color:var(--lsar-strong);font:10px var(--app-font-mono);text-align:left;cursor:pointer; }
+.super-chart-menu button:hover,.super-chart-menu button.is-selected { background:var(--lsar-row-hover); }
+.super-chart-menu-check { display:grid;place-items:center;width:15px;height:15px;border:1px solid var(--lsar-control-border);color:var(--lsar-accent); }
+.super-chart-menu p { margin:5px 8px 4px;padding-top:7px;border-top:1px solid var(--lsar-border);color:var(--lsar-muted);font:8px/1.5 var(--app-font-mono); }
+.super-chart-selected-studies { display:flex;align-items:center;gap:6px;min-height:39px;flex-wrap:wrap;padding:5px 0 9px; }
+.super-chart-selected-studies > span { display:inline-flex;align-items:center;gap:7px;padding:5px 7px;border:1px solid var(--lsar-border);color:var(--lsar-strong);font:9px var(--app-font-mono); }
+.super-chart-selected-studies button { display:grid;place-items:center;padding:0;border:0;background:transparent;color:var(--lsar-muted);cursor:pointer; }
+.super-chart-selected-studies .super-chart-no-studies { border:0;color:var(--lsar-muted); }
+.super-orderflow-stack { margin-top:28px; }
+.super-orderflow-stack-heading { display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--lsar-border); }
+.super-orderflow-stack-heading h2 { margin:7px 0 0;color:var(--lsar-strong);font-size:19px;font-weight:600;letter-spacing:-.03em; }
+.super-orderflow-stack-heading p { margin:0;color:var(--lsar-muted);font:9px var(--app-font-mono); }
+.super-orderflow-card { margin-top:13px;border:1px solid var(--lsar-border);background:var(--lsar-page); }
+.super-orderflow-card > header { display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:37px;padding:0 12px;border-bottom:1px solid var(--lsar-border);background:var(--lsar-surface);color:var(--lsar-muted);font:9px var(--app-font-mono);letter-spacing:.06em; }
+.super-orderflow-card > header button { display:inline-flex;align-items:center;gap:5px;padding:5px 7px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-muted);font:9px var(--app-font-mono);cursor:pointer; }
+.super-orderflow-card > header button:hover { border-color:var(--lsar-warning-border);color:var(--lsar-warning-ink); }
+.super-charts-app .market-autocomplete { position:relative;min-width:0; }
+.market-autocomplete-list { position:absolute;top:calc(100% + 4px);right:0;left:0;z-index:30;max-height:280px;overflow:auto;margin:0;padding:4px;border:1px solid var(--lsar-control-border);background:var(--lsar-surface);box-shadow:0 10px 24px rgba(29,42,38,.16);list-style:none; }
+.market-autocomplete-list li { display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-height:34px;padding:8px 9px;color:var(--lsar-strong);font:10px var(--app-font-mono);cursor:pointer; }
+.market-autocomplete-list li small { color:var(--lsar-muted);font-size:8px;text-align:right; }
+.market-autocomplete-list li:hover,.market-autocomplete-list li.is-active { background:var(--lsar-row-hover);color:var(--lsar-accent); }
+.market-autocomplete:focus-within .market-autocomplete-list { display:block; }
 @keyframes super-chart-pulse { from { opacity:.35;transform:scale(.8); } to { opacity:1;transform:scale(1); } }
 @media (max-width:760px) {
   .super-charts-main { padding:27px 15px 42px; }
   .super-charts-heading { padding-bottom:21px; }
   .super-chart-toolbar { align-items:stretch;flex-direction:column;gap:14px;padding:12px; }
+  .super-chart-marketbar { align-items:stretch;flex-direction:column;gap:12px;padding:12px; }
+  .super-chart-contract-field { min-width:0; }
+  .super-chart-catalogue-alert,.super-chart-catalogue-loading { align-items:flex-start;flex-wrap:wrap; }
+  .super-chart-menu-bar { flex-wrap:wrap; }
   .super-chart-controls { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:8px; }
   .super-chart-control { min-width:0; }
   .super-chart-control select,.super-chart-control input { width:100%;min-width:0; }
@@ -61,6 +103,7 @@
   .super-chart-timeframes button { flex:1;min-width:0; }
   .super-chart-study-row { gap:11px;padding:12px 1px; }
   .super-chart-study-hint { width:100%;margin-left:0; }
+  .super-orderflow-stack-heading { align-items:flex-start;flex-direction:column;gap:8px; }
   .super-chart-mount { height:62vh !important;min-height:380px; }
 }
 @media (max-width:420px) {

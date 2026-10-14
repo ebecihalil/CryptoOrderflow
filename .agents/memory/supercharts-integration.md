@@ -1,20 +1,22 @@
 ---
 name: Super Charts integration
-description: Shared Advanced Charts direction, direct exchange feeds and custom indicator semantics.
+description: Shared hosted TradingView workspace, direct exchange-data panels and custom indicator semantics.
 ---
 
-Keep separate Technical Indicators and Orderflow Indicators selection menus,
-but allow multiple selections to apply concurrently to the same chart. The user
-chose TradingView Advanced Charts to preserve the full TradingView interface,
-with price and custom indicator data supplied directly by exchanges.
+Keep separate Technical Indicators and Orderflow Indicators dropdown menus
+with multiple selections. The user approved retaining the current hosted
+TradingView price chart with custom exchange-data panels below it on one page,
+not injecting custom indicators into the iframe.
 
-**Why:** the user changed the earlier separate-chart approach and explicitly
-selected “Keep the full TradingView interface” over an app-native shared chart.
+**Why:** after discussing Advanced Charts access requirements and the hosted
+widget's limitations, the user approved keeping the existing widget plus
+separate custom plots on the same screen.
 
-**How to apply:** use authorized Advanced Charts access, not the restricted hosted
-widget or a silent Lightweight Charts replacement. Preserve supplied indicator
-semantics; do not invent additional formulas or fake orderflow charts. TradingView
-prohibits putting its proprietary library in public repositories.
+**How to apply:** do not silently replace the widget, require a proprietary SDK,
+or promise custom iframe overlays or synchronized internal controls. Shared app
+market search can drive the widget and custom panels; the widget's internal
+symbol/timeframe changes cannot drive those panels. Preserve supplied indicator
+semantics, with no invented formulas or fake orderflow charts.
 
 Contract search should offer coin/exchange autocomplete rather than a separate
 exchange selector, covering Binance, Gate.io, OKX, Bybit, MEXC, Bitget and BingX.
@@ -52,6 +54,15 @@ Native custom charts should reset their timeline when switching data domains
 retain a very narrow viewport and make real history look like a flat line.
 
 **How to apply:** distinguish an explicit dataset switch from a same-series refresh.
+
+The hosted widget can remove its bootstrap script after creating its iframe.
+For initial symbol/config verification, inspect the iframe URL, not a script
+element that may no longer exist; this does not expose its internal chart state.
+
+**Why:** the real embed replaced the initialization script during live checks.
+
+**How to apply:** verify rendered iframe configuration without assuming bootstrap
+DOM lifetime or claiming cross-origin access to interactive chart state.
 The hosted widget cannot consume our custom exchange data; use a separate chart
 library or approved Advanced Charts access for that future work. Do not treat
 TradingView's chart-control APIs as downloadable market-data APIs.

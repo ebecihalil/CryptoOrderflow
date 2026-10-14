@@ -6,6 +6,7 @@ import { FetchedDataLine } from '@/components/fetched-data-line';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { AppHeader } from '@/components/app-header';
+import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { MARKET_EXCHANGES, EXCHANGE_LABELS, matchesExchangeFilter, selectExchanges, selectMultipleOnly } from '@/lib/exchange-options';
 import { exchangeAccountRatio } from '@/lib/exchange-ratios';
 import { compareMarketRows, nextHeaderSortMode, type MarketSortMode, type MarketSortTarget } from '@/lib/market-sort';
@@ -40,7 +41,6 @@ import {
   Database,
   Info,
   RefreshCw,
-  Search,
 } from 'lucide-react';
 import {
   Route,
@@ -179,6 +179,11 @@ function Home() {
     });
     return filtered.sort((a, b) => compareMarketRows(a, b, timeframe, sortMode, sortTarget));
   }, [snapshot?.rows, search, selectedExchanges, multipleOnly, timeframe, sortMode, sortTarget]);
+  const searchOptions = useMemo<AutocompleteOption[]>(() => (snapshot?.rows ?? []).map((row) => ({
+    value: row.asset,
+    label: row.displayAsset ?? row.asset,
+    detail: row.exchangeReadings.slice(0, 3).map((reading) => reading.symbol).join(' · ') || row.exchanges.join(' · '),
+  })), [snapshot?.rows]);
 
   const handleRefresh = () => {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
@@ -225,17 +230,9 @@ function Home() {
 
         <section className="control-panel" aria-label="Screener filters">
           <div className="control-left">
-            <label className="searchbox">
-              <Search aria-hidden="true" />
-              <input
-                type="search"
-                placeholder="Search asset"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                data-testid="input-search-asset"
-                aria-label="Search assets"
-              />
-            </label>
+            <MarketAutocomplete className="searchbox market-autocomplete" inputClassName="lsar-search-input"
+              leadingSearch value={search} options={searchOptions} label="Search assets" placeholder="Search asset"
+              onChange={(value) => setSearch(value)} testId="input-search-asset" />
             <span className="filter-label">Exchange</span>
             <ExchangeFilter selected={selectedExchanges} onChange={(selected) => setExchangeSelection(selectExchanges(selected))}
               multipleOnly={multipleOnly} onMultipleOnlyChange={(enabled) => setExchangeSelection(selectMultipleOnly(enabled))} />

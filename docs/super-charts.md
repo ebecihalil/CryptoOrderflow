@@ -8,11 +8,11 @@ Uses TradingView's official hosted Advanced Chart widget, not the licensed
 Advanced Charts library or an unofficial market-data API. TradingView supplies
 the chart data. No API key, additional backend polling, or package is required.
 
-The external controls select Binance, Bybit or OKX crypto perpetual tickers,
-timeframes and RSI, MACD, EMA, SMA or Bollinger Bands. TradingView's own chart
-toolbar also supports symbol, timeframe and indicator selection. Changes inside
-the cross-origin chart cannot be read back into the external controls; applying
-external controls or changing theme rebuilds the embed from those controls.
+The shared app contract picker selects verified crypto USDT perpetual tickers
+from seven venues. A multi-select dropdown configures RSI, MACD, EMA, SMA and
+Bollinger Bands. Timeframe controls stay inside TradingView's chart toolbar.
+Changes inside the cross-origin chart cannot be read back into app controls;
+app market/study changes or theme changes rebuild the embed from those controls.
 Drawings and settings made inside the widget are not persisted by our app.
 
 Default: Binance BTCUSDT perpetual, 1h and RSI. Symbol availability is decided
@@ -31,7 +31,9 @@ Contains the approved Liquidity Zones adaptation of the user-supplied Pine v6
 indicator, on a separate exchange-data chart. See `liquidity-zones.md` for its
 calculation rules, request protection, licence and data limitations.
 
-The indicator selector also includes Multi-Exchange Aggregated Funding Rate.
+The Orderflow dropdown also includes Multi-Exchange Aggregated Funding Rate.
+Multiple custom panels can appear together below the hosted chart; see
+`chart-workspace.md` for shared market search and independent panel controls.
 See `funding-indicator.md` for its live aggregation modes, settled-history
 comparison, contemporaneous OI tracking and exchange coverage.
 The hosted TradingView widget does not accept our custom data or indicators.

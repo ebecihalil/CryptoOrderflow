@@ -1,7 +1,11 @@
 export const CHART_EXCHANGES = [
   { id: 'BINANCE', label: 'Binance' },
+  { id: 'GATEIO', label: 'Gate.io' },
   { id: 'BYBIT', label: 'Bybit' },
   { id: 'OKX', label: 'OKX' },
+  { id: 'MEXC', label: 'MEXC' },
+  { id: 'BITGET', label: 'Bitget' },
+  { id: 'BINGX', label: 'BingX' },
 ] as const;
 
 export type ChartExchange = (typeof CHART_EXCHANGES)[number]['id'];
