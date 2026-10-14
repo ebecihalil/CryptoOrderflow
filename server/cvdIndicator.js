@@ -7,6 +7,7 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 import { CVD_EXCHANGES, createCvdMarketResolver } from "./cvdMarkets.js";
 import { createCvdStreamFactory } from "./cvdStreams.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
+import { createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
 const RETENTION = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
@@ -59,6 +60,7 @@ export function createCvdIndicatorService({
       const row = group.minutes.get(time);
       if (group.gaps.has(time)) row.gap = true;
       addCvdTrade(row, trade);
+      group.bubbles.add(trade);
       group.lastProcessedTime = trade.time;
     }
     group.queue = pending;
@@ -158,6 +160,7 @@ export function createCvdIndicatorService({
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
         sources: initialSources(), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
         handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false };
+      group.bubbles = createAggressiveBubbleLedger({ market, now });
       groups.set(key, group);
       group.ready = initialize(group);
     } else if (!group.active) {
@@ -196,7 +199,42 @@ export function createCvdIndicatorService({
     }
   }, 15_000) : null;
   tick?.unref?.();
-  return { get, async close() {
+  function getBubbles(query) {
+    const parsed = validateAggressiveBubblesQuery(query);
+    parsed.asset = canonicalAsset(parsed.asset).asset;
+    const markets = parsed.market === "both" ? ["spot", "perpetual"] : [parsed.market];
+    // Reuse CVD's collectors, deduplication, shared gates and reorder buffer.
+    // TF, minimum size and browser refresh never create extra trade connections.
+    const snapshots = markets.map(market => {
+      const cvd = get({ asset: parsed.asset, market, timeframe: parsed.timeframe, anchor: "1w" });
+      const group = groups.get(`${market}:${parsed.asset}`);
+      return { cvd, market, ledger: group.bubbles.snapshot(parsed.timeframe, parsed.minValue) };
+    });
+    const all = snapshots.flatMap(s => s.ledger.points).sort((a, b) => b.value - a.value);
+    const points = all.slice(0, 500).sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
+    const firsts = snapshots.map(s => s.ledger.first).filter(t => t !== null);
+    const lasts = snapshots.map(s => s.ledger.last).filter(t => t !== null);
+    const warnings = [
+      "Live executed trades only. Previous CVD OHLC does not retain execution prices and cannot reconstruct historical bubbles.",
+      "Bubbles group same-side executions by chart candle and 0.05% underlying-price band. Size is gross traded USD-equivalent value, never net CVD or OI weighting.",
+      "Buy and sell flow and Spot/Perpetual markets remain separate. Aggressive means market-taking, not proof of institutional activity.",
+      "Prices are underlying-coin prices; bundled contract charts scale them into their native price units. USD/USDT/USDC use a parity assumption.",
+      "The bounded live buffer retains roughly two hours, without fabricated pre-recording trades. Missing sources and periods remain incomplete.",
+      "At most the 500 largest matching bubbles are displayed. This is an executed-trade overlay, not an order-book liquidity heatmap.",
+    ];
+    if (snapshots.some(s => s.ledger.truncated)) warnings.push("The price-level safety limit trimmed older activity; available bubble history is incomplete.");
+    if (snapshots.some(s => s.cvd.warnings.some(w => /Late\/out-of-order|safety buffer/.test(w)))) {
+      warnings.push("Some executions were excluded by the shared reorder/safety buffer; affected coverage is incomplete.");
+    }
+    return { ...parsed, unit: "USD-equivalent", points,
+      recordingStartedAt: new Date(Math.min(...snapshots.map(s => s.ledger.startedAt))).toISOString(),
+      historyStart: firsts.length ? new Date(Math.min(...firsts)).toISOString() : null,
+      historyEnd: lasts.length ? new Date(Math.max(...lasts)).toISOString() : null,
+      sources: snapshots.flatMap(s => s.cvd.sources.map(source => ({ ...source, market: s.market }))),
+      warnings, aggregation: { priceBandPercent: 0.05, time: "chart_candle" },
+      isLoading: snapshots.some(s => s.cvd.isLoading), generatedAt: new Date(now()).toISOString() };
+  }
+  return { get, getBubbles, async close() {
     clearInterval(tick);
     groups.forEach(stopGroup);
     await Promise.all([...groups.values()].map(async group => {

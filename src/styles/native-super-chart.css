@@ -115,6 +115,15 @@
 .native-cvd-status button { border:1px solid var(--lsar-control-border);padding:5px 8px;background:var(--lsar-surface);color:var(--lsar-strong);font:9px var(--app-font-mono);cursor:pointer; }
 .native-cvd-warning { margin:8px 0 0;padding:7px 8px;border-left:2px solid var(--lsar-accent);background:var(--lsar-surface); }
 .native-cvd-method { margin:9px 0 0;color:var(--lsar-muted);font:9px/1.55 var(--app-font-mono); }
+.native-bubble-controls { padding:15px 14px;border-top:1px solid var(--lsar-border);background:var(--lsar-page); }
+.native-bubble-control-row .super-chart-control { min-width:135px; }
+.native-bubble-control-row .super-chart-control select,.native-bubble-control-row .super-chart-control input { width:100%;min-width:0;height:32px; }
+.native-bubble-control-row .native-cvd-count { flex:1 1 170px; }
+.native-bubble-error { margin:7px 0 0;color:var(--lsar-warning-ink,#c76b61);font:9px/1.5 var(--app-font-mono); }
+.native-bubble-readout { padding:3px 6px;border:1px solid var(--lsar-border);background:var(--lsar-page);font-size:9px; }
+.native-bubble-readout.buy { color:#73c58f; }.native-bubble-readout.sell { color:#e27d75; }
+.native-chart-legend .legend-bubble-buy,.native-chart-legend .legend-bubble-sell { width:8px;height:8px;border-radius:50%; }
+.native-chart-legend .legend-bubble-buy { background:#58b77d; }.native-chart-legend .legend-bubble-sell { background:#d66e68; }
 @keyframes native-bars { from { opacity:.34;transform:translateY(4px); } to { opacity:.8;transform:translateY(-3px); } }
 @media(max-width:760px) {
  .native-symbol-strip { flex-wrap:wrap;gap:8px 12px; }.native-symbol-strip > div:first-child { flex-basis:100%; }
@@ -127,4 +136,5 @@
  .native-funding-controls-row { display:grid;grid-template-columns:1fr 1fr; }.native-funding-controls-row .super-chart-control { min-width:0; }
  .native-funding-current { margin:0;grid-column:1/-1; }.native-chart-readout { gap:8px; }
   .native-cvd-control-row { align-items:flex-start; }.native-cvd-anchors { width:100%; }.native-cvd-count { margin-right:0; }
+   .native-bubble-control-row { align-items:flex-start; }.native-bubble-control-row .super-chart-control { flex:1 1 130px; }
 }

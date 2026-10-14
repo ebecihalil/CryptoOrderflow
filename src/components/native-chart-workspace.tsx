@@ -8,13 +8,14 @@ import {
   type FundingIndicatorWindow, type FundingIndicatorPoint,
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload } from '@/hooks/use-cvd-indicator';
+import { useAggressiveBubbles, type AggressiveBubblesMarket } from '@/hooks/use-aggressive-bubbles';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
 import { DEFAULT_TECHNICAL_SETTINGS, type TechnicalSettings } from '@/lib/technical-indicators';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles';
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[] };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = [
@@ -78,6 +79,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
   const hasFunding = indicators.includes('funding');
   const hasPerpetualCvd = indicators.includes('perpetual-cvd');
   const hasSpotCvd = indicators.includes('spot-cvd');
+  const hasAggressiveBubbles = indicators.includes('aggressive-bubbles');
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -112,9 +114,33 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
   const [fundingThreshold, setFundingThreshold] = useState(0.08);
   const [perpetualAnchor, setPerpetualAnchor] = useState<CvdAnchor>('1w');
   const [spotAnchor, setSpotAnchor] = useState<CvdAnchor>('1w');
+  const [bubbleMarket, setBubbleMarket] = useState<AggressiveBubblesMarket>('both');
+  const [bubbleMinDraft, setBubbleMinDraft] = useState('10000');
+  const [bubbleMinValue, setBubbleMinValue] = useState(10000);
+  const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);
   const canonicalAsset = contract.asset.toUpperCase();
   const perpetualCvd = useCvdIndicator(canonicalAsset, 'perpetual', timeframe, perpetualAnchor, hasPerpetualCvd);
   const spotCvd = useCvdIndicator(canonicalAsset, 'spot', timeframe, spotAnchor, hasSpotCvd);
+  const aggressiveBubbles = useAggressiveBubbles(canonicalAsset, timeframe, bubbleMarket, bubbleMinValue, hasAggressiveBubbles);
+  const bubblePayload = aggressiveBubbles.payload && aggressiveBubbles.payload.asset.toUpperCase() === canonicalAsset &&
+    aggressiveBubbles.payload.timeframe === timeframe && aggressiveBubbles.payload.market === bubbleMarket &&
+    aggressiveBubbles.payload.minValue === bubbleMinValue
+    ? aggressiveBubbles.payload : null;
+
+  const commitBubbleMinimum = () => {
+    if (!/^\d+$/.test(bubbleMinDraft)) {
+      setBubbleMinError('Enter a whole USD amount from 1 to 100,000,000.');
+      return;
+    }
+    const next = Number(bubbleMinDraft);
+    if (!Number.isSafeInteger(next) || next < 1 || next > 100_000_000) {
+      setBubbleMinError('Enter a whole USD amount from 1 to 100,000,000.');
+      return;
+    }
+    setBubbleMinValue(next);
+    setBubbleMinDraft(String(next));
+    setBubbleMinError(null);
+  };
 
   const cvdControls = (market: CvdMarket, enabled: boolean, anchor: CvdAnchor, setAnchor: (value: CvdAnchor) => void,
     feed: ReturnType<typeof useCvdIndicator>) => {
@@ -278,7 +304,8 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
           liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
-           perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd} />
+            perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
+            aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles} priceDivisor={contract.priceDivisor || 1} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}
@@ -293,6 +320,53 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
       {technicalControls}
       {cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd)}
       {cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd)}
+      {hasAggressiveBubbles && <section className="native-bubble-controls" aria-label="Aggressive bubbles controls">
+        <div className="native-cvd-heading">
+          <div><span className="module-kicker">EXECUTED TRADE ACTIVITY / USD-EQUIVALENT</span><h2>Aggressive bubbles</h2></div>
+          <span className="native-cvd-source-total">{bubblePayload
+            ? `${bubblePayload.sources.filter((source) => source.status === 'live').length}/${bubblePayload.sources.length} live sources · up to ${bubblePayload.points.reduce((max, point) => Math.max(max, point.sourceCount), 0)} per level`
+            : 'Awaiting recorded executions'}</span>
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          <label className="super-chart-control"><span>Market</span><select value={bubbleMarket}
+            onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive bubbles market">
+            <option value="both">Both markets</option><option value="spot">Spot</option><option value="perpetual">Perpetual</option>
+          </select></label>
+          <label className="super-chart-control"><span>Minimum USD value</span><input type="number" min="1" max="100000000" step="1"
+            value={bubbleMinDraft} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
+            onBlur={commitBubbleMinimum} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMinimum(); event.currentTarget.blur(); } }}
+            aria-label="Minimum aggressive bubble USD-equivalent value" /></label>
+          <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
+          <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
+            <RefreshCw size={12} aria-hidden="true" /> Refresh
+          </button>
+        </div>
+        {bubbleMinError && <p className="native-bubble-error" role="alert">{bubbleMinError}</p>}
+        {aggressiveBubbles.loading && !bubblePayload && <p className="native-cvd-status" role="status">Loading recorded execution levels…</p>}
+        {aggressiveBubbles.error && <div className="native-cvd-status is-error" role="alert">
+          <span>{bubblePayload ? `Refresh issue: ${aggressiveBubbles.error} Cached points remain visible.` : aggressiveBubbles.error}</span>
+          <button type="button" onClick={aggressiveBubbles.refresh}>Retry</button>
+        </div>}
+        {bubblePayload && <>
+          <div className="native-cvd-history" role="status">
+            <span>{bubblePayload.recordingStartedAt ? `Bubble recording began ${new Date(bubblePayload.recordingStartedAt).toLocaleString()}` : 'Recording start unavailable'}</span>
+            <span>{bubblePayload.historyStart ? `First covered executions ${new Date(bubblePayload.historyStart).toLocaleString()}` : 'No covered execution start yet'}</span>
+            <span>{bubblePayload.points.length ? `${bubblePayload.points.length} price levels · execution snapshot updates about every 5 seconds` : 'No qualifying newly recorded executions in the live retention window.'}</span>
+            <span>{bubblePayload.sources.filter((source) => source.status === 'live').length < bubblePayload.sources.length ? 'Source coverage is partial; unavailable venues are not inferred.' : 'All listed trade sources are live.'}</span>
+            <span>History before recording start is unavailable; CVD candle history cannot reconstruct price-level trades.</span>
+          </div>
+          <div className="native-cvd-sources" aria-label="Aggressive bubble source coverage">
+            {bubblePayload.sources.map((source) => <span key={`${source.market}-${source.exchange}`} className={`status-${source.status}`}
+              title={[source.symbol, source.lastTradeAt ? `Last trade ${source.lastTradeAt}` : null].filter(Boolean).join(' · ') || source.status}>
+              <i aria-hidden="true" />{source.market.toUpperCase()} {source.exchange.toUpperCase()} · {source.status.replace('_', ' ')}
+            </span>)}
+          </div>
+          <details className="native-cvd-method"><summary>Method &amp; coverage notes</summary>
+            {bubblePayload.warnings.map((warning, index) => <p className="native-cvd-warning" key={`${index}-${warning}`}>{warning}</p>)}
+          </details>
+        </>}
+        <p className="native-cvd-method">Each bubble is recorded executed buy or sell activity at an aggregated price level—not price direction, an orderbook heatmap, or trader identity. Bubble price is converted from underlying USD-equivalent to this contract’s native price scale.</p>
+      </section>}
       {hasLiquidity && volumeBasis === 'aggregated' && aggregateRequested && !aggregatePayloadCurrent && <p className="native-volume-warning" role="status">
         Liquidity Zones are waiting for a matching aggregate-volume feed. Native price/technical candles remain available; zones are not calculated with substitute venue volume.
       </p>}
@@ -310,7 +384,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         <span>i</span><p>Prices and OHLC are from the selected native exchange contract. {volumeBasis === 'aggregated'
           ? 'Volume sums exactly matched underlying-coin volume from up to four venues; it is not open-interest weighted.'
           : 'Volume is from the selected venue only.'}
-          {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD records public executed-trade streams and updates its chart snapshot roughly every five seconds.</p>
+          {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD and Aggressive bubbles reuse recorded public trade streams; bubble points describe newly recorded executions only.</p>
       </div>
     </>
   );

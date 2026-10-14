@@ -9,6 +9,8 @@ import { calculateTechnicalIndicators, type TechnicalSettings } from '@/lib/tech
 import type { ChartStudyId } from '@/lib/supercharts';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
+import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
+import { AggressiveBubblesPrimitive, type PlottedAggressiveBubble } from '@/components/aggressive-bubbles-primitive';
 
 type FundingPlot = { points: FundingIndicatorPoint[]; method: FundingIndicatorMethod; threshold: number };
 type Props = {
@@ -27,9 +29,12 @@ type Props = {
   spotCvd: CvdPayload | null;
   perpetualCvdEnabled: boolean;
   spotCvdEnabled: boolean;
+  aggressiveBubbles: { points: AggressiveBubble[] } | null;
+  aggressiveBubblesEnabled: boolean;
+  priceDivisor: number;
 };
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
-type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null };
+type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null };
 
 function themeColors(element: HTMLElement): Theme {
   const styles = getComputedStyle(element);
@@ -58,7 +63,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, priceDivisor }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -69,6 +74,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const hasChartDataRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const [hover, setHover] = useState<Candle | null>(null);
+  const [bubbleHover, setBubbleHover] = useState<PlottedAggressiveBubble | null>(null);
+  const plottedBubbles = useMemo(() => (aggressiveBubbles?.points ?? [])
+    .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.value) && point.value >= 0)
+    .map((point) => ({ ...point, nativePrice: point.price * (Number.isFinite(priceDivisor) && priceDivisor > 0 ? priceDivisor : 1) })),
+  [aggressiveBubbles, priceDivisor]);
   candleDataRef.current = candles;
   const volumeByTime = useMemo(() => new Map(volumeCandles.map((bar) => [bar.time, bar.volume])), [volumeCandles]);
   const studyData = useMemo(() => calculateTechnicalIndicators(candles, technicalSettings), [candles, technicalSettings]);
@@ -113,7 +123,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       upColor: palette.positive, downColor: '#c76b61', borderVisible: false,
       wickUpColor: palette.positive, wickDownColor: '#c76b61', priceLineVisible: false,
     }, 0);
-    bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null };
+    bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null, bubblePrimitive: null };
     const root = document.documentElement;
     const observer = new MutationObserver(() => {
       const next = themeColors(mount);
@@ -130,9 +140,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     const resize = new ResizeObserver(() => chart.applyOptions({ width: mount.clientWidth }));
     resize.observe(mount);
     const crosshairHandler = (param: Parameters<IChartApi['subscribeCrosshairMove']>[0] extends (arg: infer A) => void ? A : never) => {
-      if (!param.time) { setHover(null); return; }
+      if (!param.time) { setHover(null); setBubbleHover(null); return; }
       const time = typeof param.time === 'number' ? param.time : null;
       setHover(time === null ? null : candleDataRef.current.find((item) => item.time === time) ?? null);
+      const point = (param.paneIndex === undefined || param.paneIndex === 0) && param.seriesData.has(candleSeries) ? param.point : undefined;
+      setBubbleHover(point ? bundleRef.current?.bubblePrimitive?.findBubbleAt(point.x, point.y) ?? null : null);
     };
     chart.subscribeCrosshairMove(crosshairHandler);
     const fitHandler = () => chart.timeScale().fitContent();
@@ -143,6 +155,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       chart.unsubscribeCrosshairMove(crosshairHandler);
       window.removeEventListener('native-chart-fit', fitHandler);
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+      const activeBundle = bundleRef.current;
+      if (activeBundle?.primitive) activeBundle.candleSeries.detachPrimitive(activeBundle.primitive);
+      if (activeBundle?.bubblePrimitive) activeBundle.candleSeries.detachPrimitive(activeBundle.bubblePrimitive);
       seriesRef.current = [];
       hasChartDataRef.current = false;
       paneCountRef.current = 0;
@@ -172,6 +187,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     const previousWeights = new Map(paneKeysRef.current.map((key, index) =>
       [key, chart.panes()[index]?.getStretchFactor()] as const));
     if (bundle.primitive) candleSeries.detachPrimitive(bundle.primitive);
+    if (bundle.bubblePrimitive) candleSeries.detachPrimitive(bundle.bubblePrimitive);
+    if (!aggressiveBubblesEnabled) setBubbleHover(null);
     // Recreate only the chart's series; the chart instance and shared viewport remain stable.
     for (const series of seriesRef.current) chart.removeSeries(series);
     seriesRef.current = [];
@@ -295,6 +312,13 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       candleSeries.attachPrimitive(primitive);
       bundle.primitive = primitive;
     } else bundle.primitive = null;
+    if (aggressiveBubblesEnabled) {
+      const primitive = new AggressiveBubblesPrimitive({
+        series: candleSeries, timeScale: chart.timeScale(), points: plottedBubbles, enabled: true,
+      });
+      candleSeries.attachPrimitive(primitive);
+      bundle.bubblePrimitive = primitive;
+    } else bundle.bubblePrimitive = null;
     chart.applyOptions({ timeScale: { timeVisible: true, secondsVisible: false } });
     if (candles.length) {
       const shouldFit = resetKeyRef.current !== resetKey || !hasChartDataRef.current;
@@ -315,7 +339,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         animationFrameRef.current = null;
       }
     };
-  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled]);
+  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles]);
 
   return (
     <div className="native-chart-wrap">
@@ -324,6 +348,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         {hover ? <><b>O {hover.open.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>H {hover.high.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <b>L {hover.low.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>C {hover.close.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <span>V {volumeByTime.has(hover.time) ? volumeByTime.get(hover.time)!.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span></> : <span>OHLC · move pointer over a candle</span>}
+        {bubbleHover && <span className={`native-bubble-readout ${bubbleHover.side}`}>
+          {bubbleHover.market.toUpperCase()} {bubbleHover.side.toUpperCase()} · ${bubbleHover.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} · {bubbleHover.nativePrice.toLocaleString(undefined, { maximumSignificantDigits: 8 })}
+          · {bubbleHover.tradeCount.toLocaleString()} trades · {bubbleHover.sourceCount} sources
+        </span>}
       </div>
       {insufficientStudies.length > 0 && <div className="native-study-warmup" role="status">
         <strong>Insufficient history for selected studies</strong><span>{insufficientStudies.join(' · ')}</span>
@@ -334,6 +362,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         {studies.includes('sma') && <span><i className="legend-sma" /> SMA</span>}{studies.includes('bb') && <span><i className="legend-bb" /> Bollinger</span>}
         {studies.includes('rsi') && <span>RSI · 30 / 70</span>}{studies.includes('macd') && <span>MACD</span>}{funding && <span>Funding · normalized 8h</span>}
          {perpetualCvdEnabled && <span>Perpetual CVD · signed trade flow</span>}{spotCvdEnabled && <span>Spot CVD · signed trade flow</span>}
+         {aggressiveBubblesEnabled && <><span><i className="legend-bubble-buy" /> Aggressive buys</span><span><i className="legend-bubble-sell" /> Aggressive sells</span><span>Outlined · Spot / filled · Perpetual</span></>}
       </div>
     </div>
   );

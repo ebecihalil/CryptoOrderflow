@@ -58,6 +58,13 @@ app.get("/api/indicators/cvd", (req, res) => {
     ? error.message : "CVD collection is currently unavailable. Please retry later." }); }
 });
 
+app.get("/api/indicators/aggressive-bubbles", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(cvdIndicatorService.getBubbles(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "Aggressive bubbles collection is currently unavailable. Please retry later." }); }
+});
+
 app.get("/api/market/funding", (req, res) => {
   const timeframe=req.query.timeframe??"current";
   if(typeof timeframe!=="string"||!["current","1d","7d","30d","1y"].includes(timeframe)){

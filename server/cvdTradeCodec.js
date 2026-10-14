@@ -102,9 +102,12 @@ export function parseCvdTrades(exchange, market, message, instrument, frameId = 
     const [id, timestamp, side, rawPrice, rawQuantity, multiplier] = fields;
     const price = Number(rawPrice), quantity = Number(rawQuantity), time = milliseconds(timestamp);
     const value = price * quantity * multiplier;
+    const divisor = instrument.priceDivisor ?? 1;
     if (id === undefined || id === null || !["buy", "sell"].includes(side) ||
-      !(price > 0 && quantity > 0 && value > 0 && Number.isFinite(value)) || !Number.isSafeInteger(time) || time <= 0) continue;
-    trades.push({ id: String(id), exchange, symbol: instrument.symbol, time, side, value });
+      !(price > 0 && quantity > 0 && value > 0 && Number.isFinite(value)) ||
+      !(divisor > 0 && Number.isFinite(divisor)) || !Number.isSafeInteger(time) || time <= 0) continue;
+    trades.push({ id: String(id), exchange, symbol: instrument.symbol, time, side, value,
+      price: price / divisor, quantity: quantity * multiplier * divisor });
   }
   return trades;
 }

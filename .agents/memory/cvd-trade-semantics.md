@@ -1,6 +1,6 @@
 ---
-name: CVD trade semantics
-description: Verified execution data, separate spot/perpetual aggregation and the user's one-week history requirement
+name: CVD and trade-bubble semantics
+description: Verified taker execution data, CVD continuity, one-week history and separate Aggressive bubbles
 ---
 
 Keep Spot CVD and Perpetual CVD separate, using exchange-reported taker direction.
@@ -34,6 +34,17 @@ explicitly said "new candle must start at the close of previous candle."
 **How to apply:** Carry known signed flow across coverage gaps while marking
 coverage incomplete; leave missing candle periods absent rather than estimating
 trades or creating zero-volume candles.
+
+The user requested a separate indicator named exactly "Aggressive bubbles".
+It is not a CVD display mode and must remain independently selectable.
+
+**Why:** The user wants Bookmap/DeepCharts-style executed-trade bubbles alongside
+their existing CVD and other native chart indicators.
+
+**How to apply:** Use original executed price, time, taker side and gross volume.
+Keep opposite-side activity visible even when net CVD is zero. Reuse shared trade
+collectors; never reconstruct price-level bubbles from cumulative CVD candles.
+Do not call bubbles an order-book heatmap or proof of institutional activity.
 
 USD-M Binance trade streams require its routed market endpoint after its 2026
 migration. An unrouted socket can accept a subscription yet never deliver trades.
