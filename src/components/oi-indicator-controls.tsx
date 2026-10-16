@@ -11,8 +11,8 @@ type Props = {
 };
 
 const EXCHANGES = [
-  'Binance', 'Bybit', 'OKX', 'Gate.io', 'Bitget',
-  'MEXC', 'BingX', 'KuCoin', 'HTX', 'Deribit',
+  'Binance', 'Bybit', 'OKX', 'Gate.io', 'MEXC',
+  'Bitget', 'BingX', 'KuCoin', 'Kraken', 'HTX',
 ] as const;
 
 const COLOR_FIELDS: Array<{ key: keyof OiDriverSettings['colors']; label: string }> = [
@@ -61,7 +61,7 @@ function sourceKey(value: string) {
 
 function available(value: string | undefined) {
   if (!value) return false;
-  return !/(unavailable|offline|error|missing|unsupported|unknown|not available)/i.test(value);
+  return !/(unavailable|offline|error|missing|unsupported|unknown|not available|loading|idle|reconnect)/i.test(value);
 }
 
 function formatTime(value: string) {

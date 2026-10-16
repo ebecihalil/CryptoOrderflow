@@ -705,6 +705,6 @@ export function getLsarChartReadings(asset, exchanges) {
     getLsarMarketSnapshot();
     return exchanges.flatMap(exchange => (sourceReadings[exchange] ?? [])
         .filter(reading => reading.asset === asset)
-        .map(reading => ({ exchange, symbol: reading.symbol, points: reading.points,
+        .map(reading => ({ asset: reading.asset, exchange, symbol: reading.symbol, points: reading.points,
             longWindowPoints: reading.longWindowPoints ?? [] })));
 }

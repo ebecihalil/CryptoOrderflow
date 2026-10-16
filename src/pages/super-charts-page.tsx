@@ -11,13 +11,14 @@ import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, val
 import '@/styles/super-charts.css';
 
 type MenuId = 'technical' | 'orderflow' | null;
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
 const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'liquidity', label: 'Liquidity Zones' },
   { id: 'funding', label: 'Aggregated Funding Rate' },
   { id: 'perpetual-cvd', label: 'Aggregated Perpetual CVD' },
   { id: 'spot-cvd', label: 'Aggregated Spot CVD' },
   { id: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles' },
+  { id: 'oi-driver', label: 'Aggregated Open Interest' },
 ];
 const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 

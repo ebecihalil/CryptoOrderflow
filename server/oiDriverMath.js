@@ -201,7 +201,9 @@ export function buildOiDriverCandles(contracts, duration, now) {
     if (!keys.length) continue;
     const cohort = keys.join("|"), observations = new Map();
     // Aggregate simultaneous/as-of observations, not independently sampled venue maxima.
-    const values = new Map(keys.map(key => [key, previous.get(key).sort((a, b) => a.timestamp - b.timestamp).at(-1)]));
+    const previousPoints = keys.map(key => [key, previous.get(key).sort((a, b) => a.timestamp - b.timestamp).at(-1)]);
+    if (previousPoints.some(([, point]) => time - point.timestamp > 300_000)) continue;
+    const values = new Map(previousPoints);
     const opening = [...values.values()].reduce((sum, p) => sum + p.oiCoin, 0);
     for (const key of keys) for (const point of entries.get(key)) {
       if (!observations.has(point.timestamp)) observations.set(point.timestamp, []);

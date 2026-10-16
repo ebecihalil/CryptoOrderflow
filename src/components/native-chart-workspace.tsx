@@ -9,6 +9,8 @@ import {
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload } from '@/hooks/use-cvd-indicator';
 import { useAggressiveBubbles, type AggressiveBubblesMarket } from '@/hooks/use-aggressive-bubbles';
+import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
+import { OiIndicatorControls } from '@/components/oi-indicator-controls';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
@@ -17,7 +19,7 @@ import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[] };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = [
@@ -81,11 +83,20 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
   const [technicalSettings, setTechnicalSettings] = useCoinChartSetting<TechnicalSettings>(asset, 'technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
   const [liquiditySettings, setLiquiditySettings] = useCoinChartSetting(asset, 'liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
   const [zoneColors, setZoneColors] = useCoinChartSetting(asset, 'zoneColors', DEFAULT_ZONE_COLORS);
+  const [oiDriverSettings, setOiDriverSettings] = useCoinChartSetting<OiDriverSettings>(asset, 'oiDriverSettings',
+    { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
+      pinbarBodyPct: 10, pinbarWickPct: 50, pinbarWickRatio: 2, spikeMult: 5, avgLength: 50,
+      maxSidewaysBars: 10, pullback1: 10, pullback2: 20,
+      colors: { up: '#3b82f6', down: '#ef4444', longBuild: '#3b82f6', shortBuild: '#f23645',
+        limitBuy: '#22c55e', limitSell: '#f97316', shortExit: '#facc15', longExit: '#a855f7', neutral: '#737373' } },
+    value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
+      typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
   const hasLiquidity = indicators.includes('liquidity');
   const hasFunding = indicators.includes('funding');
   const hasPerpetualCvd = indicators.includes('perpetual-cvd');
   const hasSpotCvd = indicators.includes('spot-cvd');
   const hasAggressiveBubbles = indicators.includes('aggressive-bubbles');
+  const hasOiDriver = indicators.includes('oi-driver');
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -139,6 +150,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
     aggressiveBubbles.payload.timeframe === timeframe && aggressiveBubbles.payload.market === bubbleMarket &&
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
+  const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
 
   const commitBubbleMinimum = () => {
     if (!/^\d+$/.test(bubbleMinDraft)) {
@@ -320,7 +332,8 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
-            aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles} priceDivisor={contract.priceDivisor || 1} />
+             aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
+             oiDriver={oiDriver.payload} oiDriverEnabled={hasOiDriver} priceDivisor={contract.priceDivisor || 1} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}
@@ -333,6 +346,9 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
       </p>}
       {settingsPanel}
       {technicalControls}
+      {hasOiDriver && <OiIndicatorControls settings={oiDriverSettings}
+        onChange={next => setOiDriverSettings(next)} payload={oiDriver.payload}
+        loading={oiDriver.loading} error={oiDriver.error} />}
       {cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd)}
       {cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd)}
       {hasAggressiveBubbles && <section className="native-bubble-controls" aria-label="Aggressive Volume Bubbles controls">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, MismatchDirection,
+  CandlestickSeries, ColorType, createChart, createSeriesMarkers, HistogramSeries, LineSeries, MismatchDirection,
   type IChartApi, type ISeriesApi, type Time, type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, LiquidityZone, LiquiditySettings } from '@/lib/liquidity-zones';
@@ -10,6 +10,7 @@ import type { ChartStudyId } from '@/lib/supercharts';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
+import type { OiDriverPayload } from '@/hooks/use-oi-driver';
 import { AggressiveBubblesPrimitive, type PlottedAggressiveBubble } from '@/components/aggressive-bubbles-primitive';
 import { readChartPreference, writeChartPreference, validChartView, shiftedChartRange } from '@/lib/chart-preferences.js';
 
@@ -33,6 +34,8 @@ type Props = {
   spotCvdEnabled: boolean;
   aggressiveBubbles: { points: AggressiveBubble[] } | null;
   aggressiveBubblesEnabled: boolean;
+  oiDriver: OiDriverPayload | null;
+  oiDriverEnabled: boolean;
   priceDivisor: number;
 };
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
@@ -69,7 +72,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, priceDivisor }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, priceDivisor }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -341,6 +344,29 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     };
     addCvdPane(perpetualCvd, perpetualCvdEnabled, 'perpetual-cvd');
     addCvdPane(spotCvd, spotCvdEnabled, 'spot-cvd');
+    if (oiDriverEnabled && oiDriver?.candles.length) {
+      const pane = nextPane();
+      const oiSeries = pushSeries(chart.addSeries(CandlestickSeries, {
+        priceFormat: { type: 'custom', formatter: compactCvd, minMove: 0.01 },
+        upColor: '#3b82f6', downColor: '#ef4444', borderVisible: false,
+        wickUpColor: '#3b82f6', wickDownColor: '#ef4444', priceLineVisible: false,
+      }, pane));
+      oiSeries.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } });
+      oiSeries.setData(oiDriver.candles.map(bar => ({
+        time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+        color: bar.color, wickColor: bar.color, borderColor: bar.color,
+      })));
+      oiSeries.applyOptions({ title: `Aggregated Open Interest · ${oiDriver.asset} · ${oiDriver.timeframe}` });
+      createSeriesMarkers(oiSeries, oiDriver.candles.flatMap(bar => {
+        const markers = [];
+        if (bar.spikeTime === bar.time && bar.spikePct !== null)
+          markers.push({ time: toTime(bar.time), position: 'aboveBar' as const, color: '#b91c1c', shape: 'arrowDown' as const,
+            text: `${bar.spikePct.toFixed(2)}%` });
+        if (bar.alerts.length) markers.push({ time: toTime(bar.time), position: 'belowBar' as const, color: '#facc15',
+          shape: 'circle' as const, text: bar.alerts.join(' · ') });
+        return markers;
+      }));
+    }
     // Set proportions together after every pane exists. Sequential pixel-height
     // changes during add/remove can progressively squeeze sibling panes.
     const lowerPanes = [
@@ -350,6 +376,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       ...(funding ? [{ key: 'funding', height: 112 }] : []),
       ...(perpetualCvdEnabled ? [{ key: 'perpetual-cvd', height: 142 }] : []),
       ...(spotCvdEnabled ? [{ key: 'spot-cvd', height: 142 }] : []),
+      ...(oiDriverEnabled && oiDriver?.candles.length ? [{ key: 'oi-driver', height: 158 }] : []),
     ];
     const priceHeight = Math.max(260, (mountRef.current?.clientHeight ?? 650) -
       lowerPanes.reduce((sum, pane) => sum + pane.height, 0) - 30);
@@ -424,7 +451,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         animationFrameRef.current = null;
       }
     };
-  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles]);
+  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled]);
 
   return (
     <div className="native-chart-wrap">

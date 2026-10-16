@@ -32,6 +32,34 @@ export function cvdSubscription(exchange, market, symbol, id, time) {
   }
 }
 
+export function liquidationSubscription(exchange, symbol, id, time) {
+  switch (exchange) {
+    case "binance": return { method: "SUBSCRIBE", params: [`${symbol.toLowerCase()}@forceOrder`], id };
+    case "bybit": return { op: "subscribe", args: [`allLiquidation.${symbol}`] };
+    default: return null;
+  }
+}
+
+export function parseLiquidation(exchange, message, instrument) {
+  const records = exchange === "binance"
+    ? (message?.e === "forceOrder" && message.o ? [message.o] : [])
+    : exchange === "bybit" && message?.topic?.startsWith("allLiquidation.")
+      ? (Array.isArray(message.data) ? message.data : [message.data])
+      : [];
+  return records.flatMap(record => {
+    const price = Number(record.ap ?? record.p), quantity = Number(record.q ?? record.v);
+    const time = Number(record.T ?? message.E ?? message.ts);
+    if (!(Number.isFinite(price) && price > 0 && Number.isFinite(quantity) && quantity > 0 &&
+      Number.isFinite(time) && time > 0)) return [];
+    const action = String(record.S ?? record.S).toLowerCase();
+    // Bybit Buy means a long position was liquidated; Binance BUY order closes shorts.
+    const side = exchange === "bybit"
+      ? action === "buy" ? "long" : action === "sell" ? "short" : null
+      : action === "sell" ? "long" : action === "buy" ? "short" : null;
+    return side ? [{ exchange, symbol: instrument.symbol, side, time, usd: price * quantity }] : [];
+  });
+}
+
 export function createCvdStreamFactory({
   request = requestJson, gates = requestGates, Socket = WebSocket, now = Date.now,
   wait = delay => new Promise(resolve => setTimeout(resolve, delay)),
@@ -39,7 +67,7 @@ export function createCvdStreamFactory({
   const starts = new Map();
   // ALL CVD sockets share per-exchange connection spacing across spot, perp and assets.
   // An API refresh reuses a collector; it never forces an upstream reconnect.
-  async function start(instrument, onTrade, onState) {
+  async function start(instrument, onTrade, onState, onLiquidation = () => {}) {
     const { exchange, market, symbol } = instrument;
     let stopped = false, ws, pulse, life, previousStart, generation = 0;
     const send = message => {
@@ -80,6 +108,8 @@ export function createCvdStreamFactory({
           if (stopped || thisGeneration !== generation) { socket.close(); return; }
           subscribedAt = now(); onState("idle");
           send(cvdSubscription(exchange, market, symbol, 1, now()));
+          const liquidation = market === "perpetual" ? liquidationSubscription(exchange, symbol, 2, now()) : null;
+          if (liquidation) send(liquidation);
           pulse = setInterval(() => {
             if (now() - receivedAt > 75_000) { socket.terminate(); return; }
             if (exchange === "bybit") send({ op: "ping" });
@@ -104,6 +134,11 @@ export function createCvdStreamFactory({
             if (message.event === "error" || message.type === "error" || message.success === false ||
               message.error || (message.code !== undefined && Number(message.code) !== 0)) {
               onState("unavailable"); socket.close(); return;
+            }
+            if (market === "perpetual") {
+              for (const event of parseLiquidation(exchange, message, instrument)) {
+                if (event.time >= subscribedAt && event.time <= now() + 5000) onLiquidation(event);
+              }
             }
             for (const trade of parseCvdTrades(exchange, market, message, instrument, `${subscribedAt}:${thisGeneration}:${++frameSequence}`)) {
               // Subscription snapshots/replays cannot masquerade as complete old history.

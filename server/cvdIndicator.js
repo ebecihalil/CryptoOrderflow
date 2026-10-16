@@ -127,6 +127,18 @@ export function createCvdIndicatorService({
         if (!group.active) return;
         if (source.status !== state && group.minutes.size) markGap(group);
         source.status = state;
+        if (["binance", "bybit"].includes(source.exchange)) {
+          source.liquidationConnectedSince = ["idle", "live"].includes(state)
+            ? source.liquidationConnectedSince ?? now() : null;
+        }
+      }, event => {
+        if (!group.active || event.time < group.subscribedSince || event.time > now() + 5000) return;
+        if (!group.liquidations.some(item => item.exchange === event.exchange && item.symbol === event.symbol &&
+          item.side === event.side && item.time === event.time && item.usd === event.usd)) {
+          group.liquidations.push(event);
+          group.liquidations.sort((a, b) => a.time - b.time);
+          group.liquidations = group.liquidations.filter(item => item.time >= now() - 30 * 3600_000).slice(-100_000);
+        }
       });
       if (!group.active) handle.stop(); else group.handles.push(handle);
     } catch (error) {
@@ -172,7 +184,7 @@ export function createCvdIndicatorService({
     if (!group) {
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
         sources: initialSources(), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
-        handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false };
+        handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [] };
       // Smallest supported frame is 5m: compact base cells without losing any
       // displayed price/side/value detail on any supported chart timeframe.
       group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 7 * 86400,
@@ -289,7 +301,24 @@ export function createCvdIndicatorService({
       historyEnd: last.length ? new Date(Math.max(...last)).toISOString() : null,
       storageFailed: cohorts.some(g => g.storageFailed === true) };
   }
-  return { get, getBubbles, pinAsset, unpinAsset, recordingStatus, storageDir, async close() {
+  function liquidationSnapshot(asset) {
+    const group = groups.get(`perpetual:${canonicalAsset(asset).asset}`);
+    const supported = new Set(["binance", "bybit"]);
+    return {
+      events: (group?.liquidations ?? []).filter(item => item.time >= now() - 30 * 3600_000).map(item => ({ ...item })),
+      coverage: CVD_EXCHANGES.filter(exchange => supported.has(exchange)).flatMap(exchange => {
+        const source = group?.sources.find(item => item.exchange === exchange);
+        return source?.liquidationConnectedSince
+          ? [{ exchange, since: source.liquidationConnectedSince }] : [];
+      }),
+      sources: CVD_EXCHANGES.map(exchange => {
+        const source = group?.sources.find(item => item.exchange === exchange);
+        return { exchange, status: supported.has(exchange) && source?.liquidationConnectedSince
+          ? "Connected; sampled feed" : "Unavailable" };
+      }),
+    };
+  }
+  return { get, getBubbles, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
     clearInterval(tick);
     groups.forEach(stopGroup);
     await Promise.all([...groups.values()].map(async group => {

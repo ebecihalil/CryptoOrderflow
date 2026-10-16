@@ -1,6 +1,7 @@
 import express from "express";
 import { getFundingMarketSnapshot } from "./server/fundingMarketData.js";
 import { getOpenInterestSnapshot } from "./server/openInterestMarketData.js";
+import { oiDriverService } from "./server/oiDriverService.js";
 import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
 import { fundingIndicatorService } from "./server/fundingIndicator.js";
 import { cvdIndicatorService } from "./server/cvdIndicator.js";
@@ -111,6 +112,13 @@ app.get("/api/market/open-interest", (req, res) => {
     res.status(400).json({ error: "exchanges must be a comma-separated list of supported exchange names." }); return;
   }
   res.set("Cache-Control", "no-store").json(getOpenInterestSnapshot(timeframe, selection ? [...new Set(selection.split(","))] : [], comparison));
+});
+
+app.get("/api/indicators/open-interest-driver", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(oiDriverService.get(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "Aggregated OI indicator inputs are currently unavailable." }); }
 });
 
 app.get("/api/market/lsar", (req, res) => {

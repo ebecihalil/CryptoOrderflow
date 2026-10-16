@@ -23,3 +23,13 @@ liquidation/open interest is below 0.5%.
 **How to apply:** Use comparable liquidation and OI units and the same chart
 period. Treat this as a classification threshold, not a claim that no actual
 liquidations occurred. Missing data must not be interpreted as below threshold.
+
+The user chose to use verified available sources with clear partial coverage,
+instead of suppressing all results until every requested exchange is available.
+
+**Why:** The requested exchange list does not provide a verified complete feed
+for every indicator input.
+
+**How to apply:** Show availability per metric and venue, never zero-fill an
+unavailable input, and label derived states as unavailable where missing data
+would change the classification.
