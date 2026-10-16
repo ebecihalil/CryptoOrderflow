@@ -28,6 +28,7 @@ export class BinanceRequestGate {
         this.blockedStatus = 429;
         this.backoffLevel = 0;
         this.lastLimitAt = 0;
+        this.cooldownListeners = new Set();
         if (state) {
             for (const key of ["nextStart", "blockedUntil", "blockedStatus", "backoffLevel", "lastLimitAt"])
                 if (!Number.isFinite(state[key]) || state[key] < 0) throw new Error("Invalid Binance limiter state");
@@ -56,6 +57,19 @@ export class BinanceRequestGate {
 
     checkCooldown() {
         if (this.isCoolingDown) throw this.cooldownError();
+    }
+
+    onCooldown(listener) {
+        if (typeof listener !== "function") throw new TypeError("Cooldown listener must be a function");
+        this.cooldownListeners.add(listener);
+        return () => this.cooldownListeners.delete(listener);
+    }
+
+    notifyCooldown() {
+        const error = this.cooldownError();
+        for (const listener of this.cooldownListeners) {
+            try { listener(error); } catch { /* A listener cannot weaken the shared request pause. */ }
+        }
     }
 
     async enter(url) {
@@ -141,6 +155,7 @@ export class BinanceRequestGate {
             Number.isFinite(headerDeadline) && headerDeadline > now ? headerDeadline : fallback);
         this.blockedUntil = provisionalDeadline;
         this.checkpoint();
+        this.notifyCooldown();
         const body = await response.clone().json().catch(() => null);
         const match = String(body?.msg ?? "").match(/banned until\s+(\d{10,13})\b/i);
         const epoch = match ? Number(match[1]) : NaN;

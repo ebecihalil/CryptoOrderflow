@@ -84,3 +84,15 @@ Check the affected deployment's exchange status before treating zero Binance dat
 **Why:** Render returned HTTP 418 while the Replit preview fetched hundreds of Binance contracts successfully. Binance documents 418 as an IP ban following rate-limit violations; preview success does not establish production access.
 
 **How to apply:** diagnose the actual site's API error, honor cooldown guidance, and verify fresh data from that same deployment before claiming recovery. Code can prevent further request bursts, but cannot remove an existing Binance ban. Reference: https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/general-info
+
+Treat a Binance 418/429 cooldown as a provider-wide hard pause for all market
+modules: no new REST calls or WebSocket connections, and no retry polling before
+the exchange-reported deadline. Allow only requests already in flight to finish;
+their later ban deadlines must extend, never shorten, the shared pause.
+
+**Why:** the user explicitly asked that an active Binance block must not trigger
+more outbound requests, after seeing the reported ban deadline move later.
+
+**How to apply:** share one limiter across modules and protocols, check it at
+network admission, and persist it across process restarts/instances where the
+hosting filesystem is ephemeral or traffic is distributed.

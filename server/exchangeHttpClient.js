@@ -28,6 +28,9 @@ export function createExchangeHttpClient({ gates, fetchImpl = fetch, sleep = wai
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
                 await gate.enter(url); // Includes retries; queued time is NOT network timeout time.
+                // Another already-admitted request may have reported a ban while
+                // this call was waiting to resume from the gate.
+                gate.checkCooldown?.();
                 const response = await fetchImpl(url, {
                     ...options,
                     signal: AbortSignal.timeout(timeoutMs),

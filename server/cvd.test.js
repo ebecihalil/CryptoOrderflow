@@ -219,6 +219,22 @@ test("new spot REST hosts enter existing shared limiters and Kraken empty error 
   assert.equal(entered, 1);
 });
 
+test("Binance REST client never sends a request after cooldown is active", async () => {
+  let fetched = 0, checked = 0;
+  const client = createExchangeHttpClient({
+    gates: {
+      binance: {
+        enter: async () => {},
+        checkCooldown: () => { checked++; throw Object.assign(new Error("Binance cooldown"), { status: 418 }); },
+      },
+    },
+    fetchImpl: async () => { fetched++; return new Response("{}"); },
+  });
+  await assert.rejects(client("https://fapi.binance.com/fapi/v1/exchangeInfo"), /cooldown/);
+  assert.equal(checked, 1);
+  assert.equal(fetched, 0);
+});
+
 test("socket admission shares limiter, Gate preserves decimal lots and stop prevents reconnect", async () => {
   const sockets = [];
   class FakeSocket extends EventEmitter {
@@ -239,4 +255,57 @@ test("socket admission shares limiter, Gate preserves decimal lots and stop prev
   handle.stop();
   await new Promise(r => setImmediate(r));
   assert.equal(sockets.length, 1);
+});
+
+test("Binance websocket does not start while the shared gate is cooling down", async () => {
+  let socketAttempts = 0, admissions = 0;
+  class FakeSocket extends EventEmitter {
+    constructor() { super(); socketAttempts++; }
+  }
+  const streams = createCvdStreamFactory({
+    Socket: FakeSocket, now: () => T, wait: async () => {},
+    gates: {
+      binance: {
+        isCoolingDown: true, blockedUntil: T + 60_000,
+        cooldownError: () => Object.assign(new Error("Binance cooldown"), { retryAt: T + 60_000 }),
+        enter: async () => { admissions++; },
+      },
+    },
+  });
+  const handle = await streams.start({ exchange: "binance", market: "perpetual", symbol: "BTCUSDT" }, () => {}, () => {});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(admissions, 0);
+  assert.equal(socketAttempts, 0);
+  handle.stop();
+});
+
+test("an active Binance websocket disconnects as soon as the shared gate reports a ban", async () => {
+  const sockets = [];
+  let cooling = false, onCooldown;
+  class FakeSocket extends EventEmitter {
+    constructor() { super(); this.readyState = 1; this.closed = false; sockets.push(this); }
+    send() {}
+    close() { this.closed = true; this.emit("close"); }
+    ping() {}
+  }
+  const streams = createCvdStreamFactory({
+    Socket: FakeSocket, now: () => T, wait: async () => {},
+    gates: {
+      binance: {
+        get isCoolingDown() { return cooling; },
+        blockedUntil: 0,
+        enter: async () => {},
+        onCooldown: listener => { onCooldown = listener; return () => { onCooldown = undefined; }; },
+      },
+    },
+  });
+  const handle = await streams.start({ exchange: "binance", market: "perpetual", symbol: "BTCUSDT" }, () => {}, () => {});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sockets.length, 1);
+  sockets[0].emit("open");
+  cooling = true;
+  onCooldown({ retryAt: T + 60_000 });
+  assert.equal(sockets[0].closed, true);
+  handle.stop();
+  assert.equal(onCooldown, undefined);
 });

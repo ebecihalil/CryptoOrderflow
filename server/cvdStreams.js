@@ -70,6 +70,9 @@ export function createCvdStreamFactory({
   async function start(instrument, onTrade, onState, onLiquidation = () => {}) {
     const { exchange, market, symbol } = instrument;
     let stopped = false, ws, pulse, life, previousStart, generation = 0;
+    const unsubscribeCooldown = exchange === "binance"
+      ? gates[exchange]?.onCooldown?.(() => ws?.close())
+      : undefined;
     const send = message => {
       if (ws?.readyState === WebSocket.OPEN) ws.send(typeof message === "string" ? message : JSON.stringify(message));
     };
@@ -98,6 +101,9 @@ export function createCvdStreamFactory({
         }
         if (stopped || thisGeneration !== generation) return;
         if (!url) throw new Error("Trade endpoint unavailable.");
+        // A different request can trip the shared exchange cooldown while a
+        // stream is being prepared. Check immediately before opening a socket.
+        if (gate?.isCoolingDown) throw gate.cooldownError();
         const socket = new Socket(url, {
           handshakeTimeout: 12_000, maxPayload: 4_000_000,
           ...(exchange === "gate" && market === "perpetual" ? { headers: { "X-Gate-Size-Decimal": "1" } } : {}),
@@ -106,6 +112,7 @@ export function createCvdStreamFactory({
         let receivedAt = now(), subscribedAt = 0, frameSequence = 0;
         socket.on("open", () => {
           if (stopped || thisGeneration !== generation) { socket.close(); return; }
+          if (gate?.isCoolingDown) { socket.close(); return; }
           subscribedAt = now(); onState("idle");
           send(cvdSubscription(exchange, market, symbol, 1, now()));
           const liquidation = market === "perpetual" ? liquidationSubscription(exchange, symbol, 2, now()) : null;
@@ -126,6 +133,7 @@ export function createCvdStreamFactory({
         socket.on("pong", () => { receivedAt = now(); });
         socket.on("message", raw => {
           if (stopped || thisGeneration !== generation) return;
+          if (gate?.isCoolingDown) return;
           receivedAt = now();
           try {
             const message = decodeTradeMessage(exchange, market, raw);
@@ -158,16 +166,22 @@ export function createCvdStreamFactory({
           clearInterval(pulse); clearTimeout(life);
           if (!stopped) { onState("reconnecting"); retry(); }
         });
-      } catch { if (!stopped) { onState("unavailable"); retry(); } }
+      } catch (error) { if (!stopped) { onState("unavailable"); retry(error); } }
     };
     let failures = 0, retryTimer;
-    const retry = () => {
+    const retry = error => {
       clearTimeout(retryTimer);
-      const delay = Math.min(900_000, 30_000 * 2 ** Math.min(failures++, 5)) + Math.floor(Math.random() * 3000);
+      const gateDeadline = Math.max(error?.retryAt ?? 0, gates[exchange]?.blockedUntil ?? 0);
+      const cooldownDelay = gateDeadline - now();
+      // Sleep through an exchange ban instead of polling it every 30 seconds.
+      // Recheck on wake because another in-flight response can extend the ban.
+      const delay = cooldownDelay > 0
+        ? cooldownDelay + 1000 + Math.floor(Math.random() * 2000)
+        : Math.min(900_000, 30_000 * 2 ** Math.min(failures++, 5)) + Math.floor(Math.random() * 3000);
       retryTimer = setTimeout(connect, delay); retryTimer.unref?.();
     };
     void connect();
-    return { stop() { stopped = true; generation++; clearTimeout(retryTimer); dispose(); } };
+    return { stop() { stopped = true; generation++; unsubscribeCooldown?.(); clearTimeout(retryTimer); dispose(); } };
   }
   return { start };
 }
