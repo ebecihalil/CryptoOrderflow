@@ -267,11 +267,20 @@ CVD on seconds charts), its pane stays with a message in the middle.
 
 ## Aggregated Open Interest
 
-Classic aggregated OI candles in USD (open interest in coins × the chart's
-price) from up to 17 exchanges, like an aggregated OI chart: every candle opens
-at the previous close, a missing candle is drawn flat (no gaps), and a change in
-which exchanges report never creates a fake jump (each candle's move comes from
-the exchanges present in it and the one before; the series is scaled so the
-latest candle equals the real current total). Green = OI up, red = OI down. The
-driver's state colours and spike/pullback alerts are optional ("State colors"
-in its settings).
+Plain aggregated open-interest candles (open, high, low, close) in USD, like
+TradingView: the total OI of every USDT- and USDC-margined perpetual of the coin
+on all 17 collected exchanges. No driver states, ratios, liquidations or CVD.
+`GET /api/indicators/aggregated-oi?asset=&timeframe=` (`server/aggregatedOi.js`),
+every chart timeframe (1s – 3M).
+
+- History: Binance, Bybit, OKX and Gate OI history at the native interval
+  closest to the chart (5m for ≤5m charts, 15m, 30m, 1h, 4h, 1d for 1D and
+  longer), merged with the ~30 s OI samples the site records from every
+  exchange, plus each contract's live value. Cached 1–10 minutes per contract.
+- Candles use the chart's own buckets (weeks from Monday, calendar months), so
+  every price candle, including the newest, has an OI candle.
+- Each candle's change uses only contracts present in it and before it (a
+  venue joining or leaving never makes a fake jump); candles are chained and
+  empty buckets are flat, and the series is scaled so the newest candle equals
+  the live total of ALL exchanges. Values are coins on the server; the chart
+  shows coins × candle close (USD).

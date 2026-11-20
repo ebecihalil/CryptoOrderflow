@@ -14,8 +14,7 @@ import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type 
 import { PERP_LEVERAGE_FRAMES, usePerpLeverage } from '@/hooks/use-perp-leverage';
 import { LSAR_CHART_FRAMES, useLsarChart } from '@/hooks/use-lsar-chart';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
-import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
-import { OiIndicatorControls } from '@/components/oi-indicator-controls';
+import { useAggregatedOi } from '@/hooks/use-aggregated-oi';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
@@ -79,11 +78,6 @@ export function NativeChartWorkspace(props: Props) {
     toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} cellId={props.cellId ?? 0} syncId={props.syncId ?? 0} sync={props.sync} />;
 }
 
-const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: false, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
-      pinbarBodyPct: 10, pinbarWickPct: 50, pinbarWickRatio: 2, spikeMult: 5, avgLength: 50,
-      maxSidewaysBars: 10, pullback1: 10, pullback2: 20,
-      colors: { up: '#26a69a', down: '#ef5350', longBuild: '#3b82f6', shortBuild: '#f23645',
-        limitBuy: '#22c55e', limitSell: '#f97316', shortExit: '#facc15', longExit: '#a855f7', neutral: '#737373' } };
 
 /** Technical settings owned by each built-in study (reset when that study is removed). */
 const STUDY_SETTING_KEYS: Partial<Record<string, Array<keyof TechnicalSettings>>> = {
@@ -131,10 +125,6 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     value => !!value && typeof value === 'object' && !Array.isArray(value));
   const [liquiditySettings, setLiquiditySettings] = useChartSetting('liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
   const [zoneColors, setZoneColors] = useChartSetting('zoneColors', DEFAULT_ZONE_COLORS);
-  const [oiDriverSettings, setOiDriverSettings] = useChartSetting<OiDriverSettings>('oiDriverSettings',
-    DEFAULT_OI_DRIVER_SETTINGS,
-    value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
-      typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
   const hasLiquidity = indicators.includes('liquidity');
   // has* = data is fetched for this timeframe. A selected indicator ALWAYS keeps its
   // pane on the chart; where there is no data for the timeframe its pane says so.
@@ -144,7 +134,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const hasPerpetualCvd = indicators.includes('perpetual-cvd') && !secondsMode;
   const hasSpotCvd = indicators.includes('spot-cvd') && !secondsMode;
   const hasAggressiveBubbles = indicators.includes('aggressive-bubbles') && !secondsMode;
-  const hasOiDriver = indicators.includes('oi-driver') && !secondsMode && !longFrame;
+  // Aggregated OI works on every timeframe (exchange history + recorded samples).
+  const hasOiDriver = indicators.includes('oi-driver');
   // Ratio / leverage data comes every 5 minutes: below 5m it is shown as steps on each candle.
   const leverageFrame = belowFiveMinutes ? '5m' : PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
@@ -153,9 +144,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const hasTopLsar = indicators.includes('top-lsar') && !!lsarFrame;
   const paneNotes: Record<string, string> = {};
   const fromOneMinute = 'Available from 1m charts (built from minute data).';
-  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'oi-driver'])
+  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = fromOneMinute;
-  if (longFrame && indicators.includes('oi-driver')) paneNotes['oi-driver'] = 'Aggregated Open Interest is available from 1m to 1D charts.';
   if (longFrame) for (const id of ['global-lsar', 'top-lsar', 'leverage'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (exchanges keep about 12 days of this history).';
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
@@ -245,7 +235,6 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         apply: (value) => { setBubbleMarket(value.market); setBubbleMinValue(value.minimum); setBubbleMultiplier(value.multiplier);
           setBubbleMinDraft(null); setBubbleMultDraft(null); setBubbleMinError(null); },
         factory: { market: 'both', minimum: 'auto', multiplier: 0.1 } };
-      case 'oi-driver': return { read: () => oiDriverSettings, apply: setOiDriverSettings, factory: DEFAULT_OI_DRIVER_SETTINGS };
       default: return null;
     }
   };
@@ -283,7 +272,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     aggressiveBubbles.payload.timeframe === timeframe && aggressiveBubbles.payload.market === bubbleMarket &&
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
-  const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
+  const aggregatedOi = useAggregatedOi(canonicalAsset, timeframe, hasOiDriver);
+  const oiPayload = aggregatedOi.data?.asset === canonicalAsset && aggregatedOi.data.timeframe === timeframe ? aggregatedOi.data : null;
   const leverage = usePerpLeverage(canonicalAsset, leverageFrame ?? '1h', exchange, nativeSymbol, hasLeverage);
   const globalLsar = useLsarChart(canonicalAsset, lsarFrame ?? '1h', 'global', hasGlobalLsar);
   const topLsar = useLsarChart(canonicalAsset, lsarFrame ?? '1h', 'top', hasTopLsar);
@@ -526,9 +516,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         </>}
         <p className="native-cvd-method">Each bubble is recorded executed buy or sell activity at an aggregated price level—not price direction, an orderbook heatmap, or trader identity. Bubble price is converted from underlying USD-equivalent to this contract’s native price scale.</p>
       </section> : undefined,
-      'oi-driver': hasOiDriver ? <OiIndicatorControls settings={oiDriverSettings}
-        onChange={next => setOiDriverSettings(next)} payload={oiDriver.payload}
-        loading={oiDriver.loading} error={oiDriver.error} /> : undefined,
+
     };
     return (
     <>
@@ -574,8 +562,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
       {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Perp Leverage Estimation: {leverage.error.message}</p>}
       {secondsMode && <p className="native-seconds-note" role="status">
         Seconds candles are built from this contract’s live executed trades since recording started (kept 2 hours) and refresh every 2 seconds; seconds without trades have no candle.
-        {indicators.some((id) => ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'oi-driver'].includes(id)) &&
-          ' Funding, CVD, bubbles and Open Interest are minute-based data and show from 1m upward.'}
+        {indicators.some((id) => ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles'].includes(id)) &&
+          ' Funding, CVD and bubbles are minute-based data and show from 1m upward.'}
         {nativePayloadCurrent && nativeFeed.payload?.candles.length === 0 && ' Waiting for the first trades…'}
       </p>}
       <div className="native-volume-meta" role="status">
@@ -612,7 +600,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
-             oiDriver={hasOiDriver ? oiDriver.payload : null} oiDriverEnabled={indicators.includes('oi-driver')} oiStateMode={oiDriverSettings.stateColors} syncId={syncId} sync={sync} priceDivisor={contract.priceDivisor || 1}
+             oiDriver={hasOiDriver ? oiPayload : null} oiDriverEnabled={indicators.includes('oi-driver')} syncId={syncId} sync={sync} priceDivisor={contract.priceDivisor || 1}
              leverageRows={leverageRows} leverageEnabled={indicators.includes('leverage')} lsarPanes={lsarPanes} paneNotes={paneNotes} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
