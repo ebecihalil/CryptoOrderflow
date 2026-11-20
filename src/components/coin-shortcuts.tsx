@@ -1,5 +1,6 @@
-import { Clock3, Star, X } from 'lucide-react';
+import { Clock3, Lock, Star, X } from 'lucide-react';
 import type { CoinMemory } from '@/hooks/use-coin-memory';
+import { requestSignIn } from '@/hooks/use-auth';
 import { normalizeCoin } from '@/lib/coin-memory';
 import '@/styles/coin-shortcuts.css';
 
@@ -17,16 +18,24 @@ type Props = {
 /** Recent coins (this section) and the personal watchlist (all sections). */
 export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchOnlyChange }: Props) {
   const current = normalizeCoin(active);
-  const { recent, watchlist } = memory;
-  if (!recent.length && !watchlist.length && !onWatchOnlyChange) return null;
+  const { recent, watchlist, signedIn } = memory;
   return (
     <div className="coin-shortcuts" aria-label="Your coins">
       {onWatchOnlyChange && (
         <button type="button" className={`coin-watch-only${watchOnly ? ' active' : ''}`} aria-pressed={!!watchOnly}
-          onClick={() => onWatchOnlyChange(!watchOnly)} disabled={!watchlist.length && !watchOnly}
-          title={watchlist.length ? 'Show only coins on your watchlist' : 'Star coins to build your watchlist'} data-testid="button-watch-only">
+          onClick={() => (signedIn ? onWatchOnlyChange(!watchOnly) : requestSignIn('watchlist'))}
+          disabled={signedIn && !watchlist.length && !watchOnly}
+          title={!signedIn ? 'Sign up for a free account to use your watchlist'
+            : watchlist.length ? 'Show only coins on your watchlist' : 'Star coins to build your watchlist'} data-testid="button-watch-only">
           <Star size={12} aria-hidden="true" fill={watchOnly ? 'currentColor' : 'none'} />
           Watchlist only{watchlist.length ? ` (${watchlist.length})` : ''}
+          {!signedIn && <Lock size={11} aria-hidden="true" />}
+        </button>
+      )}
+      {!signedIn && !onWatchOnlyChange && (
+        <button type="button" className="coin-watch-only" onClick={() => requestSignIn('watchlist')} data-testid="button-watch-locked"
+          title="Sign up for a free account to use your watchlist">
+          <Star size={12} aria-hidden="true" /> Watchlist <Lock size={11} aria-hidden="true" />
         </button>
       )}
       {watchlist.length > 0 && (
@@ -59,8 +68,8 @@ export function WatchStar({ memory, coin, size = 14 }: { memory: CoinMemory; coi
   return (
     <button type="button" className={`coin-watch-star${watched ? ' watched' : ''}`} aria-pressed={watched}
       aria-label={`${watched ? 'Remove' : 'Add'} ${coin} ${watched ? 'from' : 'to'} your watchlist`}
-      title={watched ? 'On your watchlist' : 'Add to your watchlist'}
-      onClick={(event) => { event.stopPropagation(); memory.toggle(coin); }} data-testid={`button-watch-${normalizeCoin(coin)}`}>
+      title={!memory.signedIn ? 'Sign up for a free account to use your watchlist' : watched ? 'On your watchlist' : 'Add to your watchlist'}
+      onClick={(event) => { event.stopPropagation(); void memory.toggle(coin); }} data-testid={`button-watch-${normalizeCoin(coin)}`}>
       <Star size={size} aria-hidden="true" fill={watched ? 'currentColor' : 'none'} />
     </button>
   );

@@ -22,6 +22,7 @@ import { LeverageEstimatePage } from '@/components/leverage-estimate-page';
 import { SuperChartsPage } from '@/pages/super-charts-page';
 import { MODULES } from '@/lib/modules';
 import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { AuthPage, AuthPromptHost } from '@/components/auth-ui';
 import { useCoinMemory, type CoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 import './styles/modules.css';
@@ -535,6 +536,8 @@ function Router() {
         <Route path="/open-interest" component={OpenInterestPage} />
         <Route path="/super-charts" component={SuperChartsPage} />
         <Route path="/leverage-estimate" component={LeverageEstimatePage} />
+        <Route path="/signup"><AuthPage mode="signup" /></Route>
+        <Route path="/signin"><AuthPage mode="signin" /></Route>
         {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/top-trader-long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts' && module.path !== '/leverage-estimate').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />
@@ -563,6 +566,7 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <Router />
+          <AuthPromptHost />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
