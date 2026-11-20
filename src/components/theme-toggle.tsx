@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 import { nextTheme, resolveTheme, savedTheme, THEME_STORAGE_KEY, type Theme } from '@/lib/theme';
 
 function readPreference(): Theme | null {
@@ -45,9 +46,10 @@ export function ThemeToggle() {
     catch { /* Keep the toggle functional when browser storage is unavailable. */ }
   };
   const target = nextTheme(theme);
+  const { t } = useI18n();
   return <button type="button" className="theme-toggle" onClick={toggle} aria-pressed={theme === 'dark'}
     aria-label={`Switch to ${target} mode`} title={`Switch to ${target} mode`} data-testid="button-theme-toggle">
     {theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-    <span className="theme-toggle-label">{target === 'dark' ? 'Dark' : 'Light'}</span>
+    <span className="theme-toggle-label">{t(target === 'dark' ? 'Dark' : 'Light')}</span>
   </button>;
 }

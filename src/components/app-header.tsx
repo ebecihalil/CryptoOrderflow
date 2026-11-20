@@ -3,6 +3,8 @@ import { Link } from 'wouter';
 import { HomeButton } from '@/components/home-button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AccountButton } from '@/components/account-button';
+import { LanguagePicker } from '@/components/language-picker';
+import { useI18n } from '@/lib/i18n';
 import type { HealthStatus } from '@/types/market';
 import '@/styles/app-header.css';
 
@@ -32,21 +34,23 @@ export function AppHeader({
     refetchInterval: 60_000,
     retry: 1,
   });
-  const feedLabel = health.isError ? 'API unreachable' : 'Market feed';
+  const { t } = useI18n();
+  const feedLabel = t(health.isError ? 'API unreachable' : 'Market feed');
 
   return (
     <>
       <header className="topbar app-header">
         <Link href="/" className="app-header-brand" aria-label="Crypto Order Flow home">
           <span className="brand-mark">{mark}</span>
-          <span className="app-header-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+          <span className="app-header-copy"><strong>{t(title)}</strong><small>{t(subtitle)}</small></span>
         </Link>
         <div className="app-header-controls">
           <HomeButton />
           <span className="app-header-section" aria-current="page">
             <span className="app-header-section-mark">{mark}</span>
-            <span>{sectionLabel}</span>
+            <span>{t(sectionLabel)}</span>
           </span>
+          <LanguagePicker />
           <span className={`app-header-feed${health.isError ? ' api-down' : health.isPending ? ' checking' : ''}`}
             data-testid="status-api-health" role="status" aria-label={feedLabel}
             title={health.isError ? 'API unreachable' : health.isPending ? 'Checking API connection' : 'API connected. Exchange availability is shown below.'}>

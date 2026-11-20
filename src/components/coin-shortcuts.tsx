@@ -2,6 +2,7 @@ import { Clock3, Lock, Star, X } from 'lucide-react';
 import type { CoinMemory } from '@/hooks/use-coin-memory';
 import { requestSignIn } from '@/hooks/use-auth';
 import { normalizeCoin } from '@/lib/coin-memory';
+import { useI18n } from '@/lib/i18n';
 import '@/styles/coin-shortcuts.css';
 
 type Props = {
@@ -20,6 +21,7 @@ type Props = {
 /** Recent coins (this section) and the personal watchlist (all sections). */
 export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchOnlyChange, showWatchlist = true }: Props) {
   const current = normalizeCoin(active);
+  const { t } = useI18n();
   const { recent, signedIn } = memory;
   const watchlist = showWatchlist ? memory.watchlist : [];
   if (!recent.length && !(showWatchlist && onWatchOnlyChange)) return null;
@@ -32,14 +34,14 @@ export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchO
           title={!signedIn ? 'Sign up for a free account to use your watchlist'
             : watchlist.length ? 'Show only coins on your watchlist' : 'Star coins to build your watchlist'} data-testid="button-watch-only">
           <Star size={12} aria-hidden="true" fill={watchOnly ? 'currentColor' : 'none'} />
-          Watchlist only{watchlist.length ? ` (${watchlist.length})` : ''}
+          {t('Watchlist only')}{watchlist.length ? ` (${watchlist.length})` : ''}
           {!signedIn && <Lock size={11} aria-hidden="true" />}
         </button>
       )}
       {/* The watchlist itself lives in the side panel (SectionWatchlist). */}
       {recent.length > 0 && (
         <div className="coin-chip-group" role="group" aria-label="Recently viewed coins">
-          <span className="coin-chip-label"><Clock3 size={11} aria-hidden="true" />Recent</span>
+          <span className="coin-chip-label"><Clock3 size={11} aria-hidden="true" />{t('Recent')}</span>
           {recent.map((coin) => (
             <button key={`r-${coin}`} type="button" className={`coin-chip${coin === current ? ' active' : ''}`}
               onClick={() => onPick(coin)} data-testid={`chip-recent-${coin}`}>{coin}</button>

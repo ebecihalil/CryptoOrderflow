@@ -3,6 +3,7 @@ import { Lock, Plus, Star, X } from 'lucide-react';
 import type { CoinMemory } from '@/hooks/use-coin-memory';
 import { requestSignIn } from '@/hooks/use-auth';
 import { normalizeCoin } from '@/lib/coin-memory';
+import { useI18n } from '@/lib/i18n';
 import '@/styles/chart-watchlist.css';
 import '@/styles/section-watchlist.css';
 
@@ -32,6 +33,7 @@ export function SectionWatchlist({ memory, section, currentCoin, onSelect, metri
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [active, setActive] = useState(0);
+  const { t } = useI18n();
   const typed = normalizeCoin(query);
   const known = useMemo(() => [...new Set((coins ?? []).map(normalizeCoin).filter(Boolean))], [coins]);
   const suggestions = useMemo(() => {
@@ -49,15 +51,15 @@ export function SectionWatchlist({ memory, section, currentCoin, onSelect, metri
   } else if (!signedIn) {
     body = (
       <div className="chart-watchlist-empty section-watchlist-locked">
-        <strong><Lock size={13} aria-hidden="true" /> Your personal watchlist</strong>
-        Create a free account to save coins and see them here in every section, on any device.
+        <strong><Lock size={13} aria-hidden="true" /> {t('Your personal watchlist')}</strong>
+        {t('Create a free account to save coins and see them here in every section, on any device.')}
       </div>
     );
   } else if (!watchlist.length) {
     body = (
       <div className="chart-watchlist-empty">
-        <strong>No coins on your watchlist</strong>
-        Type a coin above and press +, or click ☆ next to any coin in the table.
+        <strong>{t('No coins on your watchlist')}</strong>
+        {t('Type a coin above and press +, or click ☆ next to any coin in the table.')}
       </div>
     );
   } else {
@@ -91,16 +93,16 @@ export function SectionWatchlist({ memory, section, currentCoin, onSelect, metri
     <aside className="chart-watchlist section-watchlist" aria-labelledby="section-watchlist-title" data-testid="section-watchlist">
       <header className="chart-watchlist-header">
         <div>
-          <div className="chart-watchlist-eyebrow">My watchlist · {section}</div>
-          <h2 className="chart-watchlist-heading" id="section-watchlist-title">Coin watchlist</h2>
+          <div className="chart-watchlist-eyebrow">{t('My watchlist')} · {section}</div>
+          <h2 className="chart-watchlist-heading" id="section-watchlist-title">{t('Coin watchlist')}</h2>
         </div>
         <span className="chart-watchlist-count" aria-label={`${watchlist.length} of ${limit} coins`}>
           {signedIn ? `${watchlist.length}/${limit}` : <Lock size={12} aria-hidden="true" />}
         </span>
       </header>
       <p className="chart-watchlist-intro">
-        {signedIn ? 'Saved to your account. The same list appears in every section with that section’s live values.'
-          : 'Private to your account once you sign up. Free, no card needed.'}
+        {t(signedIn ? 'Saved to your account. The same list appears in every section with that section’s live values.'
+          : 'Private to your account once you sign up. Free, no card needed.')}
       </p>
       {/* Type a coin and press + (or Enter). Empty box + adds the coin on screen. */}
       <form className="section-watchlist-search" role="search" onSubmit={(event) => {
@@ -115,7 +117,7 @@ export function SectionWatchlist({ memory, section, currentCoin, onSelect, metri
         void memory.toggle(target); setQuery(''); setActive(0); setMessage(`${target} added.`);
       }}>
         <input value={query} disabled={memory.authLoading} aria-label={`Search ${section} coins to add`}
-          placeholder={!signedIn ? 'Sign up to add coins' : coin && !watched ? `Type a coin… (+ adds ${coin})` : 'Type a coin, e.g. BTC'}
+          placeholder={!signedIn ? t('Sign up to add coins') : t('Type a coin, e.g. BTC')}
           onFocus={() => { if (!signedIn && !memory.authLoading) requestSignIn('watchlist'); }}
           onChange={(event) => { setQuery(event.target.value); setActive(0); setMessage(null); }}
           onKeyDown={(event) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Star } from 'lucide-react';
 import { ALL_TIMEFRAMES, TIMEFRAME_LABELS } from '../../server/timeframes.js';
+import { useI18n } from '@/lib/i18n';
 import '@/styles/timeframe-picker.css';
 
 const KEY = 'cof:v1:tf-favorites';
@@ -27,6 +28,7 @@ function readFavorites(): string[] {
 export function TimeframePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [favorites, setFavorites] = useState<string[]>(readFavorites);
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -52,13 +54,13 @@ export function TimeframePicker({ value, onChange }: { value: string; onChange: 
       </div>
       <button type="button" className={`tf-picker-trigger${quick.includes(value) ? '' : ' is-current'}`} aria-haspopup="true" aria-expanded={open}
         onClick={() => setOpen(!open)} data-testid="tf-dropdown" title="All timeframes">
-        {quick.includes(value) ? 'More' : TIMEFRAME_LABELS[value] ?? value}<ChevronDown size={13} aria-hidden="true" />
+        {quick.includes(value) ? t('More') : TIMEFRAME_LABELS[value] ?? value}<ChevronDown size={13} aria-hidden="true" />
       </button>
       {open && (
         <div className="tf-picker-menu" role="menu" aria-label="All timeframes">
           {GROUPS.map(([group, frames]) => (
             <div key={group} role="group" aria-label={group}>
-              <div className="tf-picker-group">{group}</div>
+              <div className="tf-picker-group">{t(group)}</div>
               {frames.map((tf) => (
                 <div key={tf} className={`tf-picker-row${value === tf ? ' is-selected' : ''}`}>
                   <button type="button" role="menuitemradio" aria-checked={value === tf} className="tf-picker-select"
