@@ -28,7 +28,9 @@ type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'agg
 
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
   /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
-  toolbarStart?: ReactNode; toolbarMenus?: ReactNode };
+  toolbarStart?: ReactNode; toolbarMenus?: ReactNode;
+  /** Chart cell in a multi-chart layout: each cell keeps its own timeframe. */
+  cellId?: number };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 
 const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
@@ -72,7 +74,7 @@ export function NativeChartWorkspace(props: Props) {
   }
   return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
     contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer}
-    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} />;
+    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} cellId={props.cellId ?? 0} />;
 }
 
 const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
@@ -95,9 +97,9 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus }: Props & { contract: MarketContract }) {
+function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus, cellId = 0 }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
-  const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>('timeframe', '1h',
+  const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>(cellId ? `timeframe:${cellId}` : 'timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
   // 1s–30s candles are built from live trades of the selected contract only.
   const secondsMode = isSecondTimeframe(timeframe);

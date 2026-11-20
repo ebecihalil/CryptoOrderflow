@@ -22,7 +22,7 @@ test("verified shared market drives a native chart and synchronized orderflow la
   const page = read("pages/super-charts-page.tsx");
   assert.match(read("components/native-chart-workspace.tsx"), /contract\.symbol/);
   assert.match(page, /market\?\.asset/);
-  assert.match(page, /contract=\{market\}/);
+  assert.match(page, /contract=\{cellContract\(index\)\}/);
   const workspace = read("components/native-chart-workspace.tsx");
   assert.match(workspace, /useLiquidityCandles/);
   assert.match(workspace, /useFundingIndicator/);
