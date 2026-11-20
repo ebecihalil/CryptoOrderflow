@@ -4,14 +4,35 @@ import { bucketStart } from "./timeframes.js";
 export const BUBBLE_PRICE_STEP = 1.0005; // 0.05% logarithmic price bands
 export function validateAggressiveBubblesQuery(query) {
   const { asset, market = "both", timeframe = "1h", minValue = "10000" } = query;
+  const auto = minValue === "auto";
   if (typeof asset !== "string" || !/^[A-Z0-9]{1,30}$/.test(asset) ||
     !["both", "spot", "perpetual"].includes(market) || typeof timeframe !== "string" ||
-    !Object.hasOwn(CVD_FRAMES, timeframe) ||
+    !Object.hasOwn(CVD_FRAMES, timeframe) || !auto && (
     !["string", "number"].includes(typeof minValue) || String(minValue).trim() === "" ||
-    !Number.isFinite(Number(minValue)) || Number(minValue) < 0 || Number(minValue) > 1e12) {
-    throw Object.assign(new Error("Aggressive bubbles requires a crypto asset, valid market/timeframe and minimum value from 0 to 1 trillion USD-equivalent."), { status: 400 });
+    !Number.isFinite(Number(minValue)) || Number(minValue) < 0 || Number(minValue) > 1e12)) {
+    throw Object.assign(new Error("Aggressive bubbles requires a crypto asset, valid market/timeframe and minimum value from 0 to 1 trillion USD-equivalent (or auto)."), { status: 400 });
   }
-  return { asset, market, timeframe, minValue: Number(minValue) };
+  return { asset, market, timeframe, minValue: auto ? "auto" : Number(minValue) };
+}
+
+/** Auto minimum = this multiple of the average bubble (price level per candle) value. */
+export const AUTO_BUBBLE_MULTIPLIER = 3;
+const AUTO_BUBBLE_FLOOR = 100;
+
+/**
+ * Default minimum for the selected coin, timeframe and market: 3x the average
+ * USD value of all recorded price-level bubbles at that timeframe. Larger
+ * timeframes merge more trades per bubble, so the bar rises with them; quiet
+ * coins get a lower bar than BTC. Only clearly above-average bubbles remain.
+ */
+export function autoBubbleMinimum(points, multiplier = AUTO_BUBBLE_MULTIPLIER) {
+  const values = points.map(point => point.value).filter(value => value > 0 && Number.isFinite(value));
+  if (!values.length) return AUTO_BUBBLE_FLOOR;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const raw = Math.max(AUTO_BUBBLE_FLOOR, average * multiplier);
+  // Round to 2 significant figures so the shown number reads cleanly ($48,000, not $47,912.31).
+  const magnitude = 10 ** Math.max(0, Math.floor(Math.log10(raw)) - 1);
+  return Math.round(raw / magnitude) * magnitude;
 }
 
 export function createAggressiveBubbleLedger({

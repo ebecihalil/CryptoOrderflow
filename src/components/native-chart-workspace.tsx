@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { RefreshCw, RotateCw } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Maximize2, Minimize2, RefreshCw, RotateCw } from 'lucide-react';
 import { NativeSuperChart } from '@/components/native-super-chart';
 import { ALL_TIMEFRAMES, isSecondTimeframe, nextBucket } from '../../server/timeframes.js';
 import { TimeframePicker } from '@/components/timeframe-picker';
@@ -11,7 +11,7 @@ import {
   type FundingIndicatorWindow, type FundingIndicatorPoint,
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type CvdTimeframe } from '@/hooks/use-cvd-indicator';
-import { useAggressiveBubbles, type AggressiveBubblesMarket } from '@/hooks/use-aggressive-bubbles';
+import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
 import { OiIndicatorControls } from '@/components/oi-indicator-controls';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
@@ -23,7 +23,9 @@ import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
-type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void };
+type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
+  /** Full-screen chart mode (owned by the page so the watchlist and menus follow). */
+  expanded?: boolean; onToggleExpanded?: () => void };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 
 const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
@@ -66,10 +68,23 @@ export function NativeChartWorkspace(props: Props) {
     </section>;
   }
   return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
-    contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer} />;
+    contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer}
+    expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />;
 }
 
-function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }: Props & { contract: MarketContract }) {
+const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
+      pinbarBodyPct: 10, pinbarWickPct: 50, pinbarWickRatio: 2, spikeMult: 5, avgLength: 50,
+      maxSidewaysBars: 10, pullback1: 10, pullback2: 20,
+      colors: { up: '#3b82f6', down: '#ef4444', longBuild: '#3b82f6', shortBuild: '#f23645',
+        limitBuy: '#22c55e', limitSell: '#f97316', shortExit: '#facc15', longExit: '#a855f7', neutral: '#737373' } };
+
+/** Technical settings owned by each built-in study (reset when that study is removed). */
+const STUDY_SETTING_KEYS: Partial<Record<string, Array<keyof TechnicalSettings>>> = {
+  ema: ['emaPeriod'], sma: ['smaPeriod'], bb: ['bbPeriod', 'bbStdDev'], rsi: ['rsiPeriod'],
+  macd: ['macdFast', 'macdSlow', 'macdSignal'],
+};
+
+function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, expanded = false, onToggleExpanded }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
   const [timeframe, setTimeframe] = useCoinChartSetting<LiquidityTimeframe>(asset, 'timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
@@ -86,11 +101,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
   const [liquiditySettings, setLiquiditySettings] = useCoinChartSetting(asset, 'liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
   const [zoneColors, setZoneColors] = useCoinChartSetting(asset, 'zoneColors', DEFAULT_ZONE_COLORS);
   const [oiDriverSettings, setOiDriverSettings] = useCoinChartSetting<OiDriverSettings>(asset, 'oiDriverSettings',
-    { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
-      pinbarBodyPct: 10, pinbarWickPct: 50, pinbarWickRatio: 2, spikeMult: 5, avgLength: 50,
-      maxSidewaysBars: 10, pullback1: 10, pullback2: 20,
-      colors: { up: '#3b82f6', down: '#ef4444', longBuild: '#3b82f6', shortBuild: '#f23645',
-        limitBuy: '#22c55e', limitSell: '#f97316', shortExit: '#facc15', longExit: '#a855f7', neutral: '#737373' } },
+    DEFAULT_OI_DRIVER_SETTINGS,
     value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
       typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
   const hasLiquidity = indicators.includes('liquidity');
@@ -140,10 +151,36 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
     value => CVD_ANCHORS.some(anchor => anchor.value === value));
   const [bubbleMarket, setBubbleMarket] = useCoinChartSetting<AggressiveBubblesMarket>(asset, 'bubbleMarket', 'both',
     value => ['spot', 'perpetual', 'both'].includes(String(value)));
-  const [bubbleMinValue, setBubbleMinValue] = useCoinChartSetting(asset, 'bubbleMinValue', 10000,
-    value => Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
-  const [bubbleMinDraft, setBubbleMinDraft] = useCoinChartSetting(asset, 'bubbleMinDraft', String(bubbleMinValue));
+  // Default 'auto': 3x the average bubble for this coin/timeframe/market. A typed
+  // value stays until the indicator is removed, then it is back to auto.
+  const [bubbleMinValue, setBubbleMinValue] = useCoinChartSetting<BubbleMinimum>(asset, 'bubbleMinimum', 'auto',
+    value => value === 'auto' || Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
+  const [bubbleMinDraft, setBubbleMinDraft] = useState<string | null>(null);
   const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);
+  // Settings stay while a layer is on the chart. Removing a layer resets its
+  // settings, so adding it again starts from the defaults (bubbles: auto).
+  const previousLayers = useRef({ studies, indicators });
+  useEffect(() => {
+    const previous = previousLayers.current;
+    previousLayers.current = { studies, indicators };
+    const removedStudies = previous.studies.filter((id) => !studies.includes(id));
+    const removed = new Set<string>(previous.indicators.filter((id) => !indicators.includes(id)));
+    if (removedStudies.length) {
+      const keys = removedStudies.flatMap((id) => STUDY_SETTING_KEYS[id] ?? []);
+      if (keys.length) setTechnicalSettings((current) => ({ ...current,
+        ...Object.fromEntries(keys.map((key) => [key, DEFAULT_TECHNICAL_SETTINGS[key]])) }));
+      if (removedStudies.some((id) => Object.hasOwn(extraSettings, id))) setExtraSettings((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => !removedStudies.includes(id as ChartStudyId))));
+    }
+    if (removed.has('liquidity')) { setLiquiditySettings(DEFAULT_LIQUIDITY_SETTINGS); setZoneColors(DEFAULT_ZONE_COLORS); }
+    if (removed.has('funding')) { setFundingWindow('7d'); setFundingMethod('mean'); setFundingMode('settled'); setFundingThreshold(0.08); }
+    if (removed.has('perpetual-cvd')) setPerpetualAnchor('1w');
+    if (removed.has('spot-cvd')) setSpotAnchor('1w');
+    if (removed.has('aggressive-bubbles')) { setBubbleMarket('both'); setBubbleMinValue('auto'); setBubbleMinDraft(null); setBubbleMinError(null); }
+    if (removed.has('oi-driver')) setOiDriverSettings(DEFAULT_OI_DRIVER_SETTINGS);
+    // Setters are stable in effect; only layer changes matter here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studies, indicators]);
   const canonicalAsset = contract.asset.toUpperCase();
   // Minute-based layers are disabled on seconds timeframes; give their hooks a valid frame.
   const flowTimeframe = (secondsMode ? '1m' : timeframe) as CvdTimeframe;
@@ -157,6 +194,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
   const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
 
   const commitBubbleMinimum = () => {
+    if (bubbleMinDraft === null) return;
     if (!/^\d+$/.test(bubbleMinDraft)) {
       setBubbleMinError('Enter a whole USD amount from 1 to 100,000,000.');
       return;
@@ -167,9 +205,11 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
       return;
     }
     setBubbleMinValue(next);
-    setBubbleMinDraft(String(next));
+    setBubbleMinDraft(null);
     setBubbleMinError(null);
   };
+  const bubbleMinShown = bubbleMinDraft ?? (bubbleMinValue === 'auto'
+    ? (bubblePayload ? String(bubblePayload.effectiveMinValue) : '') : String(bubbleMinValue));
 
   const cvdControls = (market: CvdMarket, enabled: boolean, anchor: CvdAnchor, setAnchor: (value: CvdAnchor) => void,
     feed: ReturnType<typeof useCvdIndicator>) => {
@@ -326,10 +366,13 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
             onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive Volume Bubbles market">
             <option value="both">Both markets</option><option value="spot">Spot</option><option value="perpetual">Perpetual</option>
           </select></label>
-          <label className="super-chart-control"><span>Minimum USD value</span><input type="number" min="1" max="100000000" step="1"
-            value={bubbleMinDraft} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
+          <label className="super-chart-control"><span>Minimum USD value{bubbleMinValue === 'auto' ? ' · auto (3× avg)' : ''}</span><input type="number" min="1" max="100000000" step="1"
+            value={bubbleMinShown} placeholder={bubbleMinValue === 'auto' ? 'Calculating…' : undefined} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
             onBlur={commitBubbleMinimum} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMinimum(); event.currentTarget.blur(); } }}
              aria-label="Minimum aggressive volume bubble USD-equivalent value" /></label>
+          {bubbleMinValue !== 'auto' && <button type="button" className="native-tool-button" data-testid="button-bubble-auto"
+            onClick={() => { setBubbleMinValue('auto'); setBubbleMinDraft(null); setBubbleMinError(null); }}
+            title="Use 3× the average bubble value for this coin and timeframe">Auto</button>}
           <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
           <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
             <RefreshCw size={12} aria-hidden="true" /> Refresh
@@ -464,7 +507,14 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
       <div><span className="native-symbol-name">{contract?.asset ?? '—'}<i>PERP</i></span><span>{contract?.exchange.toUpperCase() ?? 'EXCHANGE'} · {contract?.symbol ?? 'Select a contract'}</span></div>
       <div className="native-price-summary"><strong>{current?.close.toLocaleString(undefined, { maximumSignificantDigits: 9 }) ?? '—'}</strong>
         <span>native close · {contract?.exchangeAsset ?? 'quote'}</span></div>
-      <button type="button" className="native-fit-button" onClick={() => window.dispatchEvent(new Event('native-chart-fit'))}>Fit view</button>
+      <div className="native-symbol-actions">
+        <button type="button" className="native-fit-button" onClick={() => window.dispatchEvent(new Event('native-chart-fit'))}>Fit view</button>
+        {onToggleExpanded && <button type="button" className="native-fit-button native-expand-button" onClick={onToggleExpanded}
+          aria-pressed={expanded} title={expanded ? 'Exit full screen (Esc)' : 'Full screen chart'} data-testid="button-chart-fullscreen">
+          {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
+          <span>{expanded ? 'Exit full screen' : 'Full screen'}</span>
+        </button>}
+      </div>
     </div>
     <FundingEnabledWorkspace enabled={hasFunding} contract={contract} timeframe={timeframe} method={fundingMethod} setMethod={setFundingMethod}
       window={fundingWindow} setWindow={setFundingWindow} mode={fundingMode} setMode={setFundingMode}

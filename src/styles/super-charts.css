@@ -119,3 +119,30 @@
 .native-extra-reset { height:32px;padding:0 10px;border:1px solid var(--lsar-control-border);background:transparent;color:var(--lsar-muted);font:10px var(--app-font-mono);cursor:pointer; }
 .super-chart-menu.is-studies { max-height:min(70vh,520px);overflow:auto;min-width:250px; }
 .super-chart-menu-group { margin:6px 8px 2px;color:var(--lsar-muted);font:8px var(--app-font-mono);letter-spacing:.08em;text-transform:uppercase; }
+
+/* Full-screen chart: menus on top, chart in the middle, watchlist on the right. */
+.native-symbol-actions { display:flex;align-items:center;gap:6px; }
+.native-expand-button { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+body.chart-fullscreen-open { overflow:hidden; }
+.super-charts-main.is-chart-expanded {
+  position:fixed;inset:0;z-index:200;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto 1fr;align-items:center;gap:6px 10px;
+  width:100%;max-width:none;margin:0;padding:8px 10px 10px;overflow:auto;background:var(--lsar-page);
+}
+.is-chart-expanded .super-charts-heading,
+.is-chart-expanded .super-chart-marketbar,
+.is-chart-expanded .native-feed-meta,
+.is-chart-expanded .native-volume-meta,
+.is-chart-expanded .native-method-note,
+.is-chart-expanded .native-volume-warning,
+.is-chart-expanded .native-data-warning { display:none; }
+.is-chart-expanded .super-chart-menu-bar,
+.is-chart-expanded .super-chart-selected-studies { margin:0; }
+.is-chart-expanded .super-chart-menu-bar { padding:4px 6px; }
+.is-chart-expanded .super-chart-workspace-layout { grid-column:1 / -1;align-self:stretch;gap:8px;align-items:stretch;grid-template-columns:minmax(0,1fr) minmax(240px,268px); }
+.is-chart-expanded .native-symbol-strip { min-height:44px;padding:6px 12px; }
+.is-chart-expanded .native-chart-canvas { min-height:320px;max-height:none; }
+.is-chart-expanded .chart-watchlist { position:sticky;top:0;max-height:calc(100dvh - 92px);overflow:auto; }
+@media (max-width:1080px) {
+  .is-chart-expanded .super-chart-workspace-layout { grid-template-columns:minmax(0,1fr); }
+  .is-chart-expanded .chart-watchlist { position:static;max-height:none; }
+}

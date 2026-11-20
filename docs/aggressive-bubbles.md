@@ -62,3 +62,13 @@ theme and scaling without recreating the chart or adding a new indicator pane.
 
 The Super Charts server watchlist pins up to five underlying coins for continuous
 Spot and Perpetual recording. See [Watchlist recording](chart-watchlist.md).
+
+## Default minimum (auto)
+
+By default the minimum USD value is automatic: 3x the average value of all
+recorded bubbles (one bubble = same-side executions in one 0.05% price band
+in one candle) for the selected coin, timeframe and market, rounded to two
+significant figures (minimum $100). Bigger timeframes and busier coins get a
+higher bar automatically, so only clearly above-average bubbles show. Typing a
+value overrides it until you press "Auto" or remove the indicator. API:
+`minValue=auto`; the response's `effectiveMinValue` is the applied number.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, RotateCw, X } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
-import { ChartWatchlist } from '@/components/chart-watchlist';
+import { MarketList } from '@/components/market-list';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
@@ -33,6 +33,46 @@ export function SuperChartsPage() {
   const [indicators, setIndicators] = useCoinChartSetting<OrderflowId[]>(market?.asset ?? '', 'indicators', ['liquidity'],
     value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
   const [marketDraft, setMarketDraft] = useState('');
+  // Full-screen chart: chart + top menus + watchlist fill the screen (browser
+  // full screen when allowed). Esc or the button returns to the normal page.
+  const [expanded, setExpanded] = useState(false);
+  const toggleExpanded = () => {
+    if (!expanded) {
+      setExpanded(true);
+      document.documentElement.requestFullscreen?.().catch(() => { /* in-page full screen still applies */ });
+    } else {
+      setExpanded(false);
+      if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
+    }
+  };
+  useEffect(() => {
+    if (!expanded) return;
+    document.body.classList.add('chart-fullscreen-open');
+    const onFullscreenChange = () => { if (!document.fullscreenElement) setExpanded(false); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.fullscreenElement && !(event.target as HTMLElement)?.closest?.('[role=menu], .super-chart-menu')) setExpanded(false);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('keydown', onKey);
+    // Chart fills the space left under the menus (they can wrap; the chart remounts on TF change).
+    const fit = () => {
+      const canvas = document.querySelector<HTMLElement>('.is-chart-expanded .native-chart-canvas');
+      if (!canvas) return;
+      const height = `${Math.max(320, Math.floor(window.innerHeight - canvas.getBoundingClientRect().top - 12))}px`;
+      if (canvas.style.height !== height) canvas.style.height = height;
+    };
+    const timer = window.setInterval(fit, 400);
+    window.addEventListener('resize', fit);
+    requestAnimationFrame(fit);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('resize', fit);
+      document.querySelectorAll<HTMLElement>('.native-chart-canvas').forEach((canvas) => { canvas.style.height = ''; });
+      document.body.classList.remove('chart-fullscreen-open');
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [expanded]);
   const memory = useCoinMemory('super-charts');
   const { remember } = memory;
   useEffect(() => { if (market?.asset) remember(market.asset); }, [market?.asset, remember]);
@@ -104,7 +144,7 @@ export function SuperChartsPage() {
   return (
     <div className="terminal module-app super-charts-app">
       <AppHeader title="Super Charts" mark="SC" sectionLabel="Super Charts (Indicators)" subtitle="Perpetual Markets" />
-      <main className="super-charts-main">
+      <main className={`super-charts-main${expanded ? ' is-chart-expanded' : ''}`}>
         <div className="super-charts-heading">
           <div className="module-kicker"><span className="module-kicker-rule" /> MARKET TOOLKIT / CHARTING</div>
           <h1 className="module-page-title">Super Charts</h1>
@@ -190,15 +230,17 @@ export function SuperChartsPage() {
             <button type="button" aria-label={`Remove ${ORDERFLOW_ITEMS.find((item) => item.id === id)?.label}`} onClick={() => toggleIndicator(id)}><X size={12} /></button></span>)}
           {!studies.length && !indicators.length && <span className="super-chart-no-studies">No studies selected</span>}
         </div>
-        <div className="super-chart-workspace-layout">
+        <div className="super-chart-workspace-layout has-market-list">
           <div className="super-chart-workspace-main">
             <NativeChartWorkspace contract={market} studies={studies} indicators={indicators}
+              expanded={expanded} onToggleExpanded={toggleExpanded}
               onRemoveLayer={(key) => {
                 if (CHART_STUDIES.some((study) => study.id === key)) toggleStudy(key as ChartStudyId);
                 else if (ORDERFLOW_ITEMS.some((item) => item.id === key)) toggleIndicator(key as OrderflowId);
               }} />
           </div>
-          <ChartWatchlist currentContract={market} onSelectContract={selectWatchlistContract} />
+          {/* Exchange-style list of every contract (replaces the old coin watchlist panel). */}
+          <MarketList contracts={contracts} current={market} onSelect={selectWatchlistContract} />
         </div>
       </main>
     </div>

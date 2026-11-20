@@ -5,6 +5,7 @@ import { AppHeader } from '@/components/app-header';
 import { HomeButton } from '@/components/home-button';
 import { HOME_MODULES, type ModuleInfo } from '@/lib/modules';
 import { useI18n } from '@/lib/i18n';
+import { DataSources } from '@/components/data-sources';
 
 function ProductHeader({ module }: { module?: ModuleInfo }) {
   return (
@@ -83,6 +84,7 @@ export function ModuleHome() {
             ))}
           </div>
         </section>
+        <DataSources />
       </main>
     </div>
   );
