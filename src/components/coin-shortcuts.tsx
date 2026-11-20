@@ -13,15 +13,19 @@ type Props = {
   /** Table pages: show only watchlisted coins. */
   watchOnly?: boolean;
   onWatchOnlyChange?: (value: boolean) => void;
+  /** Hide the personal watchlist (e.g. Super Charts has its own). */
+  showWatchlist?: boolean;
 };
 
 /** Recent coins (this section) and the personal watchlist (all sections). */
-export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchOnlyChange }: Props) {
+export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchOnlyChange, showWatchlist = true }: Props) {
   const current = normalizeCoin(active);
-  const { recent, watchlist, signedIn } = memory;
+  const { recent, signedIn } = memory;
+  const watchlist = showWatchlist ? memory.watchlist : [];
+  if (!showWatchlist && !recent.length) return null;
   return (
     <div className="coin-shortcuts" aria-label="Your coins">
-      {onWatchOnlyChange && (
+      {showWatchlist && onWatchOnlyChange && (
         <button type="button" className={`coin-watch-only${watchOnly ? ' active' : ''}`} aria-pressed={!!watchOnly}
           onClick={() => (signedIn ? onWatchOnlyChange(!watchOnly) : requestSignIn('watchlist'))}
           disabled={signedIn && !watchlist.length && !watchOnly}
@@ -32,7 +36,7 @@ export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchO
           {!signedIn && <Lock size={11} aria-hidden="true" />}
         </button>
       )}
-      {!signedIn && !onWatchOnlyChange && (
+      {showWatchlist && !signedIn && !onWatchOnlyChange && (
         <button type="button" className="coin-watch-only" onClick={() => requestSignIn('watchlist')} data-testid="button-watch-locked"
           title="Sign up for a free account to use your watchlist">
           <Star size={12} aria-hidden="true" /> Watchlist <Lock size={11} aria-hidden="true" />

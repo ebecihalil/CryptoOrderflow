@@ -36,13 +36,17 @@ test("stored lists are validated and storage failures never throw", () => {
   assert.doesNotThrow(() => writeList(WATCHLIST_KEY, ["BTC"], broken));
 });
 
-test("every coin section shows recent coins and the personal watchlist", () => {
+test("every coin section shows recent coins and the personal watchlist (Super Charts: recent only)", () => {
   for (const [file, section] of [["App.tsx", "lsar-"], ["components/funding-page.tsx", "funding"],
-    ["components/open-interest-page.tsx", "open-interest"], ["components/leverage-estimate-page.tsx", "leverage"],
-    ["pages/super-charts-page.tsx", "super-charts"]]) {
+    ["components/open-interest-page.tsx", "open-interest"], ["components/leverage-estimate-page.tsx", "leverage"]]) {
     const source = readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
     assert.match(source, new RegExp(`useCoinMemory\\([^)]*'${section}`), file);
     assert.match(source, /<CoinShortcuts /, file);
     assert.match(source, /<WatchStar /, file);
+    assert.doesNotMatch(source, /showWatchlist=\{false\}/, file);
   }
+  const charts = readFileSync(new URL("../src/pages/super-charts-page.tsx", import.meta.url), "utf8");
+  assert.match(charts, /<CoinShortcuts [^>]*showWatchlist=\{false\}/, "Super Charts keeps only its own watchlist");
+  assert.doesNotMatch(charts, /<WatchStar /);
+  assert.match(charts, /<ChartWatchlist /);
 });

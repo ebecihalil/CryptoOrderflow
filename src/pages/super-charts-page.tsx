@@ -9,7 +9,7 @@ import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
 import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
-import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { CoinShortcuts } from '@/components/coin-shortcuts';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 
@@ -114,7 +114,7 @@ export function SuperChartsPage() {
         <section className="super-chart-marketbar" aria-label="Chart market selection">
           <div className="super-chart-market-copy">
             <span className="super-chart-market-kicker">ACTIVE CONTRACT</span>
-            <strong className="super-chart-active-asset">{market?.asset ?? 'Select a contract'}{market && <WatchStar memory={memory} coin={market.asset} />}</strong>
+            <strong className="super-chart-active-asset">{market?.asset ?? 'Select a contract'}</strong>
             <small>{market ? `${market.exchange.toUpperCase()} native · ${market.symbol}` : 'Choose from the live catalogue'}</small>
           </div>
           <label className="super-chart-contract-field">
@@ -124,7 +124,8 @@ export function SuperChartsPage() {
               className="super-chart-contract-combo" inputClassName="super-chart-contract-input"
               autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
           </label>
-          <CoinShortcuts memory={memory} active={market?.asset} onPick={selectCoin} />
+          {/* Recent coins only: Super Charts keeps its own (server) watchlist below. */}
+          <CoinShortcuts memory={memory} active={market?.asset} onPick={selectCoin} showWatchlist={false} />
           {(catalogue.error || !catalogue.loading && contracts.length === 0) && (
             <div className="super-chart-catalogue-alert" role="status">
               <span>{catalogue.error ?? 'No live contracts are currently listed.'}</span>
