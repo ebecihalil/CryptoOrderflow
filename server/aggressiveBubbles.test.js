@@ -97,15 +97,19 @@ test("bubbles reuse the CVD collectors/deduplication; market/filter changes do n
   await service.close();
 });
 
-test("auto bubble minimum is 3x the average bubble value, rounded, with a floor", async () => {
-  const { autoBubbleMinimum, validateAggressiveBubblesQuery: validate } = await import("./aggressiveBubbles.js");
+test("auto bubble minimum leaves about 2-3 bubbles per candle; multiplier uses average candle volume", async () => {
+  const { bubbleThreshold, averageCandleVolume, validateAggressiveBubblesQuery: validate } = await import("./aggressiveBubbles.js");
   assert.equal(validate({ asset: "BTC", minValue: "auto" }).minValue, "auto");
-  // average 16,000 -> 48,000
-  assert.equal(autoBubbleMinimum([{ value: 10_000 }, { value: 20_000 }, { value: 18_000 }]), 48_000);
-  // rounded to two significant figures
-  assert.equal(autoBubbleMinimum([{ value: 15_971 }]), 48_000);
-  assert.equal(autoBubbleMinimum([]), 100);
-  assert.equal(autoBubbleMinimum([{ value: 5 }]), 100);
-  // a coin with smaller trades gets a smaller bar
-  assert.ok(autoBubbleMinimum([{ value: 300 }, { value: 500 }]) < autoBubbleMinimum([{ value: 30_000 }, { value: 50_000 }]));
+  assert.deepEqual(validate({ asset: "BTC", minValue: "multiplier", multiplier: "0.25" }), { asset: "BTC", market: "both", timeframe: "1h", minValue: "multiplier", multiplier: 0.25 });
+  assert.throws(() => validate({ asset: "BTC", minValue: "multiplier", multiplier: "0" }), e => e.status === 400);
+  // 10 candles, 20 price levels each with values 1000..20000 -> 200 bubbles, candle volume 210,000
+  const points = [];
+  for (let candle = 0; candle < 10; candle++) for (let level = 1; level <= 20; level++) points.push({ time: candle * 3600, value: level * 1000 });
+  assert.equal(averageCandleVolume(points).average, 210_000);
+  const auto = bubbleThreshold(points);
+  const shown = points.filter(point => point.value >= auto.value).length;
+  assert.ok(shown >= 20 && shown <= 30, `about 2-3 per candle, got ${shown / 10}`);
+  assert.ok(auto.multiplier > 0 && auto.multiplier < 1, "auto is a fraction of the candle volume");
+  assert.equal(bubbleThreshold(points, { mode: "multiplier", multiplier: 0.05 }).value, 11_000); // 0.05 x 210,000 = 10,500 -> 11,000
+  assert.equal(bubbleThreshold([]).value, 100);
 });

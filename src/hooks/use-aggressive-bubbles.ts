@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CvdMarket, CvdSource, CvdTimeframe } from './use-cvd-indicator';
 
 export type AggressiveBubblesMarket = 'both' | CvdMarket;
-/** 'auto' = 3x the average bubble value for this coin, timeframe and market (server-computed). */
-export type BubbleMinimum = number | 'auto';
+/** 'auto' = about 2–3 bubbles per candle; 'multiplier' = k × average candle volume; number = fixed USD. */
+export type BubbleMinimum = number | 'auto' | 'multiplier';
 export type AggressiveBubble = {
   id: string; market: CvdMarket; side: 'buy' | 'sell'; time: number;
   price: number; value: number; tradeCount: number; sourceCount: number;
@@ -11,7 +11,7 @@ export type AggressiveBubble = {
 export type AggressiveBubblesPayload = {
   asset: string; timeframe: CvdTimeframe; market: AggressiveBubblesMarket; minValue: BubbleMinimum;
   /** The USD minimum actually applied (the computed value when minValue is 'auto'). */
-  effectiveMinValue: number; autoMultiplier: number | null;
+  effectiveMinValue: number; averageCandleVolume: number; volumeMultiplier: number | null; multiplier?: number;
   unit: 'USD-equivalent'; points: AggressiveBubble[];
   recordingStartedAt: string; historyStart: string | null; historyEnd: string | null;
   sources: Array<CvdSource & { market: CvdMarket }>;
@@ -21,7 +21,7 @@ type State = { payload: AggressiveBubblesPayload | null; loading: boolean; error
 
 export function useAggressiveBubbles(
   asset: string, timeframe: CvdTimeframe, market: AggressiveBubblesMarket,
-  minValue: BubbleMinimum, enabled = true,
+  minValue: BubbleMinimum, multiplier: number, enabled = true,
 ) {
   const [state, setState] = useState<State>({ payload: null, loading: false, error: null });
   const [retry, setRetry] = useState(0);
@@ -33,12 +33,12 @@ export function useAggressiveBubbles(
     async function load() {
       controller = new AbortController();
       try {
-        const query = new URLSearchParams({ asset, timeframe, market, minValue: String(minValue) });
+        const query = new URLSearchParams({ asset, timeframe, market, minValue: String(minValue), multiplier: String(multiplier) });
         const response = await fetch(`/api/indicators/aggressive-bubbles?${query}`, { signal: controller.signal });
         const body = await response.json() as AggressiveBubblesPayload & { error?: string };
         if (!response.ok) throw new Error(body.error || 'Aggressive Volume Bubbles feed unavailable.');
         if (body.asset !== asset || body.market !== market || body.timeframe !== timeframe ||
-          body.minValue !== minValue || !Array.isArray(body.points) || !Array.isArray(body.sources)) {
+          body.minValue !== minValue || (minValue === 'multiplier' && body.multiplier !== multiplier) || !Array.isArray(body.points) || !Array.isArray(body.sources)) {
           throw new Error('Bubble response does not match the selected contract and filters.');
         }
         if (active) setState({ payload: body, loading: false, error: null });
@@ -51,6 +51,6 @@ export function useAggressiveBubbles(
     }
     void load();
     return () => { active = false; controller?.abort(); window.clearTimeout(timer); };
-  }, [asset, timeframe, market, minValue, enabled, retry]);
+  }, [asset, timeframe, market, minValue, multiplier, enabled, retry]);
   return { ...state, refresh };
 }

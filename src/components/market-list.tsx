@@ -99,6 +99,7 @@ export function MarketList({ contracts, current, onSelect }: {
   const [prefs, setPrefs] = useState<Prefs>(readPrefs);
   const [query, setQuery] = useState('');
   const [palette, setPalette] = useState<string | null>(null);
+  const [colorMenu, setColorMenu] = useState(false);
   // The exchange priority list opens together with Filters; its own button can fold it.
   // Filters fold away so the list gets the space; remembered in this browser.
   const [showFilters, setShowFilters] = useState(() => { try { return localStorage.getItem(`${KEY}:filters-open`) === '1'; } catch { return false; } });
@@ -227,11 +228,15 @@ export function MarketList({ contracts, current, onSelect }: {
     return () => observer.disconnect();
   }, [user]);
   useEffect(() => {
-    if (!palette) return;
-    const close = (event: PointerEvent) => { if (!(event.target as HTMLElement).closest?.('.market-list-palette, .market-list-flag')) setPalette(null); };
+    if (!palette && !colorMenu) return;
+    const close = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest?.('.market-list-palette, .market-list-flag')) setPalette(null);
+      if (!target.closest?.('.market-list-colfilter')) setColorMenu(false);
+    };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
-  }, [palette]);
+  }, [palette, colorMenu]);
 
   const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 6);
   const visible = rows.slice(first, first + Math.ceil(viewport / ROW_HEIGHT) + 12);
@@ -352,8 +357,8 @@ export function MarketList({ contracts, current, onSelect }: {
               <button type="button" onClick={() => update({ slots: DEFAULT_SLOTS })} data-testid="market-slots-default">Default exchanges</button>
             </li>
             <li className="market-list-priority-note">{prefs.oneRow
-              ? 'Each coin comes from the first exchange above that lists it; coins it lacks come from the next one. Pick an exchange per slot, leave slots empty to skip them. Exchanges marked (soon) are not chartable yet.'
-              : 'One row per coin is off: every exchange’s contract is listed.'}</li>
+              ? 'Lists are made by priority: each coin comes from the highest exchange that has it.'
+              : 'Every exchange’s contract is listed.'}</li>
           </ol>
         )}
         <div className="market-list-filters">
@@ -370,17 +375,28 @@ export function MarketList({ contracts, current, onSelect }: {
               aria-label="Minimum 24h move percent" data-testid="market-min-move" /><span>%</span>
           </label>
         </div>
-        <div className="market-list-colors" role="group" aria-label="Show colour">
-          <button type="button" className={prefs.colorFilter === 'all' ? 'is-on' : ''} onClick={() => update({ colorFilter: 'all' })}>All</button>
-          {HIGHLIGHT_COLORS.map((color) => (
-            <button type="button" key={color.id} className={`market-list-swatch${prefs.colorFilter === color.id ? ' is-on' : ''}`}
-              style={{ background: color.value }} onClick={() => update({ colorFilter: prefs.colorFilter === color.id ? 'all' : color.id })}
-              aria-label={`Show only ${color.id} coins`} title={`Only ${color.id}`} />
-          ))}
-        </div>
         </>}
       </div>
       <div className="market-list-columns">
+        {/* Colour filter, like a flag column: show only rows of one colour. */}
+        <div className="market-list-colfilter">
+          <button type="button" className={`market-list-colfilter-btn${prefs.colorFilter !== 'all' ? ' is-on' : ''}`}
+            style={prefs.colorFilter !== 'all' ? { background: COLOR_VALUE[prefs.colorFilter] } : undefined}
+            aria-expanded={colorMenu} aria-label="Show only one colour" title="Show only one colour"
+            onClick={() => setColorMenu(!colorMenu)} data-testid="market-color-filter" />
+          {colorMenu && (
+            <div className="market-list-colfilter-menu" role="menu" aria-label="Show colour">
+              <button type="button" role="menuitemradio" aria-checked={prefs.colorFilter === 'all'} className="market-list-colfilter-all"
+                onClick={() => { update({ colorFilter: 'all' }); setColorMenu(false); }}>All</button>
+              {HIGHLIGHT_COLORS.map((color) => (
+                <button type="button" key={color.id} role="menuitemradio" aria-checked={prefs.colorFilter === color.id}
+                  className={prefs.colorFilter === color.id ? 'is-on' : ''} style={{ background: color.value }}
+                  onClick={() => { update({ colorFilter: color.id }); setColorMenu(false); }}
+                  aria-label={`Show only ${color.id} coins`} data-testid={`market-filter-${color.id}`} />
+              ))}
+            </div>
+          )}
+        </div>
         {header('symbol', 'Symbol', 'is-symbol')}{header('last', 'Last')}{header('change', 'Chg')}{header('changePercent', 'Chg%')}
       </div>
       <div className="market-list-rows" ref={listRef} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)} role="list">
@@ -390,7 +406,7 @@ export function MarketList({ contracts, current, onSelect }: {
             const color = row.color ? COLOR_VALUE[row.color] : undefined;
             return (
               <div key={row.key} role="listitem" className={`market-list-row${row.key === currentKey ? ' is-current' : ''}${color ? ' is-colored' : ''}${row.secondary ? ' is-secondary' : ''}`}
-                style={{ top: (first + index) * ROW_HEIGHT, ...(color ? { '--row-color': color } as React.CSSProperties : {}) }}
+                style={{ top: (first + index) * ROW_HEIGHT, ...(palette === row.key ? { zIndex: 4 } : {}), ...(color ? { '--row-color': color } as React.CSSProperties : {}) }}
                 data-testid={`market-row-${row.key}`}>
                 <button type="button" className="market-list-flag" style={color ? { background: color } : undefined}
                   onClick={() => setPalette(palette === row.key ? null : row.key)} aria-label={`Colour ${row.contract.exchangeAsset} on ${EXCHANGE_NAMES[row.contract.exchange] ?? row.contract.exchange}`}

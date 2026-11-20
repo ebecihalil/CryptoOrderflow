@@ -88,6 +88,14 @@ const STUDY_SETTING_KEYS: Partial<Record<string, Array<keyof TechnicalSettings>>
   macd: ['macdFast', 'macdSlow', 'macdSignal'],
 };
 
+/** JSON with sorted keys, to compare settings objects. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value as object).sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(',')}}`;
+  return JSON.stringify(value ?? null);
+}
+
 function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, expanded = false, onToggleExpanded }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
   const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>('timeframe', '1h',
@@ -160,33 +168,77 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     value => CVD_ANCHORS.some(anchor => anchor.value === value));
   const [bubbleMarket, setBubbleMarket] = useChartSetting<AggressiveBubblesMarket>('bubbleMarket', 'both',
     value => ['spot', 'perpetual', 'both'].includes(String(value)));
-  // Default 'auto': 3x the average bubble for this coin/timeframe/market. A typed
-  // value stays until the indicator is removed, then it is back to auto.
+  // Default 'auto': about 2-3 bubbles per candle for this coin/timeframe/market (recalculated
+  // as data arrives). 'multiplier': k x average candle volume. A typed USD value stays fixed.
   const [bubbleMinValue, setBubbleMinValue] = useChartSetting<BubbleMinimum>('bubbleMinimum', 'auto',
-    value => value === 'auto' || Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
+    value => value === 'auto' || value === 'multiplier' || Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
+  const [bubbleMultiplier, setBubbleMultiplier] = useChartSetting<number>('bubbleMultiplier', 0.1,
+    value => typeof value === 'number' && value >= 0.001 && value <= 100);
   const [bubbleMinDraft, setBubbleMinDraft] = useState<string | null>(null);
+  const [bubbleMultDraft, setBubbleMultDraft] = useState<string | null>(null);
   const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);
-  // Settings stay while a layer is on the chart. Removing a layer resets its
-  // settings, so adding it again starts from the defaults (bubbles: auto).
+  // Save / Default per indicator. Changes apply straight away. "Save" keeps the
+  // current settings as yours for that indicator (used again when it is
+  // re-added); "Default" restores the original settings and forgets the saved
+  // ones. Removing an indicator returns it to your saved settings, else defaults.
+  const [savedLayers, setSavedLayers] = useChartSetting<Record<string, unknown>>('savedLayerSettings', {},
+    (value) => !!value && typeof value === 'object' && !Array.isArray(value));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type LayerKit = { read: () => unknown; apply: (value: any) => void; factory: unknown };
+  const kitFor = (key: string): LayerKit | null => {
+    const technical = STUDY_SETTING_KEYS[key];
+    if (technical) return {
+      read: () => Object.fromEntries(technical.map((name) => [name, technicalSettings[name]])),
+      apply: (value) => setTechnicalSettings((current) => ({ ...current, ...value })),
+      factory: Object.fromEntries(technical.map((name) => [name, DEFAULT_TECHNICAL_SETTINGS[name]])),
+    };
+    if (extraIndicator(key)?.params.length) return {
+      read: () => extraSettings[key] ?? null,
+      apply: (value) => setExtraSettings((current) => {
+        const next = { ...current };
+        if (value) next[key] = value; else delete next[key];
+        return next;
+      }),
+      factory: null,
+    };
+    switch (key) {
+      case 'liquidity': return { read: () => ({ settings: liquiditySettings, colors: zoneColors }),
+        apply: (value) => { setLiquiditySettings(value.settings); setZoneColors(value.colors); },
+        factory: { settings: DEFAULT_LIQUIDITY_SETTINGS, colors: DEFAULT_ZONE_COLORS } };
+      case 'funding': return { read: () => ({ window: fundingWindow, method: fundingMethod, mode: fundingMode, threshold: fundingThreshold }),
+        apply: (value) => { setFundingWindow(value.window); setFundingMethod(value.method); setFundingMode(value.mode); setFundingThreshold(value.threshold); },
+        factory: { window: '7d', method: 'mean', mode: 'settled', threshold: 0.08 } };
+      case 'perpetual-cvd': return { read: () => perpetualAnchor, apply: setPerpetualAnchor, factory: '1w' };
+      case 'spot-cvd': return { read: () => spotAnchor, apply: setSpotAnchor, factory: '1w' };
+      case 'aggressive-bubbles': return { read: () => ({ market: bubbleMarket, minimum: bubbleMinValue, multiplier: bubbleMultiplier }),
+        apply: (value) => { setBubbleMarket(value.market); setBubbleMinValue(value.minimum); setBubbleMultiplier(value.multiplier);
+          setBubbleMinDraft(null); setBubbleMultDraft(null); setBubbleMinError(null); },
+        factory: { market: 'both', minimum: 'auto', multiplier: 0.1 } };
+      case 'oi-driver': return { read: () => oiDriverSettings, apply: setOiDriverSettings, factory: DEFAULT_OI_DRIVER_SETTINGS };
+      default: return null;
+    }
+  };
+  const restoreLayer = (key: string) => {
+    const kit = kitFor(key);
+    if (kit) kit.apply(savedLayers[key] !== undefined ? savedLayers[key] : kit.factory);
+  };
+  const layerActions = Object.fromEntries([...studies, ...indicators].flatMap((key) => {
+    const kit = kitFor(key);
+    if (!kit) return [];
+    const current = stableJson(kit.read());
+    return [[key, {
+      saved: savedLayers[key] !== undefined && stableJson(savedLayers[key]) === current,
+      atDefault: stableJson(kit.factory) === current,
+      onSave: () => setSavedLayers((all) => ({ ...all, [key]: kit.read() })),
+      onDefault: () => { kit.apply(kit.factory); setSavedLayers((all) => { const next = { ...all }; delete next[key]; return next; }); },
+    }]];
+  }));
   const previousLayers = useRef({ studies, indicators });
   useEffect(() => {
     const previous = previousLayers.current;
     previousLayers.current = { studies, indicators };
-    const removedStudies = previous.studies.filter((id) => !studies.includes(id));
-    const removed = new Set<string>(previous.indicators.filter((id) => !indicators.includes(id)));
-    if (removedStudies.length) {
-      const keys = removedStudies.flatMap((id) => STUDY_SETTING_KEYS[id] ?? []);
-      if (keys.length) setTechnicalSettings((current) => ({ ...current,
-        ...Object.fromEntries(keys.map((key) => [key, DEFAULT_TECHNICAL_SETTINGS[key]])) }));
-      if (removedStudies.some((id) => Object.hasOwn(extraSettings, id))) setExtraSettings((current) =>
-        Object.fromEntries(Object.entries(current).filter(([id]) => !removedStudies.includes(id as ChartStudyId))));
-    }
-    if (removed.has('liquidity')) { setLiquiditySettings(DEFAULT_LIQUIDITY_SETTINGS); setZoneColors(DEFAULT_ZONE_COLORS); }
-    if (removed.has('funding')) { setFundingWindow('7d'); setFundingMethod('mean'); setFundingMode('settled'); setFundingThreshold(0.08); }
-    if (removed.has('perpetual-cvd')) setPerpetualAnchor('1w');
-    if (removed.has('spot-cvd')) setSpotAnchor('1w');
-    if (removed.has('aggressive-bubbles')) { setBubbleMarket('both'); setBubbleMinValue('auto'); setBubbleMinDraft(null); setBubbleMinError(null); }
-    if (removed.has('oi-driver')) setOiDriverSettings(DEFAULT_OI_DRIVER_SETTINGS);
+    const removed = [...previous.studies.filter((id) => !studies.includes(id)), ...previous.indicators.filter((id) => !indicators.includes(id))];
+    for (const key of removed) restoreLayer(key);
     // Setters are stable in effect; only layer changes matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studies, indicators]);
@@ -195,7 +247,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   const flowTimeframe = (secondsMode ? '1m' : timeframe) as CvdTimeframe;
   const perpetualCvd = useCvdIndicator(canonicalAsset, 'perpetual', flowTimeframe, perpetualAnchor, hasPerpetualCvd);
   const spotCvd = useCvdIndicator(canonicalAsset, 'spot', flowTimeframe, spotAnchor, hasSpotCvd);
-  const aggressiveBubbles = useAggressiveBubbles(canonicalAsset, flowTimeframe, bubbleMarket, bubbleMinValue, hasAggressiveBubbles);
+  const aggressiveBubbles = useAggressiveBubbles(canonicalAsset, flowTimeframe, bubbleMarket, bubbleMinValue, bubbleMultiplier, hasAggressiveBubbles);
   const bubblePayload = aggressiveBubbles.payload && aggressiveBubbles.payload.asset.toUpperCase() === canonicalAsset &&
     aggressiveBubbles.payload.timeframe === timeframe && aggressiveBubbles.payload.market === bubbleMarket &&
     aggressiveBubbles.payload.minValue === bubbleMinValue
@@ -227,8 +279,18 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     setBubbleMinDraft(null);
     setBubbleMinError(null);
   };
-  const bubbleMinShown = bubbleMinDraft ?? (bubbleMinValue === 'auto'
-    ? (bubblePayload ? String(bubblePayload.effectiveMinValue) : '') : String(bubbleMinValue));
+  const bubbleMinShown = bubbleMinDraft ?? (typeof bubbleMinValue === 'number' ? String(bubbleMinValue)
+    : bubblePayload ? String(bubblePayload.effectiveMinValue) : '');
+  const bubbleMultShown = bubbleMultDraft ?? (bubbleMinValue === 'multiplier' ? String(bubbleMultiplier)
+    : bubblePayload?.volumeMultiplier ? String(Number(bubblePayload.volumeMultiplier.toPrecision(2))) : '');
+  const commitBubbleMultiplier = () => {
+    if (bubbleMultDraft === null) return;
+    const next = Number(bubbleMultDraft);
+    if (!(Number.isFinite(next) && next >= 0.001 && next <= 100)) { setBubbleMinError('Enter a multiplier from 0.001 to 100 (× average candle volume).'); return; }
+    setBubbleMultiplier(next); setBubbleMinValue('multiplier'); setBubbleMultDraft(null); setBubbleMinDraft(null); setBubbleMinError(null);
+  };
+  const bubbleModeText = bubbleMinValue === 'auto' ? 'Auto · about 2–3 bubbles per candle'
+    : bubbleMinValue === 'multiplier' ? `${bubbleMultiplier}× average candle volume` : 'Fixed USD value';
 
   const cvdControls = (market: CvdMarket, enabled: boolean, anchor: CvdAnchor, setAnchor: (value: CvdAnchor) => void,
     feed: ReturnType<typeof useCvdIndicator>) => {
@@ -385,13 +447,18 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
             onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive Volume Bubbles market">
             <option value="both">Both markets</option><option value="spot">Spot</option><option value="perpetual">Perpetual</option>
           </select></label>
-          <label className="super-chart-control"><span>Minimum USD value{bubbleMinValue === 'auto' ? ' · auto (3× avg)' : ''}</span><input type="number" min="1" max="100000000" step="1"
-            value={bubbleMinShown} placeholder={bubbleMinValue === 'auto' ? 'Calculating…' : undefined} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
+          <label className="super-chart-control"><span>Minimum USD value</span><input type="number" min="1" max="100000000" step="1"
+            value={bubbleMinShown} placeholder={typeof bubbleMinValue === 'number' ? undefined : 'Calculating…'} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
             onBlur={commitBubbleMinimum} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMinimum(); event.currentTarget.blur(); } }}
              aria-label="Minimum aggressive volume bubble USD-equivalent value" /></label>
+          <label className="super-chart-control"><span>× avg candle volume</span><input type="number" min="0.001" max="100" step="0.01"
+            value={bubbleMultShown} aria-label="Minimum as a multiple of the average candle volume" data-testid="input-bubble-multiplier"
+            onChange={(event) => { setBubbleMultDraft(event.target.value); setBubbleMinError(null); }} onBlur={commitBubbleMultiplier}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMultiplier(); event.currentTarget.blur(); } }} /></label>
           {bubbleMinValue !== 'auto' && <button type="button" className="native-tool-button" data-testid="button-bubble-auto"
-            onClick={() => { setBubbleMinValue('auto'); setBubbleMinDraft(null); setBubbleMinError(null); }}
-            title="Use 3× the average bubble value for this coin and timeframe">Auto</button>}
+            onClick={() => { setBubbleMinValue('auto'); setBubbleMinDraft(null); setBubbleMultDraft(null); setBubbleMinError(null); }}
+            title="Recalculate automatically: about 2–3 bubbles per candle">Auto</button>}
+          <span className="native-bubble-mode" data-testid="bubble-mode">{bubbleModeText}</span>
           <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
           <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
             <RefreshCw size={12} aria-hidden="true" /> Refresh
@@ -494,7 +561,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
           candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
           liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings} extraSettings={extraSettings}
-           layerSettings={layerSettings} liquidityEnabled={hasLiquidity}
+           layerSettings={layerSettings} layerActions={layerActions} liquidityEnabled={hasLiquidity}
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
@@ -537,9 +604,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
       <div className="native-symbol-actions">
         <button type="button" className="native-fit-button" onClick={() => window.dispatchEvent(new Event('native-chart-fit'))}>Fit view</button>
         {onToggleExpanded && <button type="button" className="native-fit-button native-expand-button" onClick={onToggleExpanded}
-          aria-pressed={expanded} title={expanded ? 'Exit full screen (Esc)' : 'Full screen chart'} data-testid="button-chart-fullscreen">
+          aria-pressed={expanded} title={expanded ? 'Back to the normal page (Esc)' : 'Chart fills the browser window'} data-testid="button-chart-fullscreen">
           {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
-          <span>{expanded ? 'Exit full screen' : 'Full screen'}</span>
+          <span>{expanded ? 'Normal view' : 'Big chart'}</span>
         </button>}
       </div>
     </div>

@@ -103,9 +103,9 @@ live in these panels. Chart colours use a brighter pastel palette
 
 ## Full screen and indicator settings
 
-"Full screen" (next to Fit view) fills the screen with the chart: the
+"Big chart" (next to Fit view) fills the browser window with the chart (your taskbar stays visible): the
 indicator menus stay on top, the timeframe row above the chart, and the coin
-watchlist on the right. Esc or "Exit full screen" returns to the normal page.
+watchlist on the right. Esc or "Normal view" returns to the normal page.
 
 Indicator settings stay while the indicator is on the chart (also across
 reloads). Removing an indicator resets its settings, so adding it back starts
@@ -188,3 +188,12 @@ Super Charts requires a free account. Signed-out visitors see the sign-in
 form with example pictures of the main indicators and the exchange list
 (`src/components/super-charts-gate.tsx`; pictures are drawn from fixed sample
 data and labelled as examples).
+
+## Save / Default on indicator settings
+
+Every indicator with settings (⚙ on its chart label) has **Save** and
+**Default**. Changes apply straight away; Save keeps them as your settings for
+that indicator (used again when it is removed and added back, and saved to your
+account); Default restores the original settings and forgets the saved ones.
+
+In the market list, the circle left of "Symbol" filters by row colour.

@@ -8,7 +8,7 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 import { CVD_EXCHANGES, createCvdMarketResolver } from "./cvdMarkets.js";
 import { createCvdStreamFactory } from "./cvdStreams.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
-import { AUTO_BUBBLE_MULTIPLIER, autoBubbleMinimum, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
+import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
 import { secondCandleRecorder } from "./secondCandles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
@@ -236,22 +236,25 @@ export function createCvdIndicatorService({
     }
   }, 1000) : null;
   tick?.unref?.();
+  const BUBBLE_DISPLAY_LIMIT = 1500;
   function getBubbles(query) {
     const parsed = validateAggressiveBubblesQuery(query);
     parsed.asset = canonicalAsset(parsed.asset).asset;
     const markets = parsed.market === "both" ? ["spot", "perpetual"] : [parsed.market];
-    const auto = parsed.minValue === "auto";
+    const dynamic = parsed.minValue === "auto" || parsed.minValue === "multiplier";
     // Reuse CVD's collectors, deduplication, shared gates and reorder buffer.
     // TF, minimum size and browser refresh never create extra trade connections.
     const snapshots = markets.map(market => {
       const cvd = get({ asset: parsed.asset, market, timeframe: parsed.timeframe, anchor: "1w" });
       const group = groups.get(`${market}:${parsed.asset}`);
-      return { cvd, market, ledger: group.bubbles.snapshot(parsed.timeframe, auto ? 0 : parsed.minValue) };
+      return { cvd, market, ledger: group.bubbles.snapshot(parsed.timeframe, dynamic ? 0 : parsed.minValue) };
     });
-    // Auto: the minimum follows this coin/timeframe/market's own average bubble size.
-    const effectiveMinValue = auto ? autoBubbleMinimum(snapshots.flatMap(s => s.ledger.points)) : parsed.minValue;
+    // Auto / multiplier: the minimum follows this coin, timeframe and market's own trading volume.
+    const threshold = bubbleThreshold(snapshots.flatMap(s => s.ledger.points),
+      { mode: parsed.minValue === "multiplier" ? "multiplier" : "auto", multiplier: parsed.multiplier });
+    const effectiveMinValue = dynamic ? threshold.value : parsed.minValue;
     const all = snapshots.flatMap(s => s.ledger.points).filter(p => p.value >= effectiveMinValue).sort((a, b) => b.value - a.value);
-    const points = all.slice(0, 500).sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
+    const points = all.slice(0, BUBBLE_DISPLAY_LIMIT).sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
     const firsts = snapshots.map(s => s.ledger.first).filter(t => t !== null);
     const lasts = snapshots.map(s => s.ledger.last).filter(t => t !== null);
     const warnings = [
@@ -260,14 +263,16 @@ export function createCvdIndicatorService({
       "Buy and sell flow and Spot/Perpetual markets remain separate. Aggressive means market-taking, not proof of institutional activity.",
       "Prices are underlying-coin prices; bundled contract charts scale them into their native price units. USD/USDT/USDC use a parity assumption.",
       "Price-level history retains up to seven days with a bounded cell limit, without fabricated pre-recording trades. Missing sources and downtime remain incomplete.",
-      "At most the 500 largest matching bubbles are displayed. This is an executed-trade overlay, not an order-book liquidity heatmap.",
+      "At most the 1500 largest matching bubbles are displayed. This is an executed-trade overlay, not an order-book liquidity heatmap.",
     ];
     if (snapshots.some(s => s.ledger.truncated)) warnings.push("The price-level safety limit trimmed older activity; available bubble history is incomplete.");
     if (snapshots.some(s => s.cvd.warnings.some(w => /Local history/.test(w)))) warnings.push("History storage failed; recording is not guaranteed to survive a restart.");
     if (snapshots.some(s => s.cvd.warnings.some(w => /Late\/out-of-order|safety buffer/.test(w)))) {
       warnings.push("Some executions were excluded by the shared reorder/safety buffer; affected coverage is incomplete.");
     }
-    return { ...parsed, effectiveMinValue, autoMultiplier: auto ? AUTO_BUBBLE_MULTIPLIER : null, unit: "USD-equivalent", points,
+    return { ...parsed, effectiveMinValue, averageCandleVolume: threshold.averageCandleVolume,
+      volumeMultiplier: effectiveMinValue && threshold.averageCandleVolume > 0 ? effectiveMinValue / threshold.averageCandleVolume : null,
+      bubblesPerCandleTarget: parsed.minValue === "auto" ? AUTO_BUBBLES_PER_CANDLE : null, unit: "USD-equivalent", points,
       recordingStartedAt: new Date(Math.min(...snapshots.map(s => s.ledger.startedAt))).toISOString(),
       historyStart: firsts.length ? new Date(Math.min(...firsts)).toISOString() : null,
       historyEnd: lasts.length ? new Date(Math.max(...lasts)).toISOString() : null,

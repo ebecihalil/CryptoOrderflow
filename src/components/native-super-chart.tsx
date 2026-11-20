@@ -10,7 +10,7 @@ import type { ChartStudyId } from '@/lib/supercharts';
 import { computeExtraIndicator, extraIndicator, type ExtraResult } from '@/lib/extra-indicators';
 import { BandFillPrimitive } from '@/components/band-fill-primitive';
 import { TIMEFRAME_LABELS } from '../../server/timeframes.js';
-import { ChartPaneLegends, type LegendPane, type LegendRow } from '@/components/chart-pane-legends';
+import { ChartPaneLegends, type LayerActions, type LegendPane, type LegendRow } from '@/components/chart-pane-legends';
 import { extraParams } from '@/lib/extra-indicators';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
@@ -51,6 +51,8 @@ type Props = {
   extraSettings?: Record<string, Record<string, number>>;
   /** Settings UI per layer key, shown in the legend's ⚙ panel. */
   layerSettings?: Record<string, ReactNode | undefined>;
+  /** Save / Default buttons per layer key. */
+  layerActions?: Record<string, LayerActions>;
   onRemoveLayer?: (key: string) => void;
   liquidityEnabled?: boolean;
   symbolLabel?: string;
@@ -98,7 +100,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, priceDivisor, extraSettings = {}, layerSettings = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -654,7 +656,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       </div>}
       <div className="native-chart-stage">
         <div className="native-chart-canvas" ref={mountRef} role="img" aria-label="Native exchange-fed candlestick chart with synchronized indicator panes" />
-        <ChartPaneLegends panes={legendPanes} settings={layerSettings} onRemove={onRemoveLayer} />
+        <ChartPaneLegends panes={legendPanes} settings={layerSettings} actions={layerActions} onRemove={onRemoveLayer} />
       </div>
     </div>
   );

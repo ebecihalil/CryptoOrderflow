@@ -47,26 +47,16 @@ function SuperChartsWorkspace() {
   const [indicators, setIndicators] = useChartSetting<OrderflowId[]>('indicators', ['liquidity'],
     value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
   const [marketDraft, setMarketDraft] = useState('');
-  // Full-screen chart: chart + top menus + watchlist fill the screen (browser
-  // full screen when allowed). Esc or the button returns to the normal page.
+  // Big chart: chart + top menus + market list fill the browser window (not the
+  // computer's full screen, so the taskbar stays visible). Esc or the button returns.
   const [expanded, setExpanded] = useState(false);
-  const toggleExpanded = () => {
-    if (!expanded) {
-      setExpanded(true);
-      document.documentElement.requestFullscreen?.().catch(() => { /* in-page full screen still applies */ });
-    } else {
-      setExpanded(false);
-      if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {});
-    }
-  };
+  const toggleExpanded = () => setExpanded((open) => !open);
   useEffect(() => {
     if (!expanded) return;
     document.body.classList.add('chart-fullscreen-open');
-    const onFullscreenChange = () => { if (!document.fullscreenElement) setExpanded(false); };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.fullscreenElement && !(event.target as HTMLElement)?.closest?.('[role=menu], .super-chart-menu')) setExpanded(false);
+      if (event.key === 'Escape' && !(event.target as HTMLElement)?.closest?.('[role=menu], .super-chart-menu, .pane-legend-panel')) setExpanded(false);
     };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('keydown', onKey);
     // Chart fills the space left under the menus (they can wrap; the chart remounts on TF change).
     const fit = () => {
@@ -83,7 +73,6 @@ function SuperChartsWorkspace() {
       window.removeEventListener('resize', fit);
       document.querySelectorAll<HTMLElement>('.native-chart-canvas').forEach((canvas) => { canvas.style.height = ''; });
       document.body.classList.remove('chart-fullscreen-open');
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('keydown', onKey);
     };
   }, [expanded]);
