@@ -33,3 +33,11 @@
 .pane-legend-help dd { margin:0; }
 .pane-legend-help ul { margin:0;padding-left:18px; }
 @media (max-width:640px) { .pane-legend { right:56px; } .pane-legend-params { display:none; } }
+.pane-legend-actions { display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--lsar-border); }
+.pane-legend-actions button { display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:4px;font:600 11px var(--app-font-mono);cursor:pointer; }
+.pane-legend-save { border:1px solid #2563eb;background:#2563eb;color:#fff; }
+.pane-legend-save:hover:not(:disabled) { background:#1d4ed8; }
+.pane-legend-save:disabled { border-color:var(--lsar-accent);background:transparent;color:var(--lsar-accent);cursor:default; }
+.pane-legend-default { border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong); }
+.pane-legend-default:hover:not(:disabled) { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.pane-legend-default:disabled { opacity:.45;cursor:default; }

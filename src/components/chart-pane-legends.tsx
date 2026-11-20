@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Settings2, X } from 'lucide-react';
+import { Check, RotateCcw, Save, Settings2, X } from 'lucide-react';
 import { helpFor } from '@/lib/indicator-help';
 import '@/styles/chart-pane-legends.css';
 
@@ -12,10 +12,13 @@ export type LegendRow = {
   values?: Array<{ text: string; color?: string }>;
 };
 export type LegendPane = { key: string; top: number; rows: LegendRow[] };
+/** Save keeps the current settings as yours; Default restores the original settings. */
+export type LayerActions = { saved: boolean; atDefault: boolean; onSave: () => void; onDefault: () => void };
 
 type Props = {
   panes: LegendPane[];
   settings: Record<string, ReactNode | undefined>;
+  actions?: Record<string, LayerActions>;
   onRemove?: (key: string) => void;
 };
 
@@ -23,7 +26,7 @@ type Props = {
  * TradingView-style labels at the top-left of every chart pane: name, inputs
  * and live values, with ⚙ (settings + how to read it) and × (remove).
  */
-export function ChartPaneLegends({ panes, settings, onRemove }: Props) {
+export function ChartPaneLegends({ panes, settings, actions = {}, onRemove }: Props) {
   const [open, setOpen] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -70,7 +73,18 @@ export function ChartPaneLegends({ panes, settings, onRemove }: Props) {
                   <div className="pane-legend-panel" ref={panel} role="dialog" aria-label={`${row.label} settings`} data-testid={`legend-panel-${row.key}`}>
                     <header><strong>{row.label}</strong>
                       <button type="button" onClick={() => setOpen(null)} aria-label="Close"><X size={14} /></button></header>
-                    {settings[row.key] && <section className="pane-legend-settings"><h4>Settings</h4>{settings[row.key]}</section>}
+                    {settings[row.key] && <section className="pane-legend-settings"><h4>Settings</h4>{settings[row.key]}
+                      {actions[row.key] && <div className="pane-legend-actions">
+                        <button type="button" className="pane-legend-save" onClick={actions[row.key].onSave} disabled={actions[row.key].saved}
+                          title="Keep these settings for this indicator" data-testid={`legend-save-${row.key}`}>
+                          {actions[row.key].saved ? <><Check size={12} aria-hidden="true" /> Saved</> : <><Save size={12} aria-hidden="true" /> Save</>}
+                        </button>
+                        <button type="button" className="pane-legend-default" onClick={actions[row.key].onDefault} disabled={actions[row.key].atDefault && !actions[row.key].saved}
+                          title="Back to the original settings" data-testid={`legend-default-${row.key}`}>
+                          <RotateCcw size={12} aria-hidden="true" /> Default
+                        </button>
+                      </div>}
+                    </section>}
                     {help && <section className="pane-legend-help"><h4>How to read it</h4>
                       <p>{help.summary}</p>
                       {help.lines?.length ? <dl>{help.lines.map(([name, text]) => <div key={name}><dt>{name}</dt><dd>{text}</dd></div>)}</dl> : null}

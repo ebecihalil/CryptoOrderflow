@@ -27,7 +27,7 @@
 .market-list-swatch { width:16px;height:16px;border:2px solid transparent;border-radius:50%;cursor:pointer;opacity:.75; }
 .market-list-swatch.is-on { border-color:var(--lsar-ink);opacity:1; }
 .market-list-columns,.market-list-select { display:grid;grid-template-columns:minmax(0,1fr) 66px 58px 56px;align-items:center; }
-.market-list-columns { padding:0 8px 0 22px;border-bottom:1px solid var(--lsar-border); }
+.market-list-columns { position:relative;z-index:5;padding:0 8px 0 32px;border-bottom:1px solid var(--lsar-border); }
 .market-list-col { display:inline-flex;align-items:center;justify-content:flex-end;gap:2px;height:28px;padding:0;border:0;background:transparent;color:var(--lsar-muted);font:10px var(--app-font-mono);cursor:pointer; }
 .market-list-col.is-symbol { justify-content:flex-start; }
 .market-list-col:hover,.market-list-col.is-sorted { color:var(--lsar-ink); }
@@ -36,7 +36,7 @@
 .market-list-row:hover { background:var(--lsar-row-hover); }
 .market-list-row.is-colored { background:color-mix(in srgb,var(--row-color) 13%,transparent);box-shadow:inset 3px 0 0 var(--row-color); }
 .market-list-row.is-current { outline:1px solid var(--lsar-accent);outline-offset:-1px; }
-.market-list-flag { flex:none;width:8px;height:8px;margin:0 5px 0 9px;padding:0;border:1px solid var(--lsar-muted);border-radius:50%;background:transparent;cursor:pointer;opacity:.45; }
+.market-list-flag { flex:none;width:14px;height:14px;margin:0 8px 0 10px;padding:0;border:1.5px solid var(--lsar-muted);border-radius:50%;background:transparent;cursor:pointer;opacity:.55; }
 .market-list-row:hover .market-list-flag,.market-list-row.is-colored .market-list-flag { opacity:1; }
 .market-list-flag:hover { border-color:var(--lsar-ink); }
 .market-list-select { flex:1;min-width:0;height:100%;padding:0 8px 0 0;border:0;background:transparent;color:var(--lsar-ink);text-align:left;cursor:pointer; }
@@ -54,7 +54,7 @@
 .market-list-row:hover .market-list-hide,.market-list-hide:focus-visible { display:grid; }
 .market-list-hide:hover { color:#f23645; }
 .market-list-palette { position:absolute;left:20px;top:34px;z-index:5;display:flex;gap:5px;padding:6px;border:1px solid var(--lsar-control-border);border-radius:5px;background:var(--lsar-surface);box-shadow:0 8px 20px rgba(0,0,0,.3); }
-.market-list-palette button { width:18px;height:18px;padding:0;border:2px solid transparent;border-radius:50%;cursor:pointer; }
+.market-list-palette button { width:22px;height:22px;padding:0;border:2px solid transparent;border-radius:50%;cursor:pointer; }
 .market-list-palette button.is-on { border-color:var(--lsar-ink); }
 .market-list-palette-clear { display:grid;place-items:center;background:var(--lsar-page) !important;border-color:var(--lsar-border) !important;color:var(--lsar-muted); }
 .market-list-empty { margin:18px 12px;color:var(--lsar-muted);font:11px/1.5 var(--app-font-mono); }
@@ -111,3 +111,10 @@
 .market-list-signin { display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;border-radius:4px;font:600 12px var(--app-font-mono);text-decoration:none; }
 .market-list-signin { border:1px solid #2563eb;background:#2563eb;color:#fff; }
 .market-list-signin:hover { border-color:#1d4ed8;background:#1d4ed8; }
+.market-list-colfilter { position:absolute;left:10px;top:50%;transform:translateY(-50%); }
+.market-list-colfilter-btn { display:block;width:14px;height:14px;padding:0;border:1.5px solid var(--lsar-strong);border-radius:50%;background:transparent;cursor:pointer; }
+.market-list-colfilter-btn.is-on { border-color:var(--lsar-ink);box-shadow:0 0 0 2px var(--lsar-surface),0 0 0 3px var(--lsar-ink); }
+.market-list-colfilter-menu { position:absolute;left:-4px;top:22px;z-index:6;display:flex;align-items:center;gap:6px;padding:7px;border:1px solid var(--lsar-control-border);border-radius:5px;background:var(--lsar-surface);box-shadow:0 8px 20px rgba(0,0,0,.3); }
+.market-list-colfilter-menu button { width:22px;height:22px;padding:0;border:2px solid transparent;border-radius:50%;cursor:pointer; }
+.market-list-colfilter-menu button.is-on,.market-list-colfilter-menu button[aria-checked="true"] { border-color:var(--lsar-ink); }
+.market-list-colfilter-menu .market-list-colfilter-all { width:auto;height:22px;padding:0 7px;border:1px solid var(--lsar-border);border-radius:4px;background:var(--lsar-page);color:var(--lsar-strong);font:10px var(--app-font-mono); }

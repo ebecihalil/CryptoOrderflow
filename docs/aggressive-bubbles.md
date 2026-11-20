@@ -63,12 +63,18 @@ theme and scaling without recreating the chart or adding a new indicator pane.
 The Super Charts server watchlist pins up to five underlying coins for continuous
 Spot and Perpetual recording. See [Watchlist recording](chart-watchlist.md).
 
-## Default minimum (auto)
+## Minimum value (auto, multiplier or fixed)
 
-By default the minimum USD value is automatic: 3x the average value of all
-recorded bubbles (one bubble = same-side executions in one 0.05% price band
-in one candle) for the selected coin, timeframe and market, rounded to two
-significant figures (minimum $100). Bigger timeframes and busier coins get a
-higher bar automatically, so only clearly above-average bubbles show. Typing a
-value overrides it until you press "Auto" or remove the indicator. API:
-`minValue=auto`; the response's `effectiveMinValue` is the applied number.
+- **Auto (default):** the minimum is set so that about 2–3 bubbles per candle
+  remain on average, recalculated for the selected coin, timeframe and market as
+  trades arrive. The settings show the resulting USD value and what it is as a
+  multiple of the average candle volume (usually well below 1×, since one
+  bubble is one price level of one candle).
+- **× average candle volume:** type a multiplier (e.g. 0.25); the minimum is
+  that share of the average traded USD per candle, so it still adapts to the
+  coin and timeframe.
+- **Minimum USD value:** type a number to keep a fixed value.
+- **Save** keeps your setting (also when the indicator is removed and added
+  back); **Default** returns to Auto. API: `minValue=auto`, `minValue=multiplier&multiplier=0.25`
+  or `minValue=50000`; the response includes `effectiveMinValue`,
+  `averageCandleVolume` and `volumeMultiplier`. Up to 1500 bubbles are shown.
