@@ -15,6 +15,19 @@ import {
   getLsarMarketSnapshot,
   getLsarMarketSummary,
 } from "./server/lsarMarketData.js";
+import { getTopTraderLsarSnapshot, getTopTraderLsarSummary } from "./server/topTraderLsarMarketData.js";
+import { createAccountService } from "./server/accounts.js";
+import { createAccountRouter } from "./server/accountRoutes.js";
+
+// kind=global (default): all-accounts LSAR. kind=top: top-trader accounts LSAR.
+const lsarKind = (req, res) => {
+  const kind = req.query.kind ?? "global";
+  if (kind !== "global" && kind !== "top") {
+    res.status(400).json({ error: "kind must be global or top." });
+    return null;
+  }
+  return kind;
+};
 
 const app = express();
 void chartWatchlistService.start();
@@ -24,7 +37,15 @@ const staticDir = path.join(rootDir, "dist");
 const timeframes = new Set(["5m", "15m", "30m", "1h", "4h", "24h"]);
 
 app.disable("x-powered-by");
-app.use(express.json());
+// Caddy (or Render's proxy) sits in front: trust it for the client IP
+// (login rate limits) and HTTPS (Secure session cookie).
+app.set("trust proxy", process.env.TRUST_PROXY ?? "loopback, linklocal, uniquelocal");
+app.use(express.json({ limit: "20kb" }));
+
+// Free accounts: sign up / sign in, per-account watchlist.
+const accounts = createAccountService();
+app.use("/api", createAccountRouter({ accounts }));
+setInterval(() => accounts.purgeExpired(), 6 * 3600_000).unref();
 
 app.get("/api/chart/watchlist", async (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -150,8 +171,11 @@ app.get("/api/market/lsar", (req, res) => {
     maxPrice = parsed;
   }
 
-  const snapshot = getLsarMarketSnapshot();
+  const kind = lsarKind(req, res);
+  if (!kind) return;
+  const snapshot = kind === "top" ? getTopTraderLsarSnapshot() : getLsarMarketSnapshot();
   res.json({
+    kind,
     ...snapshot,
     rows: snapshot.rows.filter((row) => maxPrice === null || row.price <= maxPrice),
   });
@@ -163,7 +187,9 @@ app.get("/api/market/summary", (req, res) => {
     res.status(400).json({ error: "timeframe must be one of 5m, 15m, 30m, 1h, 4h, or 24h." });
     return;
   }
-  res.json(getLsarMarketSummary(timeframe));
+  const kind = lsarKind(req, res);
+  if (!kind) return;
+  res.json({ kind, ...(kind === "top" ? getTopTraderLsarSummary(timeframe) : getLsarMarketSummary(timeframe)) });
 });
 
 app.use("/api", (_req, res) => {
@@ -191,6 +217,7 @@ async function shutdown() {
   deadline.unref();
   await chartWatchlistService.close();
   await cvdIndicatorService.close();
+  accounts.close();
   clearTimeout(deadline);
   process.exit(0);
 }

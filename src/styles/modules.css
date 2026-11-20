@@ -31,14 +31,16 @@
 .ratio-option > svg { margin-left:auto;flex:none;color:var(--lsar-muted); }
 .module-home-foot { display:flex;justify-content:space-between;gap:16px;margin:35px auto 0;max-width:940px;padding-top:14px;border-top:1px solid var(--lsar-border);color:var(--lsar-muted);font:9px var(--app-font-mono);letter-spacing:.06em; }
 .module-home-main { max-width:1320px;min-height:calc(100dvh - 82px);padding:54px clamp(24px,5vw,72px) 190px; }
-.module-home-main .module-home-kicker { justify-content:flex-start;gap:12px; }
+.module-home-main .module-home-kicker { justify-content:flex-start;gap:12px;font-size:13px;letter-spacing:.14em; }
+.module-home-main .module-home-kicker .module-kicker-rule { width:42px; }
 .module-home-main .module-home-title { text-align:left;margin-top:14px; }
 .module-home-main .module-home-lede { margin:13px 0 0;text-align:left;max-width:560px; }
 .module-home-main .module-directory { max-width:none;margin:38px 0 0; }
 .module-home-main .directory-heading { padding-bottom:13px; }
 .module-home-main .module-list { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:14px; }
 .module-home-main .module-entry { min-width:0;align-self:start;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
-.module-home-main .module-entry-super-charts { grid-column:2; }
+/* Six modules fill the 3-column grid evenly; no forced placement needed. */
+.module-home-main .module-entry-super-charts { grid-column:auto; }
 .module-home-main .module-entry-row { min-height:116px;grid-template-columns:24px 38px minmax(0,1fr) 34px;gap:10px;padding:13px; }
 .module-home-main .module-entry-copy { min-width:0; }
 .module-home-main .module-entry-copy h3 { font-size:16px;line-height:1.35; }

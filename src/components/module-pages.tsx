@@ -22,7 +22,7 @@ export function ModuleHome() {
 
         <section className="module-directory" aria-label="Market modules">
           <div className="directory-heading">
-            <div><span className="eyebrow">01 / MODULE DIRECTORY</span><h2>Choose a market lens</h2></div>
+            <div><h2>Choose a market lens</h2></div>
             <span className="directory-count">{String(HOME_MODULES.length).padStart(2, '0')} MODULES</span>
           </div>
           <div className="module-list">

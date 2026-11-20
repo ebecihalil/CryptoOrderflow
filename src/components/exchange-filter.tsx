@@ -9,11 +9,12 @@ interface ExchangeFilterProps {
   onChange: (selected: MarketExchange[]) => void;
   multipleOnly: boolean;
   onMultipleOnlyChange: (value: boolean) => void;
+  exchanges?: MarketExchange[];
 }
 
-export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnlyChange }: ExchangeFilterProps) {
+export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnlyChange, exchanges = MARKET_EXCHANGES }: ExchangeFilterProps) {
   const menu = useRef<HTMLDetailsElement>(null);
-  const allSelected = MARKET_EXCHANGES.every((exchange) => selected.includes(exchange));
+  const allSelected = exchanges.every((exchange) => selected.includes(exchange));
   const label = multipleOnly ? 'Multi-exchange coins'
     : allSelected ? 'All sources'
     : selected.length === 0 ? 'No exchanges selected'
@@ -47,10 +48,10 @@ export function ExchangeFilter({ selected, onChange, multipleOnly, onMultipleOnl
       </summary>
       <div className="exchange-select-menu" role="group" aria-label="Select exchanges">
         <div className="exchange-select-actions">
-          <button type="button" onClick={() => onChange([...MARKET_EXCHANGES])} data-testid="button-exchanges-all">Select all</button>
+          <button type="button" onClick={() => onChange([...exchanges])} data-testid="button-exchanges-all">Select all</button>
           <button type="button" onClick={() => onChange([])} data-testid="button-exchanges-clear">Clear all</button>
         </div>
-        {MARKET_EXCHANGES.map((exchange) => (
+        {exchanges.map((exchange) => (
           <label className="exchange-select-option" key={exchange}>
             <input type="checkbox" checked={selected.includes(exchange)} data-testid={`checkbox-exchange-${exchange}`}
               onChange={(event) => onChange(event.target.checked ? [...selected, exchange] : selected.filter((value) => value !== exchange))} />

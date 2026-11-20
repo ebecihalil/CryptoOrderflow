@@ -111,3 +111,5 @@
   .super-chart-tabs [role="tab"] { font-size:11px; }
   .super-chart-study { font-size:10px; }
 }
+.super-chart-active-asset { display:inline-flex;align-items:center;gap:4px; }
+.super-chart-marketbar .coin-shortcuts { flex-basis:100%;margin:2px 0 0; }

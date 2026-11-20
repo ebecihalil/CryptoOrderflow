@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { HomeButton } from '@/components/home-button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { AccountButton } from '@/components/account-button';
 import type { HealthStatus } from '@/types/market';
 import '@/styles/app-header.css';
 
@@ -53,6 +54,7 @@ export function AppHeader({
             <span className="app-header-feed-label">{feedLabel}</span>
           </span>
           <ThemeToggle />
+          <AccountButton />
         </div>
       </header>
       {isRefreshing && <div className="refreshing-bar" data-testid="status-refreshing" />}

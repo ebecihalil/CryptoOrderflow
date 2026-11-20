@@ -28,6 +28,9 @@ export class BinanceRequestGate {
         this.verified = !probe;
         this.probeHeldUntil = 0;
         this.history = [];
+        // Binance applies its futures-data limit PER ENDPOINT (e.g. global vs
+        // top-trader account ratio), shared by USD-M and COIN-M paths here.
+        this.historyByPath = {};
         this.funding = [];
         this.general = [];
         this.generalCosts = [];
@@ -50,13 +53,19 @@ export class BinanceRequestGate {
             if (state.funding !== undefined && (!Array.isArray(state.funding) || !state.funding.every(Number.isFinite)))
                 throw new Error("Invalid Binance funding request window");
             this.funding = state.funding ?? [];
+            if (state.historyByPath !== undefined) {
+                if (!state.historyByPath || typeof state.historyByPath !== "object" || Array.isArray(state.historyByPath) ||
+                    !Object.values(state.historyByPath).every(list => Array.isArray(list) && list.every(Number.isFinite)))
+                    throw new Error("Invalid Binance per-endpoint request window");
+                this.historyByPath = state.historyByPath;
+            }
         }
         this.queue = Promise.resolve();
     }
 
     checkpoint() {
-        const { history, funding, general, generalCosts, nextStart, blockedUntil, blockedStatus, backoffLevel, lastLimitAt } = this;
-        this.save({ history, funding, general, generalCosts, nextStart, blockedUntil, blockedStatus, backoffLevel, lastLimitAt });
+        const { history, historyByPath, funding, general, generalCosts, nextStart, blockedUntil, blockedStatus, backoffLevel, lastLimitAt } = this;
+        this.save({ history, historyByPath, funding, general, generalCosts, nextStart, blockedUntil, blockedStatus, backoffLevel, lastLimitAt });
     }
 
     get isCoolingDown() { return this.now() < this.blockedUntil; }
@@ -101,12 +110,14 @@ export class BinanceRequestGate {
                 this.checkCooldown();
                 const now = this.now();
                 this.history = this.history.filter(time => time > now - this.historyWindowMs);
+                const pathKey = parsed.pathname;
+                if (history) this.historyByPath[pathKey] = (this.historyByPath[pathKey] ?? []).filter(time => time > now - this.historyWindowMs);
                 this.funding = this.funding.filter(time => time > now - 300_000);
                 const retained = this.general.map((time, index) => ({ time, cost: this.generalCosts[index] }))
                     .filter(entry => entry.time > now - this.generalWindowMs);
                 this.general = retained.map(entry => entry.time);
                 this.generalCosts = retained.map(entry => entry.cost);
-                const starts = funding ? this.funding : history ? this.history : this.general;
+                const starts = funding ? this.funding : history ? this.historyByPath[pathKey] : this.general;
                 let quotaDelay = 0;
                 if ((history || funding) && starts.length >= limit) quotaDelay = starts[starts.length - limit] + windowMs - now + 1;
                 if (!history && !funding) {
@@ -126,6 +137,7 @@ export class BinanceRequestGate {
                 }
                 if (!this.verified) this.probeHeldUntil = now + this.probeTimeoutMs;
                 starts.push(now);
+                if (history) this.history.push(now); // all-endpoint record (diagnostics/back-compat)
                 if (!history && !funding) this.generalCosts.push(cost);
                 this.nextStart = now + this.spacingMs;
                 this.checkpoint();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw, Search } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
 import { CoinLogo } from '@/components/coin-logo';
@@ -10,6 +10,9 @@ import { formatOiUnits } from '@/lib/open-interest-format';
 import type { MarketExchange } from '@/types/market';
 import type { OiRow, OiTimeframe } from '@/types/open-interest';
 import '@/styles/open-interest.css';
+import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { useCoinMemory } from '@/hooks/use-coin-memory';
+import { normalizeCoin } from '@/lib/coin-memory';
 
 const TIMEFRAMES: OiTimeframe[] = ['5m', '15m', '30m', '1h', '4h', '24h'];
 const PAGE_SIZE = 50;
@@ -183,6 +186,8 @@ export function OpenInterestPage() {
   const [sortField, setSortField] = useState<SortField>('aggregateOiUsd');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [page, setPage] = useState(0);
+  const memory = useCoinMemory('open-interest');
+  const [watchOnly, setWatchOnly] = useState(false);
   const query = useOpenInterestSnapshot(timeframe, selectedExchanges ?? [], timeframe === '24h' ? 'rolling24h' : 'candle');
   const dailyQuery = useOpenInterestSnapshot('24h', selectedExchanges ?? [], 'rolling24h');
   const tableQuery = timeframe === '24h' ? dailyQuery : query;
@@ -206,7 +211,8 @@ export function OpenInterestPage() {
       const matchesTerm = !term || row.asset.toLowerCase().includes(term) || row.displayAsset.toLowerCase().includes(term);
       const matchesExchange = selectedExchanges === null
         || (activeExchanges.length > 0 && activeExchanges.some((exchange) => Boolean(row.venues[exchange])));
-      return matchesTerm && matchesExchange;
+      const matchesWatch = !watchOnly || memory.watchlist.includes(normalizeCoin(row.asset));
+      return matchesTerm && matchesExchange && matchesWatch;
     }).sort((left, right) => {
       if (sortField === 'asset') {
         const compared = left.asset.localeCompare(right.asset);
@@ -218,7 +224,14 @@ export function OpenInterestPage() {
       if (b === null) return -1;
       return (a - b) * (sortDirection === 'asc' ? 1 : -1) || left.asset.localeCompare(right.asset);
     });
-  }, [snapshot?.rows, search, selectedExchanges, activeExchanges, sortField, sortDirection]);
+  }, [snapshot?.rows, search, selectedExchanges, activeExchanges, sortField, sortDirection, watchOnly, memory.watchlist]);
+  const { remember } = memory;
+  useEffect(() => {
+    const term = normalizeCoin(search);
+    if (!term || !snapshot?.rows.some((row) => normalizeCoin(row.asset) === term)) return;
+    const timer = window.setTimeout(() => remember(term), 700);
+    return () => window.clearTimeout(timer);
+  }, [search, snapshot?.rows, remember]);
   const handleSort = (field: SortField) => {
     if (field === sortField) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDirection(field === 'asset' ? 'asc' : 'desc'); }
@@ -284,6 +297,8 @@ export function OpenInterestPage() {
             <ExchangeFilter exchanges={exchanges} selected={selectedExchanges} onChange={(next) => { setSelectedExchanges(next); setPage(0); }} />
           </div>
         </section>
+        <CoinShortcuts memory={memory} active={search} onPick={(coin) => { setSearch(coin); setPage(0); }}
+          watchOnly={watchOnly} onWatchOnlyChange={(value) => { setWatchOnly(value); setPage(0); }} />
 
         {timeframe !== '24h' && tableQuery.isError && <div className="oi-error" role="alert">
           <span>{snapshot ? `Could not refresh. Showing the last available snapshot. ${errorMessage}` : errorMessage}</span>
@@ -320,7 +335,7 @@ export function OpenInterestPage() {
                 const change = row.changePct;
                 const changeTone = change === null ? 'oi-missing' : change > 0 ? 'oi-positive' : change < 0 ? 'oi-negative' : '';
                 return <tr key={row.asset}>
-                  <td className="oi-coin-cell"><div className="oi-coin-content"><CoinLogo asset={row.asset} /><span><strong>{row.displayAsset || row.asset}</strong><small>{row.asset}</small></span></div></td>
+                  <td className="oi-coin-cell"><div className="oi-coin-content"><WatchStar memory={memory} coin={row.asset} /><CoinLogo asset={row.asset} /><span><strong>{row.displayAsset || row.asset}</strong><small>{row.asset}</small></span></div></td>
                   <td title="Underlying coin units; contract sizing follows the row asset">{formatUnits(row.aggregateOiCoin, row.asset)}</td>
                   <td className={changeTone} title={change === null
                     ? `Change unavailable: no matched venues have an available ${timeframe === '24h' ? 'rolling 24-hour' : 'candle'} comparison baseline.`

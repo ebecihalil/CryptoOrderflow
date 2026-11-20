@@ -47,3 +47,25 @@ This is a calculation-only change: it introduces no new exchange requests or
 changes to rate limits. OI weights are normalized by the largest weight to avoid
 overflow. Short shares are accumulated directly, not obtained by subtracting
 the long share from one near 100%. Missing data does not become zero.
+
+## Top Trader LSAR
+
+`/top-trader-long-short-account-ratio` (API: `/api/market/lsar?kind=top`,
+`/api/market/summary?kind=top`) runs a second collector with identical
+aggregation and candle comparisons, using each exchange's **top-trader account
+ratio**:
+
+| Exchange | Source | Extra requests |
+| --- | --- | --- |
+| Binance USD-M | `/futures/data/topLongShortAccountRatio?symbol=` | 1 per contract |
+| Binance COIN-M | `/futures/data/topLongShortAccountRatio?pair=&contractType=PERPETUAL` | 1 per contract |
+| OKX | `rubik/stat/contracts/long-short-account-ratio-contract-top-trader` (5m + 1H) | 2 per contract |
+| Gate.io | `contract_stats.top_lsr_account` from the global scan's response | none |
+
+Contracts, prices and USD OI weights are reused from the Global LSAR scan for
+the same contracts, so both screens weight venues identically. Bybit and Toobit
+publish no top-trader ratio; Bitget and HTX are excluded until their endpoints
+are verified against official documentation. Each exchange defines "top
+traders" differently (Binance: top 20% by margin balance), so the aggregate is
+a cross-venue proxy, not one uniform population. Binance futures-data budgets
+are per endpoint, so the top-trader scan does not slow the global scan.
