@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, RotateCw, X } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
-import { ChartWatchlist } from '@/components/chart-watchlist';
+import { MarketList } from '@/components/market-list';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
@@ -230,7 +230,7 @@ export function SuperChartsPage() {
             <button type="button" aria-label={`Remove ${ORDERFLOW_ITEMS.find((item) => item.id === id)?.label}`} onClick={() => toggleIndicator(id)}><X size={12} /></button></span>)}
           {!studies.length && !indicators.length && <span className="super-chart-no-studies">No studies selected</span>}
         </div>
-        <div className="super-chart-workspace-layout">
+        <div className="super-chart-workspace-layout has-market-list">
           <div className="super-chart-workspace-main">
             <NativeChartWorkspace contract={market} studies={studies} indicators={indicators}
               expanded={expanded} onToggleExpanded={toggleExpanded}
@@ -239,7 +239,8 @@ export function SuperChartsPage() {
                 else if (ORDERFLOW_ITEMS.some((item) => item.id === key)) toggleIndicator(key as OrderflowId);
               }} />
           </div>
-          <ChartWatchlist currentContract={market} onSelectContract={selectWatchlistContract} />
+          {/* Exchange-style list of every contract (replaces the old coin watchlist panel). */}
+          <MarketList contracts={contracts} current={market} onSelect={selectWatchlistContract} />
         </div>
       </main>
     </div>

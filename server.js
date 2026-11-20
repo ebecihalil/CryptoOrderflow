@@ -8,6 +8,7 @@ import { cvdIndicatorService } from "./server/cvdIndicator.js";
 import { chartWatchlistService } from "./server/chartWatchlist.js";
 import { leverageService } from "./server/leverageService.js";
 import { marketContractService } from "./server/marketContracts.js";
+import { marketTickerService } from "./server/marketTickers.js";
 import { binanceGeoBlocks, describeBinanceAccess } from "./server/binanceAccess.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,6 +77,12 @@ app.get("/api/healthz", (_req, res) => {
 app.get("/api/market/contracts", (_req, res) => {
   res.set("Cache-Control", "no-store");
   res.json(marketContractService.get());
+});
+
+// Market list: last price and 24h change for every Super Charts contract.
+app.get("/api/market/tickers", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(marketTickerService.get());
 });
 
 app.get("/api/market/candles", async (req, res) => {

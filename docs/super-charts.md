@@ -110,3 +110,21 @@ watchlist on the right. Esc or "Exit full screen" returns to the normal page.
 Indicator settings stay while the indicator is on the chart (also across
 reloads). Removing an indicator resets its settings, so adding it back starts
 from the defaults.
+
+## Market list
+
+The right side of Super Charts lists every USDT perpetual on Binance, Bybit,
+OKX, Gate.io, Bitget, MEXC and BingX (the same coin on several exchanges is
+listed once per exchange) with last price, 24h change and 24h change %.
+
+- Click a row to chart it. Click a column title to sort (default: 24h volume).
+- Exchange buttons, Gainers / Losers and "Move ≥ x%" filter the list; the
+  colour dots show only rows of one colour.
+- The small circle colours a row; × removes it from your list. Reset shows every
+  coin on every exchange again and keeps your colours. All saved in the browser.
+- Prices come from `GET /api/market/tickers`: one bulk ticker request per
+  exchange every 30 s (Binance every 60 s), shared by all visitors and only
+  while someone has the page open (`server/marketTickers.js`).
+
+The old server "coin watchlist" panel is no longer shown on this page; coins it
+was already recording keep recording.
