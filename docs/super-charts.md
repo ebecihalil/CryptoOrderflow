@@ -118,10 +118,16 @@ OKX, Gate.io, Bitget, MEXC and BingX (the same coin on several exchanges is
 listed once per exchange) with last price, 24h change and 24h change %.
 
 - Click a row to chart it. Click a column title to sort (default: 24h volume).
-- Exchange buttons, Gainers / Losers and "Move ≥ x%" filter the list; the
+- "One row per coin" (on by default): open the exchange priority list, tick
+  the exchanges you want and order them with the arrows. Each coin is shown
+  once, from the first exchange in that order that lists it; coins it lacks
+  come from the next one, and so on. "+N" on a row lists the same coin on the
+  other exchanges underneath it. Turn it off to list every exchange's contract.
+- Gainers / Losers and "Move ≥ x%" filter the list; the
   colour dots show only rows of one colour.
-- The small circle colours a row; × removes it from your list. Reset shows every
-  coin on every exchange again and keeps your colours. All saved in the browser.
+- The small circle colours a row; × removes it from your list (in one-row mode
+  the whole coin). Reset shows every coin again and keeps your colours and
+  exchange priority. All saved in the browser.
 - Prices come from `GET /api/market/tickers`: one bulk ticker request per
   exchange every 30 s (Binance every 60 s), shared by all visitors and only
   while someone has the page open (`server/marketTickers.js`).

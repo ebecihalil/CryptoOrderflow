@@ -40,7 +40,7 @@
 .market-list-row:hover .market-list-flag,.market-list-row.is-colored .market-list-flag { opacity:1; }
 .market-list-flag:hover { border-color:var(--lsar-ink); }
 .market-list-select { flex:1;min-width:0;height:100%;padding:0 8px 0 0;border:0;background:transparent;color:var(--lsar-ink);text-align:left;cursor:pointer; }
-.market-list-symbol { display:flex;align-items:center;gap:6px;min-width:0; }
+.market-list-symbol { display:flex;align-items:center;gap:6px;min-width:0;padding-right:4px; }
 .market-list-symbol .coin-logo { width:18px;height:18px; }
 .market-list-symbol .coin-logo-fallback { font-size:7px; }
 .market-list-name { display:flex;flex-direction:column;min-width:0;line-height:1.1; }
@@ -66,3 +66,25 @@
   .super-chart-workspace-layout.has-market-list,.is-chart-expanded .super-chart-workspace-layout.has-market-list { grid-template-columns:minmax(0,1fr); }
   .market-list,.is-chart-expanded .market-list { position:static;height:560px; }
 }
+.market-list-mode { display:flex;align-items:center;justify-content:space-between;gap:6px; }
+.market-list-onerow { display:inline-flex;align-items:center;gap:5px;color:var(--lsar-strong);font:10px var(--app-font-mono);white-space:nowrap;cursor:pointer; }
+.market-list-onerow input { accent-color:var(--lsar-accent); }
+.market-list-priority-toggle { display:inline-flex;align-items:center;gap:4px;min-width:0;height:24px;padding:0 7px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-ink);font:9px var(--app-font-mono);cursor:pointer; }
+.market-list-priority-toggle[aria-expanded="true"],.market-list-priority-toggle:hover { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.market-list-priority-summary { overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
+.market-list-priority { display:grid;gap:2px;margin:0;padding:6px;border:1px solid var(--lsar-border);background:var(--lsar-page);list-style:none; }
+.market-list-priority li { display:grid;grid-template-columns:18px minmax(0,1fr) 22px 22px;align-items:center;gap:4px;height:26px; }
+.market-list-priority li.is-off label { opacity:.5; }
+.market-list-rank { display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--lsar-accent-soft);color:var(--lsar-accent);font:9px var(--app-font-mono); }
+.market-list-priority label { display:flex;align-items:center;gap:5px;min-width:0;color:var(--lsar-ink);font:10px var(--app-font-mono);cursor:pointer; }
+.market-list-priority label input { accent-color:var(--lsar-accent); }
+.market-list-priority .exchange-logo { width:13px;height:13px;border-radius:3px; }
+.market-list-priority button { display:grid;place-items:center;width:22px;height:22px;padding:0;border:1px solid var(--lsar-border);background:var(--lsar-surface);color:var(--lsar-strong);cursor:pointer; }
+.market-list-priority button:disabled { opacity:.3;cursor:default; }
+.market-list-priority button:hover:not(:disabled) { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.market-list-priority li.market-list-priority-note { display:block;height:auto;margin-top:3px;color:var(--lsar-muted);font:9px/1.45 var(--app-font-mono); }
+.market-list-more { flex:none;margin-left:auto;padding:1px 4px;border:1px solid var(--lsar-border);border-radius:3px;background:var(--lsar-page);color:var(--lsar-muted);font:8.5px var(--app-font-mono);cursor:pointer; }
+.market-list-more:hover,.market-list-more.is-open { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.market-list-row.is-secondary { background:color-mix(in srgb,var(--lsar-page) 70%,transparent); }
+.market-list-row.is-secondary .market-list-symbol { padding-left:14px; }
+.market-list-row.is-secondary .market-list-name b { font-weight:400;color:var(--lsar-strong); }

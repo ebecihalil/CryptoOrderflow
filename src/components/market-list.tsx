@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, RotateCcw, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, RotateCcw, Search, X } from 'lucide-react';
+import { groupByPriority, normalizeOrder } from '@/lib/market-priority';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import type { MarketContract } from '@/hooks/use-market-contracts';
@@ -22,6 +23,8 @@ type SortKey = 'symbol' | 'last' | 'change' | 'changePercent' | 'volume';
 type Move = 'all' | 'gainers' | 'losers';
 type Prefs = {
   exchanges: string[]; hidden: string[]; colors: Record<string, string>;
+  /** Exchange priority for "one row per coin" (first = preferred). */
+  order: string[]; oneRow: boolean;
   sort: { key: SortKey; dir: 1 | -1 }; move: Move; minMove: number; colorFilter: string;
 };
 
@@ -36,7 +39,7 @@ export const HIGHLIGHT_COLORS = [
 const COLOR_VALUE = Object.fromEntries(HIGHLIGHT_COLORS.map((color) => [color.id, color.value]));
 const KEY = 'cof:v1:market-list';
 const DEFAULTS: Prefs = {
-  exchanges: MARKET_LIST_EXCHANGES, hidden: [], colors: {},
+  exchanges: MARKET_LIST_EXCHANGES, hidden: [], colors: {}, order: MARKET_LIST_EXCHANGES, oneRow: true,
   sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorFilter: 'all',
 };
 const ROW_HEIGHT = 32;
@@ -44,7 +47,8 @@ const ROW_HEIGHT = 32;
 function readPrefs(): Prefs {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (saved && typeof saved === 'object') return { ...DEFAULTS, ...saved, sort: { ...DEFAULTS.sort, ...saved.sort } };
+    if (saved && typeof saved === 'object') return { ...DEFAULTS, ...saved, sort: { ...DEFAULTS.sort, ...saved.sort },
+      order: normalizeOrder(saved.order, MARKET_LIST_EXCHANGES) };
   } catch { /* storage blocked */ }
   return DEFAULTS;
 }
@@ -67,6 +71,8 @@ const signed = (text: string, value: number) => (value > 0 ? `+${text}` : text);
 type Row = {
   key: string; contract: MarketContract; last: number | null; change: number | null;
   changePercent: number | null; volume: number | null; color: string | undefined;
+  /** One-row mode: same coin on lower-priority exchanges; secondary = shown under its main row. */
+  others: MarketContract[]; secondary?: boolean;
 };
 
 export function MarketList({ contracts, current, onSelect }: {
@@ -75,6 +81,8 @@ export function MarketList({ contracts, current, onSelect }: {
   const [prefs, setPrefs] = useState<Prefs>(readPrefs);
   const [query, setQuery] = useState('');
   const [palette, setPalette] = useState<string | null>(null);
+  const [showPriority, setShowPriority] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(600);
   const listRef = useRef<HTMLDivElement>(null);
@@ -105,27 +113,33 @@ export function MarketList({ contracts, current, onSelect }: {
   const rows = useMemo<Row[]>(() => {
     const hidden = new Set(prefs.hidden);
     const wanted = query.trim().toUpperCase();
-    const list: Row[] = [];
-    for (const contract of contracts) {
-      const exchange = contract.exchange.toLowerCase();
-      const key = `${exchange}:${contract.symbol}`;
-      if (!prefs.exchanges.includes(exchange) || hidden.has(key)) continue;
-      if (wanted && !contract.exchangeAsset.toUpperCase().includes(wanted) && !contract.asset.toUpperCase().includes(wanted)) continue;
-      const color = prefs.colors[key];
-      if (prefs.colorFilter !== 'all' && color !== prefs.colorFilter) continue;
+    const isHidden = (contract: MarketContract) => hidden.has(`${contract.exchange.toLowerCase()}:${contract.symbol}`)
+      || hidden.has(`coin:${contract.asset.toUpperCase()}`);
+    const build = (contract: MarketContract, others: MarketContract[] = [], secondary = false): Row => {
+      const key = `${contract.exchange.toLowerCase()}:${contract.symbol}`;
       const ticker = prices.get(key);
       const last = ticker?.[1] ?? null;
       const changePercent = ticker?.[2] ?? null;
-      if (prefs.move === 'gainers' && !(changePercent !== null && changePercent > 0)) continue;
-      if (prefs.move === 'losers' && !(changePercent !== null && changePercent < 0)) continue;
-      if (prefs.minMove > 0 && !(changePercent !== null && Math.abs(changePercent) >= prefs.minMove)) continue;
       const change = last !== null && changePercent !== null ? last - last / (1 + changePercent / 100) : null;
-      list.push({ key, contract, last, change, changePercent, volume: ticker?.[3] ?? null, color });
-    }
+      return { key, contract, last, change, changePercent, volume: ticker?.[3] ?? null, color: prefs.colors[key], others, secondary };
+    };
+    // One row per coin: from the first exchange in your priority order that lists it.
+    const candidates: Row[] = prefs.oneRow
+      ? groupByPriority(contracts, prefs.order, prefs.exchanges, isHidden).map(({ primary, others }) => build(primary, others))
+      : contracts.filter((contract) => prefs.exchanges.includes(contract.exchange.toLowerCase()) && !isHidden(contract)).map((contract) => build(contract));
+    const list = candidates.filter((row) => {
+      if (wanted && !row.contract.exchangeAsset.toUpperCase().includes(wanted) && !row.contract.asset.toUpperCase().includes(wanted)) return false;
+      if (prefs.colorFilter !== 'all' && row.color !== prefs.colorFilter) return false;
+      const move = row.changePercent;
+      if (prefs.move === 'gainers' && !(move !== null && move > 0)) return false;
+      if (prefs.move === 'losers' && !(move !== null && move < 0)) return false;
+      if (prefs.minMove > 0 && !(move !== null && Math.abs(move) >= prefs.minMove)) return false;
+      return true;
+    });
     const { key: sortKey, dir } = prefs.sort;
     const value = (row: Row) => sortKey === 'last' ? row.last : sortKey === 'change' ? row.change
       : sortKey === 'changePercent' ? row.changePercent : sortKey === 'volume' ? row.volume : null;
-    return list.sort((a, b) => {
+    list.sort((a, b) => {
       if (sortKey === 'symbol') return dir * (a.contract.exchangeAsset.localeCompare(b.contract.exchangeAsset) || a.contract.exchange.localeCompare(b.contract.exchange));
       const left = value(a), right = value(b);
       if (left === null && right === null) return a.contract.exchangeAsset.localeCompare(b.contract.exchangeAsset);
@@ -133,7 +147,11 @@ export function MarketList({ contracts, current, onSelect }: {
       if (right === null) return -1;
       return dir * (left - right);
     });
-  }, [contracts, prices, prefs, query]);
+    if (!prefs.oneRow || !expanded.size) return list;
+    // "+N" opened: the coin's other exchanges listed under its main row.
+    return list.flatMap((row) => expanded.has(row.contract.asset.toUpperCase())
+      ? [row, ...row.others.map((other) => build(other, [], true))] : [row]);
+  }, [contracts, prices, prefs, query, expanded]);
 
   useEffect(() => {
     const element = listRef.current;
@@ -152,7 +170,22 @@ export function MarketList({ contracts, current, onSelect }: {
   const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 6);
   const visible = rows.slice(first, first + Math.ceil(viewport / ROW_HEIGHT) + 12);
   const currentKey = current ? `${current.exchange.toLowerCase()}:${current.symbol}` : '';
-  const total = contracts.filter((contract) => MARKET_LIST_EXCHANGES.includes(contract.exchange.toLowerCase())).length;
+  const total = prefs.oneRow ? new Set(contracts.map((contract) => contract.asset.toUpperCase())).size
+    : contracts.filter((contract) => MARKET_LIST_EXCHANGES.includes(contract.exchange.toLowerCase())).length;
+  const shown = rows.filter((row) => !row.secondary).length;
+  const enabledOrder = prefs.order.filter((exchange) => prefs.exchanges.includes(exchange));
+  const move = (exchange: string, step: -1 | 1) => {
+    const order = [...prefs.order];
+    const index = order.indexOf(exchange), target = index + step;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    update({ order });
+  };
+  const toggleExpanded = (coin: string) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(coin)) next.delete(coin); else next.add(coin);
+    return next;
+  });
   const filtered = prefs.hidden.length > 0 || prefs.exchanges.length < MARKET_LIST_EXCHANGES.length || prefs.move !== 'all'
     || prefs.minMove > 0 || prefs.colorFilter !== 'all';
   const sortBy = (key: SortKey) => update({ sort: { key, dir: prefs.sort.key === key ? (prefs.sort.dir === 1 ? -1 : 1) : key === 'symbol' ? 1 : -1 } });
@@ -177,10 +210,10 @@ export function MarketList({ contracts, current, onSelect }: {
       <header className="market-list-head">
         <div>
           <div className="market-list-eyebrow">USDT perpetuals · 24h</div>
-          <h2>Markets <span>{rows.length.toLocaleString()}{rows.length !== total ? ` / ${total.toLocaleString()}` : ''}</span></h2>
+          <h2>Markets <span>{shown.toLocaleString()}{shown !== total ? ` / ${total.toLocaleString()}` : ''} {prefs.oneRow ? 'coins' : 'contracts'}</span></h2>
         </div>
-        <button type="button" className="market-list-reset" onClick={() => { update({ ...DEFAULTS, colors: prefs.colors }); setQuery(''); }}
-          disabled={!filtered && !query} title="Show every coin on every exchange again (keeps your colours)" data-testid="market-reset">
+        <button type="button" className="market-list-reset" onClick={() => { update({ ...DEFAULTS, colors: prefs.colors, order: prefs.order, oneRow: prefs.oneRow }); setQuery(''); setExpanded(new Set()); }}
+          disabled={!filtered && !query} title="Show every coin on every exchange again (keeps your colours and exchange priority)" data-testid="market-reset">
           <RotateCcw size={12} aria-hidden="true" /> Reset
         </button>
       </header>
@@ -190,15 +223,36 @@ export function MarketList({ contracts, current, onSelect }: {
             spellCheck={false} autoCapitalize="characters" data-testid="market-search" />
           {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
         </label>
-        <div className="market-list-exchanges" role="group" aria-label="Exchanges">
-          {MARKET_LIST_EXCHANGES.map((exchange) => (
-            <button type="button" key={exchange} className={prefs.exchanges.includes(exchange) ? 'is-on' : ''}
-              aria-pressed={prefs.exchanges.includes(exchange)} onClick={() => toggleExchange(exchange)}
-              title={EXCHANGE_NAMES[exchange]} data-testid={`market-exchange-${exchange}`}>
-              <ExchangeLogo exchange={exchange} /><span>{EXCHANGE_NAMES[exchange]}</span>
-            </button>
-          ))}
+        <div className="market-list-mode">
+          <label className="market-list-onerow" title="Show each coin once, from your highest-priority exchange that lists it">
+            <input type="checkbox" checked={prefs.oneRow} onChange={(event) => { update({ oneRow: event.target.checked }); setExpanded(new Set()); }}
+              data-testid="market-one-row" /> One row per coin
+          </label>
+          <button type="button" className="market-list-priority-toggle" aria-expanded={showPriority} onClick={() => setShowPriority(!showPriority)}
+            data-testid="market-priority-toggle" title="Exchange priority and which exchanges to include">
+            <span className="market-list-priority-summary">{enabledOrder.slice(0, 3).map((exchange) => EXCHANGE_NAMES[exchange]).join(' › ')}
+              {enabledOrder.length > 3 ? ` +${enabledOrder.length - 3}` : ''}{!enabledOrder.length ? 'No exchanges' : ''}</span>
+            <ChevronDown size={12} aria-hidden="true" />
+          </button>
         </div>
+        {showPriority && (
+          <ol className="market-list-priority" aria-label="Exchange priority" data-testid="market-priority">
+            {prefs.order.map((exchange, index) => (
+              <li key={exchange} className={prefs.exchanges.includes(exchange) ? '' : 'is-off'}>
+                <span className="market-list-rank">{index + 1}</span>
+                <label><input type="checkbox" checked={prefs.exchanges.includes(exchange)} onChange={() => toggleExchange(exchange)}
+                  data-testid={`market-exchange-${exchange}`} /><ExchangeLogo exchange={exchange} />{EXCHANGE_NAMES[exchange]}</label>
+                <button type="button" onClick={() => move(exchange, -1)} disabled={index === 0} aria-label={`Move ${EXCHANGE_NAMES[exchange]} up`}
+                  data-testid={`market-up-${exchange}`}><ChevronUp size={13} /></button>
+                <button type="button" onClick={() => move(exchange, 1)} disabled={index === prefs.order.length - 1} aria-label={`Move ${EXCHANGE_NAMES[exchange]} down`}
+                  data-testid={`market-down-${exchange}`}><ChevronDown size={13} /></button>
+              </li>
+            ))}
+            <li className="market-list-priority-note">{prefs.oneRow
+              ? 'Each coin comes from the first exchange above that lists it; coins it lacks come from the next one.'
+              : 'One row per coin is off: every exchange’s contract is listed.'}</li>
+          </ol>
+        )}
         <div className="market-list-filters">
           <div className="market-list-move" role="group" aria-label="24h direction">
             {(['all', 'gainers', 'losers'] as Move[]).map((move) => (
@@ -231,7 +285,7 @@ export function MarketList({ contracts, current, onSelect }: {
             const tone = row.changePercent === null ? '' : row.changePercent > 0 ? ' is-up' : row.changePercent < 0 ? ' is-down' : '';
             const color = row.color ? COLOR_VALUE[row.color] : undefined;
             return (
-              <div key={row.key} role="listitem" className={`market-list-row${row.key === currentKey ? ' is-current' : ''}${color ? ' is-colored' : ''}`}
+              <div key={row.key} role="listitem" className={`market-list-row${row.key === currentKey ? ' is-current' : ''}${color ? ' is-colored' : ''}${row.secondary ? ' is-secondary' : ''}`}
                 style={{ top: (first + index) * ROW_HEIGHT, ...(color ? { '--row-color': color } as React.CSSProperties : {}) }}
                 data-testid={`market-row-${row.key}`}>
                 <button type="button" className="market-list-flag" style={color ? { background: color } : undefined}
@@ -240,14 +294,20 @@ export function MarketList({ contracts, current, onSelect }: {
                 <button type="button" className="market-list-select" onClick={() => onSelect(row.contract)}
                   aria-current={row.key === currentKey ? 'true' : undefined} title={`${row.contract.exchangeAsset}USDT · ${EXCHANGE_NAMES[row.contract.exchange] ?? row.contract.exchange}`}>
                   <span className="market-list-symbol"><CoinLogo asset={row.contract.asset} />
-                    <span className="market-list-name"><b>{row.contract.exchangeAsset}</b><small><ExchangeLogo exchange={row.contract.exchange} />{EXCHANGE_NAMES[row.contract.exchange] ?? row.contract.exchange}</small></span></span>
+                    <span className="market-list-name"><b>{row.contract.exchangeAsset}</b><small><ExchangeLogo exchange={row.contract.exchange} />{EXCHANGE_NAMES[row.contract.exchange] ?? row.contract.exchange}</small></span>
+                    {row.others.length > 0 && <span role="button" tabIndex={0} className={`market-list-more${expanded.has(row.contract.asset.toUpperCase()) ? ' is-open' : ''}`}
+                      title={`Also on ${row.others.map((other) => EXCHANGE_NAMES[other.exchange] ?? other.exchange).join(', ')}`}
+                      onClick={(event) => { event.stopPropagation(); toggleExpanded(row.contract.asset.toUpperCase()); }}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); toggleExpanded(row.contract.asset.toUpperCase()); } }}
+                      data-testid={`market-more-${row.contract.asset}`}>+{row.others.length}</span>}</span>
                   <span className="market-list-num">{row.last === null ? '—' : formatPrice(row.last)}</span>
                   <span className={`market-list-num${tone}`}>{row.change === null ? '—' : signed(formatPrice(row.change, row.last ?? row.change), row.change)}</span>
                   <span className={`market-list-num${tone}`}>{row.changePercent === null ? '—' : `${signed(row.changePercent.toFixed(2), row.changePercent)}%`}</span>
                 </button>
-                <button type="button" className="market-list-hide" onClick={() => update({ hidden: [...prefs.hidden, row.key] })}
+                {!row.secondary && <button type="button" className="market-list-hide"
+                  onClick={() => update({ hidden: [...prefs.hidden, prefs.oneRow ? `coin:${row.contract.asset.toUpperCase()}` : row.key] })}
                   aria-label={`Remove ${row.contract.exchangeAsset} on ${EXCHANGE_NAMES[row.contract.exchange] ?? row.contract.exchange} from the list`} title="Remove from list (Reset brings it back)"
-                  data-testid={`market-hide-${row.key}`}><X size={12} aria-hidden="true" /></button>
+                  data-testid={`market-hide-${row.key}`}><X size={12} aria-hidden="true" /></button>}
                 {palette === row.key && (
                   <div className="market-list-palette" role="menu" aria-label="Row colour">
                     {HIGHLIGHT_COLORS.map((option) => (
@@ -266,7 +326,7 @@ export function MarketList({ contracts, current, onSelect }: {
       </div>
       <footer className="market-list-foot">
         {tickers.isError ? 'Prices unavailable right now; retrying.' : unavailable.length ? `No prices from ${unavailable.join(', ')} right now.`
-          : 'Click a coin to chart it · ● to colour · × to remove · prices refresh every 15–60 s.'}
+          : `Click a coin to chart it · ● colour · × remove · +N other exchanges · prices refresh every 15–60 s.`}
       </footer>
     </aside>
   );
