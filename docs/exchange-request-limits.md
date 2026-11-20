@@ -32,6 +32,13 @@ Limits can change; recheck before adding endpoints or increasing throughput.
   all supported contracts are still queued, not silently removed.
 - No changes to LSAR candle calculations, OI weighting, filters or UI.
 
+- Binance HTTP 451 (restricted location) and CloudFront country-block 403 are
+  geographic blocks, not rate limits. They pause only the affected Binance host
+  for 30 minutes without escalating ban backoff. See `binance-access.md`.
+- The Leverage Estimate's per-asset history calls (Binance futures/data,
+  OKX rubik, Gate contract_stats, Bybit OI/account-ratio, spot candles) use the
+  same shared gates. See `leverage-estimate.md`.
+
 ## Persistence and hosting constraints
 
 Request windows, cooldowns and fallback-backoff levels are saved atomically to

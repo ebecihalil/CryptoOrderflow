@@ -18,6 +18,7 @@ import NotFound from '@/pages/not-found';
 import { ModuleComingSoon, ModuleHome } from '@/components/module-pages';
 import { FundingPage } from '@/components/funding-page';
 import { OpenInterestPage } from '@/components/open-interest-page';
+import { LeverageEstimatePage } from '@/components/leverage-estimate-page';
 import { SuperChartsPage } from '@/pages/super-charts-page';
 import { MODULES } from '@/lib/modules';
 import './styles/modules.css';
@@ -452,7 +453,8 @@ function Router() {
         <Route path="/funding-rate" component={FundingPage} />
         <Route path="/open-interest" component={OpenInterestPage} />
         <Route path="/super-charts" component={SuperChartsPage} />
-        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts').map((module) => (
+        <Route path="/leverage-estimate" component={LeverageEstimatePage} />
+        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts' && module.path !== '/leverage-estimate').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />
           </Route>

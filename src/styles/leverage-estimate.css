@@ -1,0 +1,95 @@
+.lev-app { min-height:100dvh;color:var(--lsar-ink);background:var(--lsar-page); }
+.lev-main { max-width:1660px;margin:0 auto;padding:22px clamp(16px,3.3vw,52px) 40px; }
+.lev-heading { display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:10px 0 16px; }
+.lev-heading .eyebrow { color:var(--lsar-muted); }
+.lev-heading h1 { display:flex;align-items:center;gap:10px;margin:7px 0 0;color:var(--lsar-ink);font-size:clamp(24px,3vw,36px);line-height:1.08;letter-spacing:-.05em; }
+.lev-heading h1 .coin-logo { width:30px;height:30px; }
+.lev-refresh,.lev-asset-form button[type=submit] { display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--lsar-control-border);border-radius:4px;background:var(--lsar-surface);color:var(--lsar-strong);font:11px var(--app-font-mono);cursor:pointer; }
+.lev-refresh:disabled { opacity:.6;cursor:default; }
+.lev-controls { display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px; }
+.lev-asset-form { display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap; }
+.lev-asset-form label { display:grid;gap:4px;color:var(--lsar-muted);font:9px var(--app-font-mono);text-transform:uppercase;letter-spacing:.06em; }
+.lev-asset-form input { width:120px;height:34px;padding:0 10px;border:1px solid var(--lsar-control-border);border-radius:4px;background:var(--lsar-surface);color:var(--lsar-ink);font:12px var(--app-font-mono);outline:0; }
+.lev-asset-form input:focus { border-color:var(--lsar-accent); }
+.lev-quick { display:flex;gap:4px;flex-wrap:wrap; }
+.lev-quick button { height:34px;padding:0 10px;border:1px solid var(--lsar-border);border-radius:4px;background:transparent;color:var(--lsar-muted);font:11px var(--app-font-mono);cursor:pointer; }
+.lev-quick button.active { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.lev-timeframes { display:flex;gap:2px;border-bottom:1px solid var(--lsar-border); }
+.lev-timeframes button { position:relative;min-height:36px;padding:0 12px;border:0;background:transparent;color:var(--lsar-muted);font:11px var(--app-font-mono);cursor:pointer; }
+.lev-timeframes button.active { color:var(--lsar-accent);font-weight:600; }
+.lev-timeframes button.active::after { content:'';position:absolute;right:9px;bottom:-1px;left:9px;height:2px;background:var(--lsar-accent); }
+.lev-error,.lev-warning { margin:0 0 10px;padding:9px 12px;border:1px solid;font-size:12px;line-height:1.5; }
+.lev-error { border-color:var(--lsar-error-border);background:var(--lsar-error-bg);color:var(--lsar-error-ink); }
+.lev-warning { border-color:var(--lsar-warning-border);background:var(--lsar-warning-bg);color:var(--lsar-warning-ink); }
+
+.lev-cards { display:grid;grid-template-columns:1.15fr repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px; }
+.lev-card { min-width:0;padding:13px 14px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
+.lev-card h2 { margin:0 0 8px;color:var(--lsar-muted);font:10px var(--app-font-mono);letter-spacing:.07em;text-transform:uppercase; }
+.lev-value { margin:0 0 8px;color:var(--lsar-ink);font:600 28px/1.05 var(--app-font-mono);font-variant-numeric:tabular-nums;letter-spacing:-.03em; }
+.lev-value small { margin-left:5px;color:var(--lsar-muted);font:11px var(--app-font-mono);letter-spacing:0; }
+.lev-side.long-heavy { color:var(--lsar-positive); }
+.lev-side.short-heavy { color:var(--lsar-negative); }
+.lev-note { margin:8px 0 0;color:var(--lsar-subtle-ink);font-size:11.5px;line-height:1.45; }
+.lev-regime { margin:8px 0 0;font:600 11px var(--app-font-mono);letter-spacing:.08em; }
+.lev-regime.low { color:var(--lsar-positive); }
+.lev-regime.normal { color:var(--lsar-strong); }
+.lev-regime.elevated { color:#b8862f; }
+.lev-regime.extreme { color:var(--lsar-negative); }
+.lev-regime.unavailable { color:var(--lsar-muted); }
+.lev-gauge-track { position:relative;height:8px;border-radius:4px;background:linear-gradient(90deg,#25876a 0%,#7ea36b 40%,#c4a05c 60%,#c75a52 80%,#a23c36 100%);opacity:.9; }
+.lev-gauge-track span { position:absolute;top:-4px;bottom:-4px;left:0;border-right:3px solid var(--lsar-ink);background:transparent; }
+.lev-gauge-scale { display:flex;justify-content:space-between;margin-top:5px;color:var(--lsar-muted);font:9px var(--app-font-mono); }
+.lev-bias { position:relative;height:28px; }
+.lev-bias-axis { position:absolute;top:6px;left:0;right:0;height:8px;border-radius:4px;background:var(--lsar-row-hover); }
+.lev-bias-axis::after { content:'';position:absolute;top:-3px;bottom:-3px;left:50%;width:1px;background:var(--lsar-muted); }
+.lev-bias-fill { position:absolute;top:6px;height:8px; }
+.lev-bias-fill.long { border-radius:0 4px 4px 0;background:var(--lsar-positive); }
+.lev-bias-fill.short { border-radius:4px 0 0 4px;background:var(--lsar-negative); }
+.lev-bias small { position:absolute;bottom:0;color:var(--lsar-muted);font:9px var(--app-font-mono); }
+.lev-bias-left { left:0; } .lev-bias-right { right:0; }
+.lev-facts { display:grid;gap:5px;margin:0; }
+.lev-facts div { display:flex;justify-content:space-between;gap:8px;padding-bottom:4px;border-bottom:1px solid var(--lsar-rule); }
+.lev-facts dt { color:var(--lsar-muted);font-size:11px; }
+.lev-facts dd { margin:0;color:var(--lsar-strong);font:600 11.5px var(--app-font-mono);font-variant-numeric:tabular-nums;white-space:nowrap; }
+.lev-facts dd.pos { color:var(--lsar-positive); }
+.lev-facts dd.neg { color:var(--lsar-negative); }
+
+.lev-chart-panel { margin-bottom:12px;padding:10px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
+.lev-chart-legend { display:flex;gap:6px 18px;flex-wrap:wrap;margin:0 0 8px;color:var(--lsar-muted);font:10px var(--app-font-mono); }
+.lev-chart-legend span { display:inline-flex;align-items:center;gap:5px; }
+.lev-chart-legend i { display:inline-block;width:12px;height:3px;border-radius:2px; }
+.lev-chart-legend i.score { background:#b8862f; }
+.lev-chart-legend i.pressure { background:var(--lsar-accent); }
+.lev-chart-legend i.long { height:9px;width:7px;background:#25876a; }
+.lev-chart-legend i.short { height:9px;width:7px;background:#c75a52; }
+.lev-chart-canvas { width:100%;height:clamp(420px,62vh,640px); }
+.lev-chart-empty { display:grid;place-items:center;height:320px;color:var(--lsar-muted);font:12px var(--app-font-mono);text-align:center; }
+
+.lev-sources,.lev-method { margin-bottom:12px;padding:13px 15px;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
+.lev-sources h2,.lev-method h2 { margin:0 0 10px;color:var(--lsar-muted);font:11px var(--app-font-mono);letter-spacing:.07em;text-transform:uppercase; }
+.lev-sources table { width:100%;border-collapse:collapse;font-size:12px; }
+.lev-sources th { padding:6px 8px;border-bottom:1px solid var(--lsar-border);color:var(--lsar-muted);font:9px var(--app-font-mono);text-align:left;text-transform:uppercase; }
+.lev-sources td { padding:7px 8px;border-bottom:1px solid var(--lsar-rule);color:var(--lsar-body-ink);vertical-align:middle; }
+.lev-sources td:first-child { white-space:nowrap; }
+.lev-sources td .exchange-logo { width:14px;height:14px;vertical-align:-2px; }
+.lev-status { font:10px var(--app-font-mono);text-transform:uppercase; }
+.lev-status.live { color:var(--lsar-positive); }
+.lev-status.partial,.lev-status.cached,.lev-status.loading,.lev-status.refreshing { color:#b8862f; }
+.lev-status.unavailable { color:var(--lsar-negative); }
+.lev-status.not-listed { color:var(--lsar-muted); }
+.lev-method ol { margin:0 0 10px;padding-left:18px;color:var(--lsar-body-ink);font-size:12.5px;line-height:1.6; }
+.lev-method p { margin:6px 0 0;color:var(--lsar-body-ink);font-size:12.5px;line-height:1.6; }
+.lev-method .lev-disclaimer { color:var(--lsar-warning-ink); }
+
+@media (max-width:1180px) {
+  .lev-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .lev-card-score { grid-column:1 / -1; }
+}
+@media (max-width:640px) {
+  .lev-main { padding:16px 16px 32px; }
+  .lev-heading { align-items:flex-start;flex-direction:column; }
+  .lev-cards { grid-template-columns:1fr; }
+  .lev-timeframes { width:100%;overflow-x:auto; }
+  .lev-sources { overflow-x:auto; }
+  .lev-chart-canvas { height:460px; }
+}

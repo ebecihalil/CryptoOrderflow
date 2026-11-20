@@ -1,5 +1,6 @@
 import { BinanceCooldownError } from "./binanceRequestGate.js";
 import { ExchangeCooldownError } from "./exchangeRequestGate.js";
+import { routeBinanceRequest, binanceGeoBlocks, BinanceGeoBlockError } from "./binanceAccess.js";
 
 const wait = delay => new Promise(resolve => setTimeout(resolve, delay));
 const HOSTS = {
@@ -17,9 +18,18 @@ const HOSTS = {
     "api.backpack.exchange": "backpack",
 };
 export const exchangeForUrl = value => HOSTS[new URL(value).hostname];
-export const isExchangeCooldown = error => error instanceof BinanceCooldownError || error instanceof ExchangeCooldownError;
+export const isExchangeCooldown = error => error instanceof BinanceCooldownError || error instanceof ExchangeCooldownError || error instanceof BinanceGeoBlockError;
 
-export function createExchangeHttpClient({ gates, fetchImpl = fetch, sleep = wait, timeoutMs = 12_000 }) {
+// Binance answers restricted regions with 451, or with a CloudFront 403 page
+// ("configured to block access from your country"). Neither is a rate limit.
+export async function isBinanceGeoBlock(response) {
+    if (response.status === 451) return true;
+    if (response.status !== 403 || !/cloudfront/i.test(response.headers.get("x-cache") ?? response.headers.get("via") ?? "")) return false;
+    const text = await response.clone().text().catch(() => "");
+    return /block access from your country|restricted location/i.test(text);
+}
+
+export function createExchangeHttpClient({ gates, fetchImpl = fetch, sleep = wait, timeoutMs = 12_000, route = routeBinanceRequest, geoBlocks = binanceGeoBlocks }) {
     return async function fetchJson(url, options = {}) {
         const exchange = exchangeForUrl(url);
         const gate = gates[exchange];
@@ -27,15 +37,21 @@ export function createExchangeHttpClient({ gates, fetchImpl = fetch, sleep = wai
         let lastError;
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
+                // A geo-blocked Binance host fails fast and spends no quota.
+                if (exchange === "binance") geoBlocks.check(url);
                 await gate.enter(url); // Includes retries; queued time is NOT network timeout time.
                 // Another already-admitted request may have reported a ban while
                 // this call was waiting to resume from the gate.
                 gate.checkCooldown?.();
-                const response = await fetchImpl(url, {
+                // Quota accounting above uses the original URL; only the network
+                // route changes (binance.vision spot data or the optional relay).
+                const target = exchange === "binance" ? route(url) : { url, headers: {} };
+                const response = await fetchImpl(target.url, {
                     ...options,
                     signal: AbortSignal.timeout(timeoutMs),
-                    headers: { "User-Agent": "Crypto-Orderflow/1.0", ...options.headers },
+                    headers: { "User-Agent": "Crypto-Orderflow/1.0", ...options.headers, ...target.headers },
                 });
+                if (exchange === "binance" && await isBinanceGeoBlock(response)) throw geoBlocks.mark(url);
                 await gate.inspect(response);
                 if (!response.ok) {
                     const error = new Error(`Exchange returned HTTP ${response.status}`);
