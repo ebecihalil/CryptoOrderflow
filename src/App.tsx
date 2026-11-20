@@ -24,6 +24,7 @@ import { MODULES } from '@/lib/modules';
 import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
 import { AuthPromptHost } from '@/components/auth-ui';
 import { AuthPage } from '@/components/auth-showcase';
+import { LegalPage } from '@/pages/legal-page';
 import { SectionWatchlist } from '@/components/section-watchlist';
 import { useCoinMemory, type CoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
@@ -555,6 +556,8 @@ function Router() {
         <Route path="/leverage-estimate" component={LeverageEstimatePage} />
         <Route path="/signup"><AuthPage mode="signup" /></Route>
         <Route path="/signin"><AuthPage mode="signin" /></Route>
+        <Route path="/privacy"><LegalPage kind="privacy" /></Route>
+        <Route path="/terms"><LegalPage kind="terms" /></Route>
         {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/top-trader-long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts' && module.path !== '/leverage-estimate').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />
