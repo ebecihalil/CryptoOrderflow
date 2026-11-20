@@ -192,7 +192,11 @@ export function SuperChartsPage() {
         </div>
         <div className="super-chart-workspace-layout">
           <div className="super-chart-workspace-main">
-            <NativeChartWorkspace contract={market} studies={studies} indicators={indicators} />
+            <NativeChartWorkspace contract={market} studies={studies} indicators={indicators}
+              onRemoveLayer={(key) => {
+                if (CHART_STUDIES.some((study) => study.id === key)) toggleStudy(key as ChartStudyId);
+                else if (ORDERFLOW_ITEMS.some((item) => item.id === key)) toggleIndicator(key as OrderflowId);
+              }} />
           </div>
           <ChartWatchlist currentContract={market} onSelectContract={selectWatchlistContract} />
         </div>

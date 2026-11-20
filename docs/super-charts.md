@@ -81,3 +81,13 @@ Technical studies, Liquidity Zones, aggregated volume, CVD, aggressive bubbles
 and funding use the same buckets. CVD/bubbles come from recorded trades (up to
 14 days), so 1W/1M/3M show only the recorded part. Aggregated OI supports
 1m–1D; weekly and longer frames show an explanation instead of thin bars.
+
+## Pane legends and settings
+
+Each pane shows TradingView-style labels at its top-left: name, inputs and
+values at the crosshair (latest bar otherwise). ⚙ opens that layer's settings
+together with "How to read it" (summary, lines/colours and common signals, see
+`src/lib/indicator-help.ts`); × removes the layer. Settings that used to sit
+below the chart (study periods, Liquidity Zones, funding, CVD, bubbles, OI)
+live in these panels. Chart colours use a brighter pastel palette
+(`CHART_COLORS`) so candles, volume and indicators stay clearly visible.

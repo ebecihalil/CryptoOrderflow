@@ -22,7 +22,7 @@ import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
-type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[] };
+type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 // 1m … 3M. Weekly/monthly/quarterly buckets are calendar-aligned (UTC).
 const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = (CHART_TIMEFRAMES as LiquidityTimeframe[])
@@ -67,10 +67,10 @@ export function NativeChartWorkspace(props: Props) {
     </section>;
   }
   return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
-    contract={props.contract} studies={props.studies} indicators={props.indicators} />;
+    contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer} />;
 }
 
-function WorkspaceWithContract({ contract, studies, indicators }: Props & { contract: MarketContract }) {
+function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
   const [timeframe, setTimeframe] = useCoinChartSetting<LiquidityTimeframe>(asset, 'timeframe', '1h',
     value => FRAMES.some(frame => frame.value === value));
@@ -241,21 +241,21 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         onChange={(event) => setZoneColors((current) => ({ ...current, transparency: Number(event.target.value) }))} /></label>
     <p className="native-hint">Pivots confirm 10 bars after the swing; ATR and volume need warmup history. Available history varies by venue and resolution (some feeds return about 300 bars), so short history can omit zones. Current usable {volumeBasis === 'aggregated' ? 'contiguous aggregate-volume' : 'native-volume'} history: {liquidityCandles.length} bars; scan {liquiditySettings.backBars} + 30 warmup.</p>
   </section>;
-  const technicalControls = studies.length > 0 && <section className="native-tech-controls" aria-label="Technical indicator periods">
-    <div className="native-section-label"><span className="module-kicker">PRICE STUDIES / SETTINGS</span><b>Study parameters</b></div>
-    {studies.includes('ema') && <PeriodControl label="EMA period" value={technicalSettings.emaPeriod}
-      onChange={(value) => setTechnicalSettings((current) => ({ ...current, emaPeriod: value }))} />}
-    {studies.includes('sma') && <PeriodControl label="SMA period" value={technicalSettings.smaPeriod}
-      onChange={(value) => setTechnicalSettings((current) => ({ ...current, smaPeriod: value }))} />}
-    {studies.includes('bb') && <>
+  // One settings entry per technical study, shown in its chart-legend ⚙ panel.
+  const technicalLayerSettings: Record<string, ReactNode> = {
+    ema: <PeriodControl label="EMA period" value={technicalSettings.emaPeriod}
+      onChange={(value) => setTechnicalSettings((current) => ({ ...current, emaPeriod: value }))} />,
+    sma: <PeriodControl label="SMA period" value={technicalSettings.smaPeriod}
+      onChange={(value) => setTechnicalSettings((current) => ({ ...current, smaPeriod: value }))} />,
+    bb: <>
       <PeriodControl label="Bollinger period" value={technicalSettings.bbPeriod}
         onChange={(value) => setTechnicalSettings((current) => ({ ...current, bbPeriod: value }))} />
       <label className="super-chart-control"><span>Deviation</span><input type="number" min="0.1" max="10" step="0.1"
         value={technicalSettings.bbStdDev} onChange={(event) => { const n = Number(event.target.value); if (Number.isFinite(n) && n > 0 && n <= 10) setTechnicalSettings((current) => ({ ...current, bbStdDev: n })); }} /></label>
-    </>}
-    {studies.includes('rsi') && <PeriodControl label="RSI period" value={technicalSettings.rsiPeriod}
-      onChange={(value) => setTechnicalSettings((current) => ({ ...current, rsiPeriod: value }))} />}
-    {studies.includes('macd') && <>
+    </>,
+    rsi: <PeriodControl label="RSI period" value={technicalSettings.rsiPeriod}
+      onChange={(value) => setTechnicalSettings((current) => ({ ...current, rsiPeriod: value }))} />,
+    macd: <>
       <PeriodControl label="MACD fast" value={technicalSettings.macdFast}
         onChange={(value) => {
           if (value >= technicalSettings.macdSlow) {
@@ -272,11 +272,10 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         }} />
       <PeriodControl label="MACD signal" value={technicalSettings.macdSignal}
         onChange={(value) => setTechnicalSettings((current) => ({ ...current, macdSignal: value }))} />
-    </>}
-    {studies.includes('macd') && <small>Fast period must remain below slow. Periods: 2–500.</small>}
-    {studies.map((id) => extraIndicator(id)).filter((def) => def && def.params.length).map((def) => (
+      <small>Fast period must remain below slow. Periods: 2–500.</small>
+    </>,
+    ...Object.fromEntries(studies.map((id) => extraIndicator(id)).filter((def) => def && def.params.length).map((def) => [def!.id, (
       <div className="native-extra-params" key={def!.id}>
-        <b>{def!.label}</b>
         {def!.params.map((param) => {
           const value = extraParams(def!.id, extraSettings[def!.id])[param.key];
           return <label className="super-chart-control" key={param.key}><span>{param.label}</span>
@@ -294,10 +293,78 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         <button type="button" className="native-extra-reset" onClick={() => setExtraSettings((current) => {
           const { [def!.id]: _removed, ...rest } = current; return rest; })}>Defaults</button>
       </div>
-    ))}
-  </section>;
+    )])),
+  };
 
-  const chartAndDetails = (funding: FundingPlotData | null) => (
+  const chartAndDetails = (funding: FundingPlotData | null, fundingControls: ReactNode) => {
+    // Settings for each chart layer, opened from the ⚙ next to its name on the chart.
+    const layerSettings: Record<string, ReactNode | undefined> = {
+      volume: <label className="super-chart-control"><span>Volume basis</span><select value={volumeBasis}
+        onChange={(event) => setVolumeBasis(event.target.value as LiquidityVolumeMode)} aria-label="Volume pane basis">
+        <option value="single">Selected venue</option><option value="aggregated">Aggregated · 4 venues</option></select></label>,
+      liquidity: hasLiquidity ? <>{settingsPanel}{<section className="native-signals">
+        <div><span className="module-kicker">QUALIFIED ZONES</span><b>{liquidity.zones.length}</b><small>{liquidity.signals.length} signals in visible feed history</small></div>
+        <ul>{[...liquidity.signals].sort((a, b) => b.time - a.time).slice(0, 5).map((signal, index) =>
+          <li key={`${signal.time}-${signal.type}-${index}`}><i className={signal.type} /><b>{signal.type === 'breakout' ? 'Breakout' : 'Touch'}</b>
+            <span>{signal.zoneIds.length} zone{signal.zoneIds.length === 1 ? '' : 's'}</span><time>{fmtTime(signal.time)}</time>{!signal.closed && <em>Provisional</em>}</li>)}
+          {!liquidity.signals.length && <li className="native-no-signals">No zone signals in the available history.</li>}</ul>
+      </section>}</> : undefined,
+      ...technicalLayerSettings,
+      funding: fundingControls ?? undefined,
+      'perpetual-cvd': cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd) || undefined,
+      'spot-cvd': cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd) || undefined,
+      'aggressive-bubbles': hasAggressiveBubbles ? <section className="native-bubble-controls" aria-label="Aggressive Volume Bubbles controls">
+        <div className="native-cvd-heading">
+          <div><span className="module-kicker">EXECUTED TRADE ACTIVITY / USD-EQUIVALENT</span><h2>Aggressive Volume Bubbles</h2></div>
+          <span className="native-cvd-source-total">{bubblePayload
+            ? `${bubblePayload.sources.filter((source) => source.status === 'live').length}/${bubblePayload.sources.length} live sources · up to ${bubblePayload.points.reduce((max, point) => Math.max(max, point.sourceCount), 0)} per level`
+            : 'Awaiting recorded executions'}</span>
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          <label className="super-chart-control"><span>Market</span><select value={bubbleMarket}
+            onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive Volume Bubbles market">
+            <option value="both">Both markets</option><option value="spot">Spot</option><option value="perpetual">Perpetual</option>
+          </select></label>
+          <label className="super-chart-control"><span>Minimum USD value</span><input type="number" min="1" max="100000000" step="1"
+            value={bubbleMinDraft} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
+            onBlur={commitBubbleMinimum} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMinimum(); event.currentTarget.blur(); } }}
+             aria-label="Minimum aggressive volume bubble USD-equivalent value" /></label>
+          <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
+          <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
+            <RefreshCw size={12} aria-hidden="true" /> Refresh
+          </button>
+        </div>
+        {bubbleMinError && <p className="native-bubble-error" role="alert">{bubbleMinError}</p>}
+        {aggressiveBubbles.loading && !bubblePayload && <p className="native-cvd-status" role="status">Loading recorded execution levels…</p>}
+        {aggressiveBubbles.error && <div className="native-cvd-status is-error" role="alert">
+          <span>{bubblePayload ? `Refresh issue: ${aggressiveBubbles.error} Cached points remain visible.` : aggressiveBubbles.error}</span>
+          <button type="button" onClick={aggressiveBubbles.refresh}>Retry</button>
+        </div>}
+        {bubblePayload && <>
+          <div className="native-cvd-history" role="status">
+            <span>{bubblePayload.recordingStartedAt ? `Bubble recording began ${new Date(bubblePayload.recordingStartedAt).toLocaleString()}` : 'Recording start unavailable'}</span>
+            <span>{bubblePayload.historyStart ? `First covered executions ${new Date(bubblePayload.historyStart).toLocaleString()}` : 'No covered execution start yet'}</span>
+            <span>{bubblePayload.points.length ? `${bubblePayload.points.length} price levels · execution snapshot updates about every 5 seconds` : 'No qualifying newly recorded executions in the live retention window.'}</span>
+            <span>{bubblePayload.sources.filter((source) => source.status === 'live').length < bubblePayload.sources.length ? 'Source coverage is partial; unavailable venues are not inferred.' : 'All listed trade sources are live.'}</span>
+            <span>History before recording start is unavailable; CVD candle history cannot reconstruct price-level trades.</span>
+          </div>
+          <div className="native-cvd-sources" aria-label="Aggressive bubble source coverage">
+            {bubblePayload.sources.map((source) => <span key={`${source.market}-${source.exchange}`} className={`status-${source.status}`}
+              title={[source.symbol, source.lastTradeAt ? `Last trade ${source.lastTradeAt}` : null].filter(Boolean).join(' · ') || source.status}>
+              <i aria-hidden="true" />{source.market.toUpperCase()} {source.exchange.toUpperCase()} · {source.status.replace('_', ' ')}
+            </span>)}
+          </div>
+          <details className="native-cvd-method"><summary>Method &amp; coverage notes</summary>
+            {bubblePayload.warnings.map((warning, index) => <p className="native-cvd-warning" key={`${index}-${warning}`}>{warning}</p>)}
+          </details>
+        </>}
+        <p className="native-cvd-method">Each bubble is recorded executed buy or sell activity at an aggregated price level—not price direction, an orderbook heatmap, or trader identity. Bubble price is converted from underlying USD-equivalent to this contract’s native price scale.</p>
+      </section> : undefined,
+      'oi-driver': hasOiDriver ? <OiIndicatorControls settings={oiDriverSettings}
+        onChange={next => setOiDriverSettings(next)} payload={oiDriver.payload}
+        loading={oiDriver.loading} error={oiDriver.error} /> : undefined,
+    };
+    return (
     <>
       <div className="native-chart-toolbar">
         {frameButtons}
@@ -351,6 +418,9 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
           candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
           liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings} extraSettings={extraSettings}
+           layerSettings={layerSettings} liquidityEnabled={hasLiquidity}
+           onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
+           symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
              aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
@@ -365,73 +435,13 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         <p className="native-volume-warning">{aggregateFeed.error ? `Volume feed: ${aggregateFeed.error}` : aggregateFeed.payload?.stale
           ? 'Aggregated volume is cached; its freshness is unverified.' : 'Aggregated volume coverage is partial. Missing sources and unmatched timestamps are excluded, never treated as zero.'}
       </p>}
-      {settingsPanel}
-      {technicalControls}
-      {hasOiDriver && <OiIndicatorControls settings={oiDriverSettings}
-        onChange={next => setOiDriverSettings(next)} payload={oiDriver.payload}
-        loading={oiDriver.loading} error={oiDriver.error} />}
-      {cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd)}
-      {cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd)}
-      {hasAggressiveBubbles && <section className="native-bubble-controls" aria-label="Aggressive Volume Bubbles controls">
-        <div className="native-cvd-heading">
-          <div><span className="module-kicker">EXECUTED TRADE ACTIVITY / USD-EQUIVALENT</span><h2>Aggressive Volume Bubbles</h2></div>
-          <span className="native-cvd-source-total">{bubblePayload
-            ? `${bubblePayload.sources.filter((source) => source.status === 'live').length}/${bubblePayload.sources.length} live sources · up to ${bubblePayload.points.reduce((max, point) => Math.max(max, point.sourceCount), 0)} per level`
-            : 'Awaiting recorded executions'}</span>
-        </div>
-        <div className="native-cvd-control-row native-bubble-control-row">
-          <label className="super-chart-control"><span>Market</span><select value={bubbleMarket}
-            onChange={(event) => setBubbleMarket(event.target.value as AggressiveBubblesMarket)} aria-label="Aggressive Volume Bubbles market">
-            <option value="both">Both markets</option><option value="spot">Spot</option><option value="perpetual">Perpetual</option>
-          </select></label>
-          <label className="super-chart-control"><span>Minimum USD value</span><input type="number" min="1" max="100000000" step="1"
-            value={bubbleMinDraft} aria-invalid={!!bubbleMinError} onChange={(event) => { setBubbleMinDraft(event.target.value); setBubbleMinError(null); }}
-            onBlur={commitBubbleMinimum} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitBubbleMinimum(); event.currentTarget.blur(); } }}
-             aria-label="Minimum aggressive volume bubble USD-equivalent value" /></label>
-          <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
-          <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
-            <RefreshCw size={12} aria-hidden="true" /> Refresh
-          </button>
-        </div>
-        {bubbleMinError && <p className="native-bubble-error" role="alert">{bubbleMinError}</p>}
-        {aggressiveBubbles.loading && !bubblePayload && <p className="native-cvd-status" role="status">Loading recorded execution levels…</p>}
-        {aggressiveBubbles.error && <div className="native-cvd-status is-error" role="alert">
-          <span>{bubblePayload ? `Refresh issue: ${aggressiveBubbles.error} Cached points remain visible.` : aggressiveBubbles.error}</span>
-          <button type="button" onClick={aggressiveBubbles.refresh}>Retry</button>
-        </div>}
-        {bubblePayload && <>
-          <div className="native-cvd-history" role="status">
-            <span>{bubblePayload.recordingStartedAt ? `Bubble recording began ${new Date(bubblePayload.recordingStartedAt).toLocaleString()}` : 'Recording start unavailable'}</span>
-            <span>{bubblePayload.historyStart ? `First covered executions ${new Date(bubblePayload.historyStart).toLocaleString()}` : 'No covered execution start yet'}</span>
-            <span>{bubblePayload.points.length ? `${bubblePayload.points.length} price levels · execution snapshot updates about every 5 seconds` : 'No qualifying newly recorded executions in the live retention window.'}</span>
-            <span>{bubblePayload.sources.filter((source) => source.status === 'live').length < bubblePayload.sources.length ? 'Source coverage is partial; unavailable venues are not inferred.' : 'All listed trade sources are live.'}</span>
-            <span>History before recording start is unavailable; CVD candle history cannot reconstruct price-level trades.</span>
-          </div>
-          <div className="native-cvd-sources" aria-label="Aggressive bubble source coverage">
-            {bubblePayload.sources.map((source) => <span key={`${source.market}-${source.exchange}`} className={`status-${source.status}`}
-              title={[source.symbol, source.lastTradeAt ? `Last trade ${source.lastTradeAt}` : null].filter(Boolean).join(' · ') || source.status}>
-              <i aria-hidden="true" />{source.market.toUpperCase()} {source.exchange.toUpperCase()} · {source.status.replace('_', ' ')}
-            </span>)}
-          </div>
-          <details className="native-cvd-method"><summary>Method &amp; coverage notes</summary>
-            {bubblePayload.warnings.map((warning, index) => <p className="native-cvd-warning" key={`${index}-${warning}`}>{warning}</p>)}
-          </details>
-        </>}
-        <p className="native-cvd-method">Each bubble is recorded executed buy or sell activity at an aggregated price level—not price direction, an orderbook heatmap, or trader identity. Bubble price is converted from underlying USD-equivalent to this contract’s native price scale.</p>
-      </section>}
       {hasLiquidity && volumeBasis === 'aggregated' && aggregateRequested && !aggregatePayloadCurrent && <p className="native-volume-warning" role="status">
         Liquidity Zones are waiting for a matching aggregate-volume feed. Native price/technical candles remain available; zones are not calculated with substitute venue volume.
       </p>}
       {hasLiquidity && volumeBasis === 'aggregated' && aggregatePayloadCurrent && liquidityCandles.length < liquiditySettings.backBars + 30 && <p className="native-volume-warning" role="status">
         Only {liquidityCandles.length} consecutive matched-volume bars are available for Liquidity Zones; {liquiditySettings.backBars + 30} bars are recommended for the scan and warmup. The calculation uses the contiguous matched suffix only.
       </p>}
-      {hasLiquidity && <section className="native-signals">
-        <div><span className="module-kicker">QUALIFIED ZONES</span><b>{liquidity.zones.length}</b><small>{liquidity.signals.length} signals in visible feed history</small></div>
-        <ul>{[...liquidity.signals].sort((a, b) => b.time - a.time).slice(0, 5).map((signal, index) =>
-          <li key={`${signal.time}-${signal.type}-${index}`}><i className={signal.type} /><b>{signal.type === 'breakout' ? 'Breakout' : 'Touch'}</b>
-            <span>{signal.zoneIds.length} zone{signal.zoneIds.length === 1 ? '' : 's'}</span><time>{fmtTime(signal.time)}</time>{!signal.closed && <em>Provisional</em>}</li>)}
-          {!liquidity.signals.length && <li className="native-no-signals">No zone signals in the available history.</li>}</ul>
-      </section>}
+
       <div className="native-method-note">
         <span>i</span><p>Prices and OHLC are from the selected native exchange contract. {volumeBasis === 'aggregated'
           ? 'Volume sums exactly matched underlying-coin volume from up to four venues; it is not open-interest weighted.'
@@ -439,7 +449,8 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
           {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD and Aggressive Volume Bubbles reuse recorded public trade streams; bubble points describe newly recorded executions only.</p>
       </div>
     </>
-  );
+    );
+  };
 
   return <section className="native-workspace" aria-label="Native perpetual chart workspace">
     <div className="native-symbol-strip">
@@ -460,7 +471,7 @@ type FundingProps = {
   contract: MarketContract; timeframe: LiquidityTimeframe; method: FundingIndicatorMethod;
   setMethod: (value: FundingIndicatorMethod) => void; window: FundingIndicatorWindow; setWindow: (value: FundingIndicatorWindow) => void;
   mode: 'settled' | 'recordedLive'; setMode: (value: 'settled' | 'recordedLive') => void;
-  threshold: number; setThreshold: (value: number) => void; render: (plot: FundingPlotData | null) => ReactNode;
+  threshold: number; setThreshold: (value: number) => void; render: (plot: FundingPlotData | null, controls: ReactNode) => ReactNode;
 };
 
 function FundingEnabledWorkspace(props: FundingProps) {
@@ -477,9 +488,8 @@ function FundingEnabledWorkspace(props: FundingProps) {
   const liveCount = payload?.observations.points.filter((point) => point.weightedPct !== null && point.weightedPct !== undefined).length ?? 0;
   const activeSources = payload?.sources.filter((source) => source.status === 'ok').length ?? 0;
 
-  return <>
-    {props.render(props.enabled ? plot : null)}
-    {props.enabled && <section className="native-funding-controls" aria-label="Aggregated funding controls">
+  // Funding settings live in the chart legend's ⚙ panel (TradingView style).
+  const controls = props.enabled ? <section className="native-funding-controls" aria-label="Aggregated funding controls">
       <div className="native-funding-head"><div><span className="module-kicker">CROWD CARRY / VERIFIED VENUES</span><h2>Aggregated funding rate</h2></div>
         <span className={`native-funding-live${feed.stale ? ' is-stale' : ''}`}><i />{feed.stale ? 'Cached snapshot' : payload?.isRefreshing ? 'Refreshing venues' : `${activeSources} live sources`}</span></div>
       <div className="native-funding-controls-row">
@@ -522,8 +532,8 @@ function FundingEnabledWorkspace(props: FundingProps) {
           return fallbackCount ? ` ${fallbackCount} recorded live point${fallbackCount === 1 ? '' : 's'} use the feed’s mean fallback where contemporaneous OI was unavailable.` : '';
         })()}
         {' '}Available feed points: {mode === 'settled' ? payload?.history.points.length ?? 0 : payload?.observations.points.length ?? 0}; charted points are clipped to selected price history.</p>
-    </section>}
-  </>;
+    </section> : null;
+  return <>{props.render(props.enabled ? plot : null, controls)}</>;
 }
 
 function PeriodControl({ label, value, onChange }: {
