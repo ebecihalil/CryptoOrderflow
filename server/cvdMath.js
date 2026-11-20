@@ -1,4 +1,7 @@
-export const CVD_FRAMES = { "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400 };
+import { CHART_TIMEFRAMES, bucketStart, nextBucket, timeframeSeconds } from "./timeframes.js";
+// All chart timeframes; CVD is built from per-minute recordings, so 1m/3m work
+// and calendar frames (1W/1M/3M) cover only the recorded history (partial).
+export const CVD_FRAMES = Object.fromEntries(CHART_TIMEFRAMES.map(tf => [tf, timeframeSeconds(tf)]));
 export const CVD_ANCHORS = ["1d", "1w", "1m", "3m", "6m", "1y"];
 
 export function cvdAnchorStart(seconds, anchor) {
@@ -39,7 +42,7 @@ export function buildCvdCandles(minutes, timeframe, anchor, nowSeconds) {
   for (const minute of rows) {
     if (!minute.trades || minute.time > nowSeconds) continue;
     const reset = cvdAnchorStart(minute.time, anchor);
-    const time = Math.floor(minute.time / step) * step;
+    const time = bucketStart(timeframe, minute.time);
     // Coverage gaps do not erase observed cumulative flow. The next observed
     // candle opens at the previous close; only calendar anchor changes reset it.
     if (reset !== previousAnchor) {
@@ -49,7 +52,7 @@ export function buildCvdCandles(minutes, timeframe, anchor, nowSeconds) {
     }
     if (!current || current.time !== time) {
       current = { time, open: baseline, high: baseline, low: baseline, close: baseline,
-        buyValue: 0, sellValue: 0, trades: 0, sourceCount: 0, provisional: time + step > nowSeconds,
+        buyValue: 0, sellValue: 0, trades: 0, sourceCount: 0, provisional: nextBucket(timeframe, time) > nowSeconds,
         partial: true, segmentStart: reset !== previousAnchor || candles.length === 0, _sources: new Set() };
       candles.push(current);
     }

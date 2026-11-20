@@ -1,0 +1,35 @@
+/* Overlay that sits on top of the chart canvas; only legend rows take clicks. */
+.pane-legends { position:absolute;inset:0;z-index:4;pointer-events:none; }
+.pane-legend { position:absolute;left:8px;right:72px;display:flex;flex-direction:column;align-items:flex-start;gap:2px; }
+.pane-legend-row { position:relative;display:flex;align-items:center;gap:6px;max-width:100%;padding:1px 4px;border-radius:3px;
+  background:color-mix(in srgb,var(--lsar-surface) 72%,transparent);color:var(--lsar-ink);font:11px/1.5 var(--app-font-mono);pointer-events:auto;white-space:nowrap; }
+.pane-legend-row:hover { background:color-mix(in srgb,var(--lsar-surface) 92%,transparent); }
+.pane-legend-swatch { width:9px;height:9px;flex:none;border-radius:2px; }
+.pane-legend-name { color:var(--lsar-ink);font-weight:600; }
+.pane-legend-params { color:var(--lsar-muted); }
+.pane-legend-value { font-variant-numeric:tabular-nums;color:var(--lsar-ink); }
+.pane-legend-gear,.pane-legend-remove { display:inline-grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:3px;background:transparent;color:var(--lsar-muted);cursor:pointer;opacity:.75; }
+.pane-legend-row:hover .pane-legend-gear,.pane-legend-row:hover .pane-legend-remove,.pane-legend-gear.is-open { opacity:1; }
+.pane-legend-gear:hover,.pane-legend-gear.is-open { color:var(--lsar-accent);background:var(--lsar-row-hover); }
+.pane-legend-remove:hover { color:var(--lsar-negative);background:var(--lsar-row-hover); }
+.pane-legend-gear:focus-visible,.pane-legend-remove:focus-visible { outline:2px solid var(--lsar-accent);opacity:1; }
+.pane-legend-panel { position:absolute;top:calc(100% + 4px);left:0;z-index:20;width:min(380px,calc(100vw - 48px));max-height:min(62vh,520px);overflow:auto;
+  padding:12px 14px;border:1px solid var(--lsar-control-border);border-radius:6px;background:var(--lsar-surface);box-shadow:0 14px 34px rgba(5,14,12,.35);
+  color:var(--lsar-body-ink);font:12px/1.55 var(--app-font-sans,inherit);white-space:normal;cursor:default; }
+.pane-legend-panel header { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
+.pane-legend-panel header strong { color:var(--lsar-ink);font-size:14px; }
+.pane-legend-panel header button { display:grid;place-items:center;width:26px;height:26px;border:0;border-radius:4px;background:transparent;color:var(--lsar-muted);cursor:pointer; }
+.pane-legend-panel h4 { margin:10px 0 6px;color:var(--lsar-muted);font:600 10px var(--app-font-mono);letter-spacing:.08em;text-transform:uppercase; }
+.pane-legend-panel h5 { margin:8px 0 4px;color:var(--lsar-ink);font-size:12px; }
+.pane-legend-settings { padding-bottom:10px;border-bottom:1px solid var(--lsar-border); }
+.pane-legend-settings > * { margin:0 0 8px; }
+.pane-legend-settings section { margin:0;padding:0;border:0;background:transparent; }
+.pane-legend-settings .native-section-label,.pane-legend-settings .native-cvd-heading { display:none; }
+.pane-legend-settings .super-chart-control { display:inline-flex;flex-direction:column;gap:3px;margin:0 8px 8px 0; }
+.pane-legend-help p { margin:0 0 6px; }
+.pane-legend-help dl { display:grid;gap:4px;margin:0; }
+.pane-legend-help dl div { display:grid;grid-template-columns:minmax(90px,38%) 1fr;gap:8px; }
+.pane-legend-help dt { color:var(--lsar-ink);font-weight:600; }
+.pane-legend-help dd { margin:0; }
+.pane-legend-help ul { margin:0;padding-left:18px; }
+@media (max-width:640px) { .pane-legend { right:56px; } .pane-legend-params { display:none; } }

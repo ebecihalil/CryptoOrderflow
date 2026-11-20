@@ -440,7 +440,7 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
           <span data-testid="text-generated-at">SNAPSHOT {formatTimestamp(latestTimestamp)} · {snapshot?.totalMarkets ?? summary?.totalMarkets ?? '—'} ASSETS</span>
         </div>
         </div>
-        <SectionWatchlist memory={memory} section={variant.kind === 'top' ? 'Top Trader LSAR' : 'Global LSAR'}
+        <SectionWatchlist memory={memory} coins={snapshot?.rows.map((row) => row.asset)} section={variant.kind === 'top' ? 'Top Trader LSAR' : 'Global LSAR'}
           currentCoin={snapshot?.rows.some((row) => normalizeCoin(row.asset) === normalizeCoin(search)) ? search : null}
           onSelect={(coin) => setSearch(coin)}
           metric={(coin) => {

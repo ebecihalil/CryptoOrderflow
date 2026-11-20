@@ -19,7 +19,7 @@ test('shared Home navigation has an accessible label, arrow and root destination
   assert.match(source, /href="\/"/);
   assert.match(source, /aria-label="Back to Crypto Order Flow home"/);
   assert.match(source, /<ArrowLeft size=\{15\} aria-hidden="true" \/>/);
-  assert.match(source, /<span>Home<\/span>/);
+  assert.match(source, /<span>\{t\('Home'\)\}<\/span>/);
 });
 
 test('Home styling stays consistent across pages, themes and viewport widths', () => {

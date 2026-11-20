@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   CandlestickSeries, ColorType, createChart, createSeriesMarkers, HistogramSeries, LineSeries, MismatchDirection,
   type IChartApi, type ISeriesApi, type Time, type UTCTimestamp,
@@ -9,6 +9,9 @@ import { calculateTechnicalIndicators, type TechnicalSettings } from '@/lib/tech
 import type { ChartStudyId } from '@/lib/supercharts';
 import { computeExtraIndicator, extraIndicator, type ExtraResult } from '@/lib/extra-indicators';
 import { BandFillPrimitive } from '@/components/band-fill-primitive';
+import { TIMEFRAME_LABELS } from '../../server/timeframes.js';
+import { ChartPaneLegends, type LegendPane, type LegendRow } from '@/components/chart-pane-legends';
+import { extraParams } from '@/lib/extra-indicators';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
@@ -41,7 +44,20 @@ type Props = {
   priceDivisor: number;
   /** Saved parameters for the popular-indicator registry, by indicator id. */
   extraSettings?: Record<string, Record<string, number>>;
+  /** Settings UI per layer key, shown in the legend's ⚙ panel. */
+  layerSettings?: Record<string, ReactNode | undefined>;
+  onRemoveLayer?: (key: string) => void;
+  liquidityEnabled?: boolean;
+  symbolLabel?: string;
 };
+/** Soft pastel hues that stay clearly visible on the light and dark chart backgrounds. */
+export const CHART_COLORS = {
+  up: '#5fd4aa', down: '#f0857a',
+  volumeUp: 'rgba(95,212,170,0.55)', volumeDown: 'rgba(240,133,122,0.55)',
+  histUp: 'rgba(95,212,170,0.8)', histDown: 'rgba(240,133,122,0.8)',
+  ema: '#f6c06a', sma: '#6fd6c8', bbBand: '#b8a4ee', bbMid: '#9d86e8',
+  rsi: '#7cc8f5', macd: '#f6c06a', signal: '#7cc8f5',
+} as const;
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
 type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null; fills: BandFillPrimitive[] };
 type SavedView = {
@@ -57,7 +73,7 @@ function themeColors(element: HTMLElement): Theme {
     muted: styles.getPropertyValue('--lsar-muted').trim() || '#929b92',
     border: styles.getPropertyValue('--lsar-border').trim() || '#303831',
     accent: styles.getPropertyValue('--lsar-accent').trim() || '#a6c69a',
-    positive: styles.getPropertyValue('--lsar-positive').trim() || '#4e9c68',
+    positive: styles.getPropertyValue('--lsar-positive').trim() || CHART_COLORS.up,
   };
 }
 
@@ -76,7 +92,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, priceDivisor, extraSettings = {} }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, priceDivisor, extraSettings = {}, layerSettings = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -90,6 +106,21 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const savedViewRef = useRef<SavedView | null>(readChartPreference(viewKey, null, validChartView));
   const captureViewRef = useRef<() => void>(() => {});
   const [hover, setHover] = useState<Candle | null>(null);
+  // Top offset of every pane, for the TradingView-style legends.
+  const [paneLayout, setPaneLayout] = useState<Array<{ key: string; top: number }>>([]);
+  const measurePanes = useCallback(() => {
+    const chart = bundleRef.current?.chart;
+    if (!chart) return;
+    let top = 0;
+    const next = chart.panes().map((pane, index) => {
+      const item = { key: paneKeysRef.current[index] ?? `pane-${index}`, top };
+      top += pane.getHeight() + 1; // 1px pane separator
+      return item;
+    });
+    setPaneLayout((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+  }, []);
+  const measureRef = useRef(measurePanes);
+  measureRef.current = measurePanes;
   const [bubbleHover, setBubbleHover] = useState<PlottedAggressiveBubble | null>(null);
   const plottedBubbles = useMemo(() => (aggressiveBubbles?.points ?? [])
     .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.value) && point.value >= 0)
@@ -145,8 +176,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     });
     const candleSeries = chart.addSeries(CandlestickSeries, {
       priceFormat: priceFormat(candles),
-      upColor: palette.positive, downColor: '#c76b61', borderVisible: false,
-      wickUpColor: palette.positive, wickDownColor: '#c76b61', priceLineVisible: false,
+      upColor: palette.positive, downColor: CHART_COLORS.down, borderVisible: false,
+      wickUpColor: palette.positive, wickDownColor: CHART_COLORS.down, priceLineVisible: false,
     }, 0);
     bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null, bubblePrimitive: null, fills: [] };
     const captureView = () => {
@@ -198,7 +229,12 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       candleSeries.applyOptions({ upColor: next.positive, wickUpColor: next.positive });
     });
     observer.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme'] });
-    const resize = new ResizeObserver(() => chart.applyOptions({ width: mount.clientWidth }));
+    const resize = new ResizeObserver(() => {
+      chart.applyOptions({ width: mount.clientWidth });
+      requestAnimationFrame(() => measureRef.current());
+    });
+    const remeasure = () => requestAnimationFrame(() => measureRef.current());
+    window.addEventListener('pointerup', remeasure);
     resize.observe(mount);
     const crosshairHandler = (param: Parameters<IChartApi['subscribeCrosshairMove']>[0] extends (arg: infer A) => void ? A : never) => {
       if (!param.time) { setHover(null); setBubbleHover(null); return; }
@@ -215,6 +251,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       if (saveTimer !== null) clearTimeout(saveTimer);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(scheduleSave);
       window.removeEventListener('pointerup', scheduleSave);
+      window.removeEventListener('pointerup', remeasure);
       mount.removeEventListener('wheel', scheduleSave);
       window.removeEventListener('pagehide', captureView);
       observer.disconnect();
@@ -274,7 +311,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }, 1));
       volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0 } });
       volumeSeries.setData(volumeCandles.map((bar) => ({
-        time: toTime(bar.time), value: bar.volume, color: bar.close >= bar.open ? '#4e9c6870' : '#c76b6170',
+        time: toTime(bar.time), value: bar.volume, color: bar.close >= bar.open ? CHART_COLORS.volumeUp : CHART_COLORS.volumeDown,
       })));
       bundle.volumeSeries = volumeSeries;
     } else bundle.volumeSeries = null;
@@ -285,10 +322,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       line.setData(data.filter((point): point is { time: number; value: number } => point.value !== null && Number.isFinite(point.value))
         .map((point) => ({ time: toTime(point.time), value: point.value })));
     };
-    priceOverlay('ema', studyData.ema, '#e9ae62', 2);
-    priceOverlay('sma', studyData.sma, '#75b6b0', 2);
+    priceOverlay('ema', studyData.ema, CHART_COLORS.ema, 2);
+    priceOverlay('sma', studyData.sma, CHART_COLORS.sma, 2);
     if (studies.includes('bb') && studyData.bb.middle.length) {
-      for (const [data, color] of [[studyData.bb.upper, '#9b8cbe'], [studyData.bb.middle, '#8878ad'], [studyData.bb.lower, '#9b8cbe']] as const) {
+      for (const [data, color] of [[studyData.bb.upper, CHART_COLORS.bbBand], [studyData.bb.middle, CHART_COLORS.bbMid], [studyData.bb.lower, CHART_COLORS.bbBand]] as const) {
         const line = pushSeries(chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }, 0));
         line.setData(data.filter((point) => point.value !== null && Number.isFinite(point.value)).map((point) => ({ time: toTime(point.time), value: point.value! })));
       }
@@ -307,7 +344,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
           : pushSeries(chart.addSeries(LineSeries, { ...common, color: item.color, lineWidth: (item.width ?? 1) as 1 | 2 | 3 | 4,
             lineStyle: item.dashed ? 2 : 0, ...(item.type === 'dots' ? { lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 2 } : {}) }, pane));
         series.setData(item.type === 'histogram'
-          ? data.map((point) => 'value' in point ? { ...point, color: (point.value as number) >= 0 ? '#4e9c688c' : '#c76b618c' } : point)
+          ? data.map((point) => 'value' in point ? { ...point, color: (point.value as number) >= 0 ? CHART_COLORS.histUp : CHART_COLORS.histDown } : point)
           : data);
         first ??= series;
       }
@@ -333,24 +370,24 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     if (studies.includes('rsi') && studyData.rsi.length) {
       const pane = nextPane();
       const rsi = pushSeries(chart.addSeries(LineSeries, {
-        color: '#69a8c4', lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+        color: CHART_COLORS.rsi, lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
         autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
       }, pane));
       rsi.setData(studyData.rsi.filter((point) => point.value !== null).map((point) => ({ time: toTime(point.time), value: point.value! })));
-      rsi.createPriceLine({ price: 70, color: '#c76b6170', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '70' });
-      rsi.createPriceLine({ price: 30, color: '#4e9c6870', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '30' });
+      rsi.createPriceLine({ price: 70, color: CHART_COLORS.volumeDown, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '70' });
+      rsi.createPriceLine({ price: 30, color: CHART_COLORS.volumeUp, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '30' });
     }
     if (studies.includes('macd') && studyData.macd.histogram.length) {
       const pane = nextPane();
       const macdPriceFormat = priceFormat(candles);
       const hist = pushSeries(chart.addSeries(HistogramSeries, { priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
       hist.setData(studyData.macd.histogram.filter((point) => point.value !== null).map((point) => ({
-        time: toTime(point.time), value: point.value!, color: point.value! >= 0 ? '#4e9c688c' : '#c76b618c',
+        time: toTime(point.time), value: point.value!, color: point.value! >= 0 ? CHART_COLORS.histUp : CHART_COLORS.histDown,
       })));
       hist.createPriceLine({ price: 0, color: '#89928a88', lineWidth: 1, lineStyle: 0, axisLabelVisible: false });
-      const line = pushSeries(chart.addSeries(LineSeries, { color: '#d5ad73', lineWidth: 1, priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
+      const line = pushSeries(chart.addSeries(LineSeries, { color: CHART_COLORS.macd, lineWidth: 1, priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
       line.setData(studyData.macd.macd.filter((point) => point.value !== null).map((point) => ({ time: toTime(point.time), value: point.value! })));
-      const signal = pushSeries(chart.addSeries(LineSeries, { color: '#729db4', lineWidth: 1, priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
+      const signal = pushSeries(chart.addSeries(LineSeries, { color: CHART_COLORS.signal, lineWidth: 1, priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
       signal.setData(studyData.macd.signal.filter((point) => point.value !== null).map((point) => ({ time: toTime(point.time), value: point.value! })));
     }
     for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'pane') drawExtra(result, nextPane());
@@ -369,7 +406,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }, pane));
       fund.setData(fundingRows.map((point) => point.value === null
         ? { time: point.time }
-        : { ...point, color: point.value >= 0 ? '#c76b61b8' : '#4e9c68b8' }));
+        : { ...point, color: point.value >= 0 ? CHART_COLORS.histDown : CHART_COLORS.histUp }));
       fund.createPriceLine({ price: funding.threshold, color: '#c76b6180', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '+' });
       fund.createPriceLine({ price: -funding.threshold, color: '#4e9c6880', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '−' });
       fund.createPriceLine({ price: 0, color: '#89928a70', lineWidth: 1, lineStyle: 0, axisLabelVisible: false });
@@ -379,18 +416,17 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       const pane = nextPane();
       const series = pushSeries(chart.addSeries(CandlestickSeries, {
         priceFormat: { type: 'custom', formatter: compactCvd, minMove: 0.01 },
-        upColor: '#4e9c68', downColor: '#c76b61', borderVisible: false,
-        wickUpColor: '#4e9c68', wickDownColor: '#c76b61', priceLineVisible: false,
+        upColor: CHART_COLORS.up, downColor: CHART_COLORS.down, borderVisible: false,
+        wickUpColor: CHART_COLORS.up, wickDownColor: CHART_COLORS.down, priceLineVisible: false,
       }, pane));
       series.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } });
       // Missing timestamps stay missing; cumulative values are never carried across gaps.
       series.setData((payload?.candles ?? []).map((bar) => ({
         time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
-        color: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
-        wickColor: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
-        borderColor: bar.close >= bar.open ? '#4e9c68' : '#c76b61',
+        color: bar.close >= bar.open ? CHART_COLORS.up : CHART_COLORS.down,
+        wickColor: bar.close >= bar.open ? CHART_COLORS.up : CHART_COLORS.down,
+        borderColor: bar.close >= bar.open ? CHART_COLORS.up : CHART_COLORS.down,
       })));
-      series.applyOptions({ title: `${key === 'perpetual-cvd' ? 'Aggregated Perpetual CVD' : 'Aggregated Spot CVD'} · ${(payload?.anchor ?? '1w').toUpperCase()}` });
     };
     addCvdPane(perpetualCvd, perpetualCvdEnabled, 'perpetual-cvd');
     addCvdPane(spotCvd, spotCvdEnabled, 'spot-cvd');
@@ -406,7 +442,6 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
         color: bar.color, wickColor: bar.color, borderColor: bar.color,
       })));
-      oiSeries.applyOptions({ title: `Aggregated Open Interest · ${oiDriver.asset} · ${oiDriver.timeframe}` });
       createSeriesMarkers(oiSeries, oiDriver.candles.flatMap(bar => {
         const markers = [];
         if (bar.spikeTime === bar.time && bar.spikePct !== null)
@@ -503,12 +538,65 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         animationFrameRef.current = null;
       }
     };
+    requestAnimationFrame(() => measureRef.current());
   }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled]);
+
+  // ---- TradingView-style legends: name, inputs and value at the crosshair ----
+  const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;
+  const legendPanes = useMemo<LegendPane[]>(() => {
+    const at = (data: Array<{ time: number; value: number | null }> | undefined) => {
+      if (!data || legendTime === null) return null;
+      for (let i = data.length - 1; i >= 0; i--) if (data[i].time <= legendTime) return data[i].time === legendTime ? data[i].value : null;
+      return null;
+    };
+    const num = (value: number | null | undefined) => {
+      if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+      const abs = Math.abs(value);
+      // Full prices like TradingView; only very large values (volume, CVD, OBV) are abbreviated.
+      if (abs >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+      if (abs >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+      return value.toLocaleString(undefined, { maximumSignificantDigits: 7 });
+    };
+    const bar = candles.find((item) => item.time === legendTime) ?? null;
+    const tone = bar ? (bar.close >= bar.open ? CHART_COLORS.up : CHART_COLORS.down) : undefined;
+    const priceRows: LegendRow[] = [{ key: 'price', label: symbolLabel ?? 'Price', params: TIMEFRAME_LABELS[timeframe] ?? timeframe,
+      values: bar ? [`O ${num(bar.open)}`, `H ${num(bar.high)}`, `L ${num(bar.low)}`, `C ${num(bar.close)}`].map((text) => ({ text, color: tone })) : [] }];
+    if (studies.includes('ema') && studyData.ema.length) priceRows.push({ key: 'ema', label: 'EMA', params: String(technicalSettings.emaPeriod), color: CHART_COLORS.ema, values: [{ text: num(at(studyData.ema)), color: CHART_COLORS.ema }] });
+    if (studies.includes('sma') && studyData.sma.length) priceRows.push({ key: 'sma', label: 'SMA', params: String(technicalSettings.smaPeriod), color: CHART_COLORS.sma, values: [{ text: num(at(studyData.sma)), color: CHART_COLORS.sma }] });
+    if (studies.includes('bb') && studyData.bb.middle.length) priceRows.push({ key: 'bb', label: 'BB', params: `${technicalSettings.bbPeriod} ${technicalSettings.bbStdDev}`, color: CHART_COLORS.bbBand,
+      values: [studyData.bb.upper, studyData.bb.middle, studyData.bb.lower].map((data) => ({ text: num(at(data)), color: CHART_COLORS.bbBand })) });
+    const extraRow = (id: ChartStudyId, result: ExtraResult): LegendRow => {
+      const def = extraIndicator(id)!;
+      return { key: id, label: def.label, params: Object.values(extraParams(id, extraSettings[id])).join(' '), color: result.series[0]?.color,
+        values: result.series.map((series) => ({ text: num(at(series.data)), color: series.color })) };
+    };
+    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'overlay') priceRows.push(extraRow(id, result));
+    if (liquidityEnabled) priceRows.push({ key: 'liquidity', label: 'Liquidity Zones', params: `${zones.length} zones`, color: '#9ccfb8' });
+    if (aggressiveBubblesEnabled) priceRows.push({ key: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles', params: `${plottedBubbles.length} levels`, color: CHART_COLORS.up });
+    const extrasByPane = new Map(extraData.map(([id, result]) => [`extra-${id}`, extraRow(id, result)]));
+    const cvdValue = (payload: CvdPayload | null) => num(payload?.candles.find((item) => item.time === legendTime)?.close ?? null);
+    const rowsFor = (key: string): LegendRow[] => {
+      if (key === 'price') return priceRows;
+      if (key === 'volume') return [{ key: 'volume', label: 'Volume', values: [{ text: num(legendTime === null ? null : volumeByTime.get(legendTime) ?? null) }] }];
+      if (key === 'rsi') return [{ key: 'rsi', label: 'RSI', params: String(technicalSettings.rsiPeriod), color: CHART_COLORS.rsi, values: [{ text: num(at(studyData.rsi)), color: CHART_COLORS.rsi }] }];
+      if (key === 'macd') return [{ key: 'macd', label: 'MACD', params: `${technicalSettings.macdFast} ${technicalSettings.macdSlow} ${technicalSettings.macdSignal}`, color: CHART_COLORS.macd,
+        values: [{ text: num(at(studyData.macd.macd)), color: CHART_COLORS.macd }, { text: num(at(studyData.macd.signal)), color: CHART_COLORS.signal }, { text: num(at(studyData.macd.histogram)) }] }];
+      if (extrasByPane.has(key)) return [extrasByPane.get(key)!];
+      if (key === 'funding') return [{ key: 'funding', label: 'Aggregated Funding', params: `${funding?.method ?? ''} · 8h`, color: CHART_COLORS.down,
+        values: [{ text: (() => { const v = fundingRows.find((row) => row.time === legendTime)?.value; return v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(4)}%`; })() }] }];
+      if (key === 'perpetual-cvd') return [{ key: 'perpetual-cvd', label: 'Aggregated Perpetual CVD', params: (perpetualCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(perpetualCvd) }] }];
+      if (key === 'spot-cvd') return [{ key: 'spot-cvd', label: 'Aggregated Spot CVD', params: (spotCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(spotCvd) }] }];
+      if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6' }];
+      return [];
+    };
+    return paneLayout.map((pane) => ({ ...pane, rows: rowsFor(pane.key) })).filter((pane) => pane.rows.length);
+  }, [paneLayout, legendTime, candles, studies, studyData, technicalSettings, extraData, extraSettings, liquidityEnabled, zones.length,
+    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, symbolLabel, timeframe]);
 
   return (
     <div className="native-chart-wrap">
       <div className="native-chart-readout" aria-live="polite">
-        <span>{timeframe} · UTC</span>
+        <span>{TIMEFRAME_LABELS[timeframe] ?? timeframe} · UTC</span>
         {hover ? <><b>O {hover.open.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>H {hover.high.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <b>L {hover.low.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>C {hover.close.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <span>V {volumeByTime.has(hover.time) ? volumeByTime.get(hover.time)!.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span></> : <span>OHLC · move pointer over a candle</span>}
@@ -520,14 +608,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       {insufficientStudies.length > 0 && <div className="native-study-warmup" role="status">
         <strong>Insufficient history for selected studies</strong><span>{insufficientStudies.join(' · ')}</span>
       </div>}
-      <div className="native-chart-canvas" ref={mountRef} role="img" aria-label="Native exchange-fed candlestick chart with synchronized indicator panes" />
-      <div className="native-chart-legend"><span><i className="legend-candle" /> Candles / selected venue OHLC</span>
-        {showVolume && <span><i className="legend-volume" /> Volume</span>}{studies.includes('ema') && <span><i className="legend-ema" /> EMA</span>}
-        {studies.includes('sma') && <span><i className="legend-sma" /> SMA</span>}{studies.includes('bb') && <span><i className="legend-bb" /> Bollinger</span>}
-        {studies.includes('rsi') && <span>RSI · 30 / 70</span>}{studies.includes('macd') && <span>MACD</span>}
-        {extraData.map(([id]) => <span key={id}>{extraIndicator(id)?.label}</span>)}{funding && <span>Funding · normalized 8h</span>}
-         {perpetualCvdEnabled && <span>Aggregated Perpetual CVD · signed trade flow</span>}{spotCvdEnabled && <span>Aggregated Spot CVD · signed trade flow</span>}
-         {aggressiveBubblesEnabled && <><span><i className="legend-bubble-buy" /> Aggressive buys</span><span><i className="legend-bubble-sell" /> Aggressive sells</span><span>Outlined · Spot / filled · Perpetual</span></>}
+      <div className="native-chart-stage">
+        <div className="native-chart-canvas" ref={mountRef} role="img" aria-label="Native exchange-fed candlestick chart with synchronized indicator panes" />
+        <ChartPaneLegends panes={legendPanes} settings={layerSettings} onRemove={onRemoveLayer} />
       </div>
     </div>
   );

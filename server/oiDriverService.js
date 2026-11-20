@@ -8,15 +8,23 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 import { marketContractService } from "./marketContracts.js";
 import { buildOiDriverCandles } from "./oiDriverMath.js";
 
+// OI history is ~30h of 5-minute samples plus live sampling, so the driver
+// supports 1m–1D; weekly/monthly/quarterly bars would be fabricated from too
+// little history and are refused with an explanation instead.
+export const OI_DRIVER_WINDOWS = { "1m": 60_000, "3m": 180_000, ...OI_WINDOWS };
 export const OI_DRIVER_EXCHANGES = ["binance", "bybit", "okx", "gate", "mexc", "bitget", "bingx", "kucoin", "kraken", "htx"];
 const MAX_CANDLES = 1_500;
 
 function validateQuery(query, catalogue = marketContractService) {
   const asset = typeof query.asset === "string" ? canonicalAsset(query.asset).asset : "";
   const timeframe = query.timeframe ?? "1h";
+  if (["1w", "1mo", "3mo"].includes(timeframe))
+    throw Object.assign(new Error("Aggregated OI is available from 1m to 1D: weekly and longer bars need more OI history than is collected."), { status: 400 });
+  if (!Object.hasOwn(OI_DRIVER_WINDOWS, timeframe))
+    throw Object.assign(new Error("A verified crypto contract and supported chart timeframe are required."), { status: 400 });
   const exchange = query.exchange, symbol = query.symbol;
   if (!/^[A-Z0-9]{1,30}$/.test(asset) || !isCryptoAsset(asset) ||
-      !Object.hasOwn(OI_WINDOWS, timeframe) || typeof exchange !== "string" ||
+      typeof exchange !== "string" ||
       typeof symbol !== "string" || !/^[A-Z0-9_-]{2,45}$/.test(symbol)) {
     throw Object.assign(new Error("A verified crypto contract and supported chart timeframe are required."), { status: 400 });
   }
@@ -61,7 +69,7 @@ export function createOiDriverService({
 } = {}) {
   function get(query) {
     const parsed = validateQuery(query, catalogue);
-    const duration = OI_WINDOWS[parsed.timeframe];
+    const duration = OI_DRIVER_WINDOWS[parsed.timeframe];
     const oiData = oiInputs(parsed.asset, OI_DRIVER_EXCHANGES);
     // The supplied Pine source uses a fixed 1-day CVD anchor.
     // Reuse the shared 10-venue collector and its sampled liquidation stream.

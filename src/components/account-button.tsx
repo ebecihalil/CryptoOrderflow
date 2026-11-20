@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { LogOut, UserRound } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useI18n } from '@/lib/i18n';
 import '@/styles/auth.css';
 
 const currentPath = () => `${window.location.pathname}${window.location.search}`;
@@ -9,10 +10,11 @@ const currentPath = () => `${window.location.pathname}${window.location.search}`
 export function AccountButton() {
   const { user, loading, signOut } = useAuth();
   const [, navigate] = useLocation();
+  const { t } = useI18n();
   if (loading) return <span className="account-button placeholder" aria-hidden="true" />;
   if (!user) {
     return <Link href={`/signin?next=${encodeURIComponent(currentPath())}`} className="account-button" data-testid="link-signin">
-      <UserRound size={14} aria-hidden="true" /><span>Sign in</span></Link>;
+      <UserRound size={14} aria-hidden="true" /><span>{t('Sign in')}</span></Link>;
   }
   return (
     <details className="account-menu">
@@ -21,10 +23,10 @@ export function AccountButton() {
         <span className="account-email">{user.email}</span>
       </summary>
       <div className="account-menu-panel">
-        <span className="account-menu-label">Signed in as</span>
+        <span className="account-menu-label">{t('Signed in as')}</span>
         <strong>{user.email}</strong>
         <button type="button" onClick={() => signOut.mutate(undefined, { onSuccess: () => navigate('/') })} data-testid="button-signout">
-          <LogOut size={14} aria-hidden="true" /> Sign out
+          <LogOut size={14} aria-hidden="true" /> {t('Sign out')}
         </button>
       </div>
     </details>

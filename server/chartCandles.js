@@ -3,19 +3,33 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 import { CHART_VENUES, createMarketContractService, marketContractService } from "./marketContracts.js";
 import { fetchVenueCandles } from "./venueCandles.js";
 import { canonicalAsset } from "./assetIdentity.js";
+import { aggregateCandles, isContiguous, isTimeframe, nextBucket } from "./timeframes.js";
 
+// [Binance interval, Bybit interval] for natively supported timeframes.
+// Binance/Bybit weeks start Monday and months are calendar months (UTC).
 const intervals = {
-  "5m": ["5m", "5", 300], "15m": ["15m", "15", 900],
-  "30m": ["30m", "30", 1800], "1h": ["1h", "60", 3600],
-  "4h": ["4h", "240", 14400], "24h": ["1d", "D", 86400],
+  "1m": ["1m", "1"], "3m": ["3m", "3"], "5m": ["5m", "5"], "15m": ["15m", "15"],
+  "30m": ["30m", "30"], "1h": ["1h", "60"], "4h": ["4h", "240"], "24h": ["1d", "D"],
+  "1w": ["1w", "W"], "1mo": ["1M", "M"],
 };
+/**
+ * Timeframes a venue does not provide natively are built from a smaller
+ * native timeframe (see timeframes.js). Returns the base timeframe or null.
+ */
+export function derivedFrom(exchange, timeframe) {
+  if (timeframe === "3mo") return exchange === "okx" ? null : "1mo";
+  if (["gate", "mexc"].includes(exchange) && timeframe === "3m") return "1m";
+  // Weekly/monthly alignment is only trusted where documented as Monday/calendar UTC.
+  if (["gate", "mexc", "bingx"].includes(exchange) && (timeframe === "1w" || timeframe === "1mo")) return "24h";
+  return null;
+}
 export function validateCandleQuery(query) {
   const exchange = query.exchange ?? "binance";
   const symbol = query.symbol ?? "BTCUSDT";
   const timeframe = query.timeframe ?? "1h";
   if (typeof exchange !== "string" || !Object.hasOwn(CHART_VENUES, exchange) || typeof symbol !== "string" ||
     !/^[A-Z0-9_-]{2,45}$/.test(symbol) || (["binance", "bybit"].includes(exchange) && !/^[A-Z0-9]{2,30}USDT$/.test(symbol)) ||
-    typeof timeframe !== "string" || !Object.hasOwn(intervals, timeframe)) {
+    typeof timeframe !== "string" || !isTimeframe(timeframe)) {
     throw Object.assign(new Error("Choose a supported exchange, a verified USDT perpetual symbol, and a supported timeframe."), { status: 400 });
   }
   return { exchange, symbol, timeframe };
@@ -23,7 +37,6 @@ export function validateCandleQuery(query) {
 export function parseCandles(exchange, body, timeframe, now = Date.now()) {
   const rows = exchange === "binance" ? body : body.result?.list;
   if (!Array.isArray(rows) || !rows.length) throw new Error("Exchange returned no candles for this contract.");
-  const seconds = intervals[timeframe][2];
   const candles = rows.map(row => {
     if (!Array.isArray(row) || row.length < 6) throw new Error("Malformed exchange candle.");
     const values = row.slice(0, 6).map(value => value === "" || value === null ? NaN : Number(value));
@@ -33,14 +46,13 @@ export function parseCandles(exchange, body, timeframe, now = Date.now()) {
       high < Math.max(open, close, low) || low > Math.min(open, close, high)) {
       throw new Error("Invalid exchange candle prices or volume.");
     }
-    return { time: ms / 1000, open, high, low, close, volume, closed: ms + seconds * 1000 <= now };
+    return { time: ms / 1000, open, high, low, close, volume };
   }).sort((a, b) => a.time - b.time);
-  for (let i = 1; i < candles.length; i++) {
-    if (candles[i].time - candles[i - 1].time !== seconds) {
-      throw new Error("Exchange candle history has a gap or duplicate timestamp; indicator calculation paused.");
-    }
+  if (!isContiguous(candles, timeframe)) {
+    throw new Error("Exchange candle history has a gap or duplicate timestamp; indicator calculation paused.");
   }
-  return candles;
+  // Closed when the next bucket has started (calendar-aware for 1W/1M/3M).
+  return candles.map((bar, i) => ({ ...bar, closed: i < candles.length - 1 || nextBucket(timeframe, bar.time) * 1000 <= now }));
 }
 
 /** Shared, bounded per-series cache. Refresh never bypasses the exchange gates. */
@@ -79,7 +91,7 @@ export function createCandleService({ request = requestJson, gates = requestGate
     metadata.set(key, { value: instrument, expires: now() + 3_600_000 }); trim(metadata);
     return instrument;
   }
-  async function get(query) {
+  async function get(query, { internal = false } = {}) {
     const { exchange, symbol, timeframe } = validateCandleQuery(query);
     const key = `${exchange}:${symbol}:${timeframe}`;
     const saved = cache.get(key);
@@ -91,10 +103,21 @@ export function createCandleService({ request = requestJson, gates = requestGate
     }
     if (pending.has(key)) return pending.get(key);
     // Bound in-flight user-selected markets as well as retained cache entries.
-    if (pending.size >= 4) throw Object.assign(new Error("Chart requests are busy. Please try again shortly."), { status: 503 });
+    if (!internal && pending.size >= 4) throw Object.assign(new Error("Chart requests are busy. Please try again shortly."), { status: 503 });
     const task = (async () => {
       try {
         const instrument = await validateContract(exchange, symbol);
+        const baseTimeframe = derivedFrom(exchange, timeframe);
+        if (baseTimeframe) {
+          // Built from the venue's smaller native candles (same units and gates).
+          const baseData = await get({ exchange, symbol, timeframe: baseTimeframe }, { internal: true });
+          if (baseData.stale) throw Object.assign(new Error(baseData.error ?? "Base candles unavailable."), { retryAt: baseData.retryAt });
+          const candles = aggregateCandles(baseData.candles, timeframe, now());
+          if (!candles.length) throw new Error("Not enough history to build this timeframe.");
+          const data = { ...baseData, timeframe, candles, fetchedAt: new Date(now()).toISOString(), stale: false, derivedFrom: baseTimeframe };
+          cache.set(key, { data, nextAttempt: now() + 30_000 }); trim(cache);
+          return data;
+        }
         const [binanceInterval, bybitInterval] = intervals[timeframe];
         const url = exchange === "binance"
           ? `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${binanceInterval}&limit=1000`

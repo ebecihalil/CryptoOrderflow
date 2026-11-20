@@ -378,7 +378,7 @@ export function OpenInterestPage() {
           </div>
         </section>
         </div>
-        <SectionWatchlist memory={memory} section="Open Interest"
+        <SectionWatchlist memory={memory} coins={snapshot?.rows.map((row) => row.asset)} section="Open Interest"
           currentCoin={snapshot?.rows.some((row) => normalizeCoin(row.asset) === normalizeCoin(search)) ? search : null}
           onSelect={(coin) => { setSearch(coin); setPage(0); }}
           metric={(coin) => {

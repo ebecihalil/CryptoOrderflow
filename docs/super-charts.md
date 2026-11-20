@@ -69,3 +69,34 @@ Overlays draw on the price pane (Ichimoku/Keltner/Donchian fills via
 levels. Parameters are editable under Study parameters and saved per coin.
 Volume-based studies use the selected exchange's candle volume. Values can
 differ slightly from other platforms when history depth or seeding differs.
+
+## Timeframes
+
+1m, 3m, 5m, 15m, 30m, 1h, 4h, 1D, 1W, 1M, 3M (`server/timeframes.js`, all UTC;
+weeks start Monday, months/quarters on the 1st). Native exchange candles are
+used where documented (Binance/Bybit/OKX/Bitget/BingX 1m–1M, OKX 3M); other
+frames are built from smaller native candles (Gate/MEXC 3m from 1m, Gate/MEXC/
+BingX 1W/1M from 1D, 3M from 1M), dropping an incomplete first bucket.
+Technical studies, Liquidity Zones, aggregated volume, CVD, aggressive bubbles
+and funding use the same buckets. CVD/bubbles come from recorded trades (up to
+14 days), so 1W/1M/3M show only the recorded part. Aggregated OI supports
+1m–1D; weekly and longer frames show an explanation instead of thin bars.
+
+Seconds (1s, 5s, 15s, 30s): perpetual exchange APIs publish no seconds
+candles, so they are built from the selected contract's live executed trades
+(`server/secondCandles.js`), starting when the chart is first opened and kept
+for 2 hours (recording stops after 10 idle minutes). Volume is the single
+contract's; minute-based layers (CVD, bubbles, funding, OI) start at 1m.
+
+The timeframe control shows starred favourites as quick buttons; the dropdown
+lists every timeframe with a ☆ to pin or unpin it (stored in the browser).
+
+## Pane legends and settings
+
+Each pane shows TradingView-style labels at its top-left: name, inputs and
+values at the crosshair (latest bar otherwise). ⚙ opens that layer's settings
+together with "How to read it" (summary, lines/colours and common signals, see
+`src/lib/indicator-help.ts`); × removes the layer. Settings that used to sit
+below the chart (study periods, Liquidity Zones, funding, CVD, bubbles, OI)
+live in these panels. Chart colours use a brighter pastel palette
+(`CHART_COLORS`) so candles, volume and indicators stay clearly visible.

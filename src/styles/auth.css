@@ -36,3 +36,7 @@
 .auth-switch a { color:var(--lsar-accent);font-weight:600; }
 .auth-note { margin:0;color:var(--lsar-muted);font-size:11px;text-align:center; }
 @media (max-width:640px) { .account-email { display:none; } }
+/* Signed-out "Sign in": blue so it stands out in both themes. */
+.account-button:not(.signed-in):not(.placeholder) { border-color:#2563eb;background:#2563eb;color:#ffffff;font-weight:600; }
+.account-button:not(.signed-in):not(.placeholder):hover { border-color:#1d4ed8;background:#1d4ed8; }
+.account-button:not(.signed-in):not(.placeholder):focus-visible { outline:2px solid #93c5fd;outline-offset:2px; }

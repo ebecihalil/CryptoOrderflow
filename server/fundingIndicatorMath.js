@@ -4,7 +4,12 @@ import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
 import { FUNDING_LABELS, normalizedRate } from "./fundingMath.js";
 
-export const INDICATOR_STEPS = { "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400 };
+import { CHART_TIMEFRAMES, bucketStart, nextBucket, timeframeSeconds } from "./timeframes.js";
+export const INDICATOR_STEPS = Object.fromEntries(CHART_TIMEFRAMES.map(tf => [tf, timeframeSeconds(tf)]));
+const firstBucketFrom = (timeframe, from) => {
+  const start = bucketStart(timeframe, from);
+  return start < from ? nextBucket(timeframe, start) : start;
+};
 export const INDICATOR_WINDOWS = { "1d": 86400, "7d": 604800, "30d": 2592000 };
 const finite = value => typeof value === "number" && Number.isFinite(value);
 
@@ -88,7 +93,7 @@ export function settledFundingChart(entries, from, to, timeframe) {
   const series = entries.map(normalizedSettledRates).filter(points => points.length);
   if (!series.length) return [];
   const indices = series.map(() => -1), result = [];
-  for (let time = Math.ceil(from / step) * step; time <= to; time += step) {
+  for (let time = firstBucketFrom(timeframe, from); time <= to; time = nextBucket(timeframe, time)) {
     const rates = [];
     series.forEach((points, index) => {
       while (indices[index] + 1 < points.length && points[indices[index] + 1].time <= time) indices[index]++;
@@ -105,12 +110,12 @@ export function recordedFundingChart(observations, from, to, timeframe) {
   const step = INDICATOR_STEPS[timeframe], buckets = new Map();
   for (const point of observations) {
     if (point.time < from || point.time > to) continue;
-    buckets.set(Math.floor(point.time / step) * step, point);
+    buckets.set(bucketStart(timeframe, point.time), point);
   }
   const result = [];
   for (const [time, point] of [...buckets].sort((a, b) => a[0] - b[0])) {
     const previous = result.at(-1);
-    if (previous && time - previous.time > step) result.push({ time: previous.time + step,
+    if (previous && time > nextBucket(timeframe, previous.time)) result.push({ time: nextBucket(timeframe, previous.time),
       meanPct: null, medianPct: null, weightedPct: null, weightedFallback: false, sourceCount: 0 });
     result.push({ ...point, time });
   }

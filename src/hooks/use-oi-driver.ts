@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Candle } from "@/lib/supercharts";
 import { calculateOiDriver, OI_DRIVER_DEFAULTS } from "../../server/oiDriverMath.js";
+import { timeframeSeconds } from "../../server/timeframes.js";
 
 export type OiDriverSettings = {
   showTotals: boolean; stateColors: boolean; showLsar: boolean;
@@ -58,8 +59,7 @@ export function useOiDriver(asset: string, timeframe: string, exchange: string, 
         if (body.asset !== asset || body.timeframe !== timeframe || body.symbol !== symbol ||
           !Array.isArray(body.candles) || !Array.isArray(body.sources)) throw new Error("OI indicator response did not match the selected chart.");
         const aligned = body.candles.map(row => {
-          const time = row.time + Number(timeframe === "5m" ? 300 : timeframe === "15m" ? 900 : timeframe === "30m" ? 1800 :
-            timeframe === "1h" ? 3600 : timeframe === "4h" ? 14400 : 86400);
+          const time = row.time + timeframeSeconds(timeframe);
           const price = prices.get(row.time);
           return { ...row, price: price ? { open: price.open, high: price.high, low: price.low, close: price.close } : null,
             cvd: row.cvd ?? null, longLiqUsd: row.longLiqUsd, shortLiqUsd: row.shortLiqUsd };

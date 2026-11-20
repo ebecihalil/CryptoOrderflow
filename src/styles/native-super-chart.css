@@ -138,3 +138,5 @@
   .native-cvd-control-row { align-items:flex-start; }.native-cvd-anchors { width:100%; }.native-cvd-count { margin-right:0; }
    .native-bubble-control-row { align-items:flex-start; }.native-bubble-control-row .super-chart-control { flex:1 1 130px; }
 }
+/* Chart + TradingView-style pane legends overlay */
+.native-chart-stage { position:relative; }
