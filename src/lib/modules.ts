@@ -3,6 +3,8 @@ export type ModuleInfo = {
   mark: string;
   path: string;
   description: string;
+  /** Home-page group: clicking the card reveals these options. */
+  children?: ModuleInfo[];
 };
 
 export const MODULES: ModuleInfo[] = [
@@ -16,6 +18,15 @@ export const MODULES: ModuleInfo[] = [
   { title: 'Super Charts (Indicators)', mark: 'SC', path: '/super-charts', description: 'Charting tools and technical indicators.' },
 ];
 
-export const HOME_MODULES = MODULES.filter(
-  (module) => module.path !== '/cvd' && module.path !== '/liquidations',
-);
+const LSAR_PATHS = ['/long-short-account-ratio', '/top-trader-long-short-account-ratio'];
+
+/** Long Short Account Ratio: one home card that opens to Global / Top Trader. */
+export const LSAR_GROUP: ModuleInfo = {
+  title: 'Long Short Account Ratio', mark: 'LS', path: '/long-short-account-ratio',
+  description: 'OI-weighted account positioning: all accounts or top traders.',
+  children: MODULES.filter((module) => LSAR_PATHS.includes(module.path)),
+};
+
+export const HOME_MODULES: ModuleInfo[] = MODULES
+  .filter((module) => module.path !== '/cvd' && module.path !== '/liquidations')
+  .flatMap((module) => module.path === LSAR_PATHS[0] ? [LSAR_GROUP] : LSAR_PATHS.includes(module.path) ? [] : [module]);
