@@ -178,3 +178,27 @@ body.chart-fullscreen-open { overflow:hidden; }
 /* The hover read-out floats over the chart instead of taking a line. */
 .is-chart-expanded .native-chart-wrap { position:relative; }
 .is-chart-expanded .native-chart-readout { position:absolute;left:8px;bottom:34px;z-index:3;max-width:calc(100% - 90px);padding:3px 7px;border-radius:4px;background:color-mix(in srgb,var(--lsar-surface) 88%,transparent);pointer-events:none; }
+
+/* Multi-chart layouts */
+.sc-cells { display:grid;gap:6px;height:calc(100dvh - 16px);min-height:0; }
+.sc-cell { position:relative;min-width:0;min-height:0;overflow:visible;border:1px solid var(--lsar-border); }
+.sc-cell.is-active { z-index:3; }
+/* Notes and details under each chart live in the ⚙ panels; the chart fills the cell. */
+.sc-cell .native-chart-wrap ~ * { display:none; }
+.sc-cell .native-workspace { overflow:visible; }
+.sc-cells.is-multi .sc-cell:not(.is-active) .sc-toolbar { opacity:.85; }
+.sc-cells.is-multi .sc-cell.is-active { border-color:var(--lsar-accent);box-shadow:0 0 0 1px var(--lsar-accent); }
+.sc-cell .native-workspace { height:100%; }
+.sc-cells.is-multi .native-chart-canvas { min-height:140px; }
+.layout-picker { position:relative; }
+.layout-trigger { display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--lsar-control-border);background:var(--lsar-page);cursor:pointer; }
+.layout-trigger:hover,.layout-trigger[aria-expanded="true"] { border-color:var(--lsar-accent); }
+.layout-icon { display:grid;gap:2px;width:18px;height:14px; }
+.layout-icon i { border:1.5px solid var(--lsar-strong);border-radius:1px; }
+.layout-menu { position:absolute;top:36px;left:0;z-index:40;display:grid;gap:6px;padding:8px;border:1px solid var(--lsar-control-border);border-radius:6px;background:var(--lsar-surface);box-shadow:0 14px 30px rgba(0,0,0,.35); }
+.layout-row { display:flex;align-items:center;gap:6px; }
+.layout-count { width:12px;color:var(--lsar-muted);font:10px var(--app-font-mono); }
+.layout-row button { display:grid;place-items:center;width:34px;height:30px;padding:0;border:1px solid transparent;border-radius:4px;background:transparent;cursor:pointer; }
+.layout-row button:hover { background:var(--lsar-row-hover); }
+.layout-row button.is-on { border-color:var(--lsar-accent);background:var(--lsar-accent-soft); }
+.layout-row button.is-on .layout-icon i { border-color:var(--lsar-accent); }

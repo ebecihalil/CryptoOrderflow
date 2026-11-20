@@ -88,30 +88,35 @@ test("bubbles reuse the CVD collectors/deduplication; market/filter changes do n
   callbacks.get("perpetual")(trade({ side: "sell" }));
   clock += 3000;
   const b = service.getBubbles({ asset: "BTC", market: "both", timeframe: "5m", minValue: 0 });
-  assert.equal(b.points.length, 2); assert.equal(b.sources.length, 25); assert.equal(opened, 2);
+  assert.equal(b.points.length, 2); assert.equal(b.sources.length, 26); assert.equal(opened, 2);
   assert.equal(b.points.find(p => p.market === "spot").value, 100);
   assert.equal(b.points.find(p => p.market === "perpetual").side, "sell");
   const spot = service.getBubbles({ asset: "BTC", market: "spot", timeframe: "1h", minValue: 200 });
-  assert.equal(spot.points.length, 0); assert.equal(spot.sources.length, 10); assert.equal(opened, 2);
+  assert.equal(spot.points.length, 0); assert.equal(spot.sources.length, 11); assert.equal(opened, 2);
   assert.equal(service.get({ asset: "BTC", market: "spot", timeframe: "5m" }).candles[0].close, 100);
   await service.close();
 });
 
-test("auto bubble minimum leaves about 2-3 bubbles per candle; multiplier uses average candle volume", async () => {
-  const { bubbleThreshold, averageCandleVolume, validateAggressiveBubblesQuery: validate } = await import("./aggressiveBubbles.js");
+test("dynamic minimum: k x 20-candle average volume per candle; auto keeps about 2-3 bubbles per candle", async () => {
+  const { bubbleThreshold, candleVolumeAverages, validateAggressiveBubblesQuery: validate } = await import("./aggressiveBubbles.js");
   assert.equal(validate({ asset: "BTC", minValue: "auto" }).minValue, "auto");
   assert.deepEqual(validate({ asset: "BTC", minValue: "multiplier", multiplier: "0.25" }), { asset: "BTC", market: "both", timeframe: "1h", minValue: "multiplier", multiplier: 0.25 });
   assert.throws(() => validate({ asset: "BTC", minValue: "multiplier", multiplier: "0" }), e => e.status === 400);
-  // 10 candles, 20 price levels each with values 1000..20000 -> 200 bubbles, candle volume 210,000
+  // 30 candles, 20 price levels each (1000..20000): candle volume 210,000
   const points = [];
-  for (let candle = 0; candle < 10; candle++) for (let level = 1; level <= 20; level++) points.push({ time: candle * 3600, value: level * 1000 });
-  assert.equal(averageCandleVolume(points).average, 210_000);
+  for (let candle = 0; candle < 30; candle++) for (let level = 1; level <= 20; level++) points.push({ time: candle * 3600, value: level * 1000 });
+  assert.equal(candleVolumeAverages(points).get(29 * 3600), 210_000);
   const auto = bubbleThreshold(points);
-  const shown = points.filter(point => point.value >= auto.value).length;
-  assert.ok(shown >= 20 && shown <= 30, `about 2-3 per candle, got ${shown / 10}`);
-  assert.ok(auto.multiplier > 0 && auto.multiplier < 1, "auto is a fraction of the candle volume");
-  assert.equal(bubbleThreshold(points, { mode: "multiplier", multiplier: 0.05 }).value, 11_000); // 0.05 x 210,000 = 10,500 -> 11,000
-  assert.equal(bubbleThreshold([]).value, 100);
+  const shown = points.filter(point => point.value >= auto.at(point.time)).length;
+  assert.ok(shown >= 60 && shown <= 90, `about 2-3 per candle, got ${shown / 30}`);
+  assert.ok(auto.k > 0 && auto.k < 1, "k is a fraction of the average candle volume");
+  const fixed = bubbleThreshold(points, { mode: "multiplier", multiplier: 0.05 });
+  assert.equal(fixed.k, 0.05);
+  assert.equal(fixed.at(29 * 3600), 10_500);
+  // A quiet stretch gets a lower bar than a busy one (per-candle, moving average).
+  const mixed = [...points.map(p => ({ ...p })), ...Array.from({ length: 20 }, (_, i) => ({ time: (30 + i) * 3600, value: 500 }))];
+  const dyn = bubbleThreshold(mixed, { mode: "multiplier", multiplier: 0.1 });
+  assert.ok(dyn.at(49 * 3600) < dyn.at(29 * 3600));
 });
 
 test("1m charts: a bubble lands on the minute its trades happened, not the 5-minute block start", () => {

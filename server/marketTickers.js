@@ -13,7 +13,14 @@ const URLS = {
   mexc: "https://contract.mexc.com/api/v1/contract/ticker",
   bitget: "https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES",
   bingx: "https://open-api.bingx.com/openApi/swap/v2/quote/ticker",
+  aster: "https://fapi.asterdex.com/fapi/v1/ticker/24hr",
+  hyperliquid: "https://api.hyperliquid.xyz/info",
+  kucoin: "https://api-futures.kucoin.com/api/v1/contracts/active",
+  htx: "https://api.hbdm.com/linear-swap-ex/market/detail/batch_merged",
 };
+const fetchTickers = (request, exchange) => exchange === "hyperliquid"
+  ? request(URLS.hyperliquid, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "metaAndAssetCtxs" }) })
+  : request(URLS[exchange]);
 // Binance bulk 24h ticker is a heavy call (weight 40): refresh it less often.
 export const TICKER_REFRESH_MS = { binance: 60_000, default: 30_000 };
 const IDLE_MS = 5 * 60_000;
@@ -27,8 +34,17 @@ const pct = (last, open) => last !== null && open > 0 ? (last / open - 1) * 100 
 
 /** Parse one exchange's bulk ticker body into [symbol, last, change% (percent units), quote volume USD]. */
 export function parseTickers(exchange, body) {
-  const rows = exchange === "binance" || exchange === "gate" ? body
-    : exchange === "bybit" ? body?.result?.list : body?.data;
+  if (exchange === "hyperliquid") {
+    // [meta, assetContexts]: same order; change vs the previous day's price.
+    const universe = body?.[0]?.universe, contexts = body?.[1];
+    if (!Array.isArray(universe) || !Array.isArray(contexts)) throw new Error("hyperliquid tickers unavailable.");
+    return universe.flatMap((coin, index) => {
+      const ctx = contexts[index] ?? {}, last = num(ctx.markPx);
+      return coin.isDelisted || !(last > 0) ? [] : [[coin.name, last, (() => { const c = pct(last, num(ctx.prevDayPx)); return c === null ? null : Math.round(c * 1000) / 1000; })(), num(ctx.dayNtlVlm)]];
+    });
+  }
+  const rows = exchange === "binance" || exchange === "gate" || exchange === "aster" ? body
+    : exchange === "bybit" ? body?.result?.list : exchange === "htx" ? body?.ticks ?? body?.data : body?.data;
   if (!Array.isArray(rows)) throw new Error(`${exchange} tickers unavailable.`);
   if (["okx", "bitget", "bingx"].includes(exchange) && Number(body.code) !== 0) throw new Error(`${exchange} tickers rejected.`);
   const out = [];
@@ -46,6 +62,10 @@ export function parseTickers(exchange, body) {
       case "bitget": symbol = row.symbol; last = num(row.lastPr);
         change = num(row.change24h) !== null ? num(row.change24h) * 100 : pct(last, num(row.open24h)); volume = num(row.usdtVolume ?? row.quoteVolume); break;
       case "bingx": symbol = row.symbol; last = num(row.lastPrice); change = num(row.priceChangePercent); volume = num(row.quoteVolume); break;
+      case "aster": symbol = row.symbol; last = num(row.lastPrice); change = num(row.priceChangePercent); volume = num(row.quoteVolume); break;
+      case "kucoin": symbol = row.symbol; last = num(row.lastTradePrice);
+        change = num(row.priceChgPct) !== null ? num(row.priceChgPct) * 100 : null; volume = num(row.turnoverOf24h); break;
+      case "htx": symbol = row.contract_code; last = num(row.close); change = pct(last, num(row.open)); volume = num(row.trade_turnover); break;
       default: throw new Error("Unsupported ticker exchange.");
     }
     if (typeof symbol !== "string" || !(last > 0)) continue;
@@ -64,7 +84,7 @@ export function createMarketTickerService({ request = requestJson, gates = reque
     if (state.pending || now() < state.nextAttempt || gates[exchange]?.isCoolingDown) return;
     state.pending = (async () => {
       try {
-        state.rows = parseTickers(exchange, await request(URLS[exchange]));
+        state.rows = parseTickers(exchange, await fetchTickers(request, exchange));
         state.status = "ok"; state.updatedAt = now();
         state.nextAttempt = now() + (TICKER_REFRESH_MS[exchange] ?? TICKER_REFRESH_MS.default);
       } catch {

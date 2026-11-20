@@ -140,3 +140,7 @@
 }
 /* Chart + TradingView-style pane legends overlay */
 .native-chart-stage { position:relative; }
+/* Frame between chart panes so every indicator has a clear outline. */
+.native-chart-stage { position:relative; }
+.pane-divider { position:absolute;left:0;right:0;z-index:2;height:0;border-top:2px solid rgba(232,238,240,.55);pointer-events:none; }
+:root:not(.dark) .pane-divider { border-top-color:rgba(40,56,59,.45); }

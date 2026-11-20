@@ -113,7 +113,7 @@
 .market-list-signin:hover { border-color:#1d4ed8;background:#1d4ed8; }
 .market-list-colfilter { position:absolute;left:10px;top:50%;transform:translateY(-50%); }
 .market-list-colfilter-btn { display:block;width:14px;height:14px;padding:0;border:1.5px solid var(--lsar-strong);border-radius:50%;background:transparent;cursor:pointer; }
-.market-list-colfilter-btn.is-on { border-color:var(--lsar-ink);box-shadow:0 0 0 2px var(--lsar-surface),0 0 0 3px var(--lsar-ink); }
+.market-list-colfilter-btn.is-on { border:0;background:conic-gradient(#f23645 0 60deg,#ff9800 60deg 120deg,#f5d33b 120deg 180deg,#22ab94 180deg 240deg,#2962ff 240deg 300deg,#9c27b0 300deg); }
 .market-list-colfilter-menu { position:absolute;left:-4px;top:22px;z-index:6;display:flex;align-items:center;gap:6px;padding:7px;border:1px solid var(--lsar-control-border);border-radius:5px;background:var(--lsar-surface);box-shadow:0 8px 20px rgba(0,0,0,.3); }
 .market-list-colfilter-menu button { width:22px;height:22px;padding:0;border:2px solid transparent;border-radius:50%;cursor:pointer; }
 .market-list-colfilter-menu button.is-on,.market-list-colfilter-menu button[aria-checked="true"] { border-color:var(--lsar-ink); }

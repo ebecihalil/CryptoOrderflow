@@ -207,3 +207,34 @@ In the market list, the circle left of "Symbol" filters by row colour.
 Bubbles are recorded in 5-minute cells for 7 days (exact for 5m and larger
 charts) and in 1-minute cells for the last 12 hours, used by 1m and 3m charts,
 so every bubble sits on the candle in which its trades happened.
+
+## Perp Leverage Estimation
+
+Replaces the old Leverage Estimate pane (the Leverage Estimate page is
+unchanged). Built only from data this server records: per-exchange open
+interest, per-exchange perpetual and spot taker trades (buy/sell = footprint,
+CVD, volume) and liquidations (Binance, Bybit, OKX, Deribit). An exchange counts
+in a candle only when it has open interest (this and the previous candle), perp
+trades and spot trades in that candle. Lines, 100 = normal for the coin (own
+200-candle median): orange = average (open interest ÷ 20-candle average spot
+volume, combined 70/30 with perp ÷ spot volume); green / red = long / short
+side: new open interest is split by aggressive buyers (longs) vs sellers
+(shorts); falling open interest is taken first from liquidations, then from the
+side that was closing. Equal long and short = both on the orange line.
+`GET /api/indicators/perp-leverage?asset=&timeframe=&exchange=&symbol=` (`server/perpLeverage.js`).
+History starts when the server started recording the coin.
+
+## Multi-chart layouts
+
+The layout button next to the symbol search offers 1, 2, 3 or 4 charts (13
+arrangements). Click a chart to select it (blue outline): the toolbar and the
+market list then change that chart. Each chart keeps its own coin and
+timeframe; indicators are shared by all charts.
+
+## Exchanges with charts
+
+Binance, Bybit, OKX, Gate.io, Bitget, MEXC, BingX, KuCoin, HTX, Hyperliquid and
+Aster (candles, prices, contracts). Hyperliquid, KuCoin and HTX skip candles
+with no trades; such minutes are shown as flat, zero-volume bars. Kraken,
+Lighter, Paradex, Deribit, CoinEx, BitMEX and Toobit are used for data
+(funding, open interest, trades) but are not chartable yet.

@@ -11,7 +11,7 @@ import {
   type FundingIndicatorWindow, type FundingIndicatorPoint,
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type CvdTimeframe } from '@/hooks/use-cvd-indicator';
-import { useLeverageEstimate, type LeverageTimeframe } from '@/hooks/use-leverage-estimate';
+import { PERP_LEVERAGE_FRAMES, usePerpLeverage } from '@/hooks/use-perp-leverage';
 import { LSAR_CHART_FRAMES, useLsarChart } from '@/hooks/use-lsar-chart';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
@@ -25,14 +25,15 @@ import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
-/** Leverage Estimate exists on these chart timeframes (24h = 1D). */
-const LEVERAGE_FRAMES: Partial<Record<string, LeverageTimeframe>> = { '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '24h': '1d' };
+
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
   /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
-  toolbarStart?: ReactNode; toolbarMenus?: ReactNode };
+  toolbarStart?: ReactNode; toolbarMenus?: ReactNode;
+  /** Chart cell in a multi-chart layout: each cell keeps its own timeframe. */
+  cellId?: number };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 
-const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
+const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx', 'aster', 'hyperliquid', 'kucoin', 'htx']);
 const DEFAULT_LIQUIDITY_SETTINGS: LiquiditySettings = { backBars: 300, volMult: 1.2 };
 const DEFAULT_ZONE_COLORS: ThemeColors = { resistance: '#ff0000', support: '#008000', inside: '#808080', transparency: 35 };
 const METHOD_NAMES: Record<FundingIndicatorMethod, string> = { mean: 'Simple mean', median: 'Median', weighted: 'OI-weighted' };
@@ -73,7 +74,7 @@ export function NativeChartWorkspace(props: Props) {
   }
   return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
     contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer}
-    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} />;
+    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} cellId={props.cellId ?? 0} />;
 }
 
 const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
@@ -96,9 +97,9 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus }: Props & { contract: MarketContract }) {
+function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus, cellId = 0 }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
-  const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>('timeframe', '1h',
+  const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>(cellId ? `timeframe:${cellId}` : 'timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
   // 1s–30s candles are built from live trades of the selected contract only.
   const secondsMode = isSecondTimeframe(timeframe);
@@ -122,7 +123,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const hasSpotCvd = indicators.includes('spot-cvd') && !secondsMode;
   const hasAggressiveBubbles = indicators.includes('aggressive-bubbles') && !secondsMode;
   const hasOiDriver = indicators.includes('oi-driver') && !secondsMode;
-  const leverageFrame = LEVERAGE_FRAMES[timeframe];
+  const leverageFrame = PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
   const lsarFrameOk = LSAR_CHART_FRAMES.includes(timeframe);
   const hasGlobalLsar = indicators.includes('global-lsar') && lsarFrameOk;
@@ -253,7 +254,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
   const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
-  const leverage = useLeverageEstimate(canonicalAsset, leverageFrame ?? '1h', hasLeverage);
+  const leverage = usePerpLeverage(canonicalAsset, timeframe, exchange, nativeSymbol, hasLeverage);
   const globalLsar = useLsarChart(canonicalAsset, timeframe, 'global', hasGlobalLsar);
   const topLsar = useLsarChart(canonicalAsset, timeframe, 'top', hasTopLsar);
   const lsarPanes = useMemo(() => [
@@ -289,8 +290,6 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     if (!(Number.isFinite(next) && next >= 0.001 && next <= 100)) { setBubbleMinError('Enter a multiplier from 0.001 to 100 (× average candle volume).'); return; }
     setBubbleMultiplier(next); setBubbleMinValue('multiplier'); setBubbleMultDraft(null); setBubbleMinDraft(null); setBubbleMinError(null);
   };
-  const bubbleModeText = bubbleMinValue === 'auto' ? 'Auto · about 2–3 bubbles per candle'
-    : bubbleMinValue === 'multiplier' ? `${bubbleMultiplier}× average candle volume` : 'Fixed USD value';
 
   const cvdControls = (market: CvdMarket, enabled: boolean, anchor: CvdAnchor, setAnchor: (value: CvdAnchor) => void,
     feed: ReturnType<typeof useCvdIndicator>) => {
@@ -458,7 +457,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
           {bubbleMinValue !== 'auto' && <button type="button" className="native-tool-button" data-testid="button-bubble-auto"
             onClick={() => { setBubbleMinValue('auto'); setBubbleMinDraft(null); setBubbleMultDraft(null); setBubbleMinError(null); }}
             title="Recalculate automatically: about 2–3 bubbles per candle">Auto</button>}
-          <span className="native-bubble-mode" data-testid="bubble-mode">{bubbleModeText}</span>
+
           <span className="native-cvd-count">{bubblePayload ? `${bubblePayload.points.reduce((sum, point) => sum + point.tradeCount, 0).toLocaleString()} trades · ${bubblePayload.sources.length} sources` : 'Price-level executions only'}</span>
           <button type="button" className="native-tool-button" onClick={aggressiveBubbles.refresh} disabled={aggressiveBubbles.loading}>
             <RefreshCw size={12} aria-hidden="true" /> Refresh
@@ -536,8 +535,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
       {hasTopLsar && topLsar.isSuccess && !topLsar.data.points.length && <p className="native-seconds-note" role="status">
         No top-trader ratio for {canonicalAsset} yet: Binance, OKX and Gate.io publish it only for some coins, and the server may still be collecting it.</p>}
       {indicators.includes('leverage') && !leverageFrame && <p className="native-seconds-note" role="status">
-        Leverage Estimate is available on 5m, 15m, 30m, 1h, 4h and 1D charts.</p>}
-      {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Leverage Estimate: {leverage.error.message}</p>}
+        Perp Leverage Estimation is available on 5m, 15m, 30m, 1h, 4h and 1D charts.</p>}
+      {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Perp Leverage Estimation: {leverage.error.message}</p>}
       {secondsMode && <p className="native-seconds-note" role="status">
         Seconds candles are built from this contract’s live executed trades since recording started (kept 2 hours) and refresh every 2 seconds; seconds without trades have no candle.
         {indicators.some((id) => ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'oi-driver'].includes(id)) &&
@@ -570,7 +569,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         : candles.length ? <NativeSuperChart key={`${contract.exchange}:${contract.symbol}:${timeframe}`}
           viewKey={chartViewKey(asset, contract.exchange, contract.symbol, timeframe)}
           candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
-          liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
+          liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} fundingEnabled={hasFunding} showVolume={showVolume} timeframe={timeframe}
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings} extraSettings={extraSettings}
            layerSettings={layerSettings} layerActions={layerActions} liquidityEnabled={hasLiquidity}
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}

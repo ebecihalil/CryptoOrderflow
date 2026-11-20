@@ -131,3 +131,47 @@ test("settings routes require sign-in", async () => {
     assert.deepEqual((await (await fetch(`${base}/me/prefs/market-list`, { headers: { cookie } })).json()).value, { oneRow: false });
   } finally { server.close(); accounts.close(); }
 });
+
+test("Google sign-in: state checked, verified email signs in (and creates the account once)", async () => {
+  const accounts = createAccountService({ file: ":memory:" });
+  const google = { clientId: "cid", secret: "sec", redirectUri: "https://example.test/api/auth/google/callback" };
+  let claims = { aud: "cid", iss: "https://accounts.google.com", email: "g-user@example.com", email_verified: true };
+  const fetchJson = async url => url.includes("/token?") || url.endsWith("/token") ? { ok: true, body: { id_token: "x" } } : { ok: true, body: claims };
+  const app = express(); app.use(express.json()); app.use("/api", createAccountRouter({ accounts, google, fetchJson }));
+  const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}/api`;
+  try {
+    assert.deepEqual(await (await fetch(`${base}/auth/providers`)).json(), { google: true });
+    const start = await fetch(`${base}/auth/google/start?next=/super-charts`, { redirect: "manual" });
+    assert.equal(start.status, 302);
+    const location = new URL(start.headers.get("location"));
+    assert.equal(location.hostname, "accounts.google.com");
+    const state = location.searchParams.get("state");
+    const cookie = start.headers.get("set-cookie").split(";")[0];
+    const bad = await fetch(`${base}/auth/google/callback?code=c&state=wrong`, { redirect: "manual", headers: { cookie } });
+    assert.match(bad.headers.get("location"), /^\/signin\?error=/);
+    const ok = await fetch(`${base}/auth/google/callback?code=c&state=${state}`, { redirect: "manual", headers: { cookie } });
+    assert.equal(ok.headers.get("location"), "/super-charts");
+    const session = ok.headers.get("set-cookie").split(/,(?=\s*cof_)/).find(c => c.trim().startsWith("cof_session="));
+    assert.ok(session && !session.includes("cof_session=;"));
+    const me = await (await fetch(`${base}/auth/me`, { headers: { cookie: session.trim().split(";")[0] } })).json();
+    assert.equal(me.user.email, "g-user@example.com");
+    // Unverified email is refused.
+    claims = { ...claims, email_verified: false };
+    const again = await fetch(`${base}/auth/google/start`, { redirect: "manual" });
+    const s2 = new URL(again.headers.get("location")).searchParams.get("state");
+    const refused = await fetch(`${base}/auth/google/callback?code=c&state=${s2}`, { redirect: "manual", headers: { cookie: again.headers.get("set-cookie").split(";")[0] } });
+    assert.match(refused.headers.get("location"), /not%20verified/);
+    // A Google-created account cannot be signed into with a password.
+    await assert.rejects(accounts.login("g-user@example.com", "google"), e => e.status === 401);
+  } finally { server.close(); accounts.close(); }
+});
+
+test("Google sign-in is off without configuration", async () => {
+  const accounts = createAccountService({ file: ":memory:" });
+  const app = express(); app.use("/api", createAccountRouter({ accounts, google: null }));
+  const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}/api`;
+  try {
+    assert.deepEqual(await (await fetch(`${base}/auth/providers`)).json(), { google: false });
+    assert.equal((await fetch(`${base}/auth/google/start`, { redirect: "manual" })).status, 404);
+  } finally { server.close(); accounts.close(); }
+});

@@ -73,17 +73,20 @@ export function ChartPaneLegends({ panes, settings, actions = {}, onRemove }: Pr
                   <div className="pane-legend-panel" ref={panel} role="dialog" aria-label={`${row.label} settings`} data-testid={`legend-panel-${row.key}`}>
                     <header><strong>{row.label}</strong>
                       <button type="button" onClick={() => setOpen(null)} aria-label="Close"><X size={14} /></button></header>
-                    {settings[row.key] && <section className="pane-legend-settings"><h4>Settings</h4>{settings[row.key]}
-                      {actions[row.key] && <div className="pane-legend-actions">
-                        <button type="button" className="pane-legend-save" onClick={actions[row.key].onSave} disabled={actions[row.key].saved}
-                          title="Keep these settings for this indicator" data-testid={`legend-save-${row.key}`}>
-                          {actions[row.key].saved ? <><Check size={12} aria-hidden="true" /> Saved</> : <><Save size={12} aria-hidden="true" /> Save</>}
-                        </button>
-                        <button type="button" className="pane-legend-default" onClick={actions[row.key].onDefault} disabled={actions[row.key].atDefault && !actions[row.key].saved}
-                          title="Back to the original settings" data-testid={`legend-default-${row.key}`}>
-                          <RotateCcw size={12} aria-hidden="true" /> Default
-                        </button>
-                      </div>}
+                    {settings[row.key] && <section className="pane-legend-settings">
+                      <div className="pane-legend-settings-head"><h4>Settings</h4>
+                        {actions[row.key] && <div className="pane-legend-actions">
+                          <button type="button" className="pane-legend-save" onClick={actions[row.key].onSave} disabled={actions[row.key].saved}
+                            title="Keep these settings (they stop changing automatically)" data-testid={`legend-save-${row.key}`}>
+                            {actions[row.key].saved ? <><Check size={12} aria-hidden="true" /> Saved</> : <><Save size={12} aria-hidden="true" /> Save</>}
+                          </button>
+                          <button type="button" className="pane-legend-default" onClick={actions[row.key].onDefault} disabled={actions[row.key].atDefault && !actions[row.key].saved}
+                            title="Back to the original (automatic) settings" data-testid={`legend-default-${row.key}`}>
+                            <RotateCcw size={12} aria-hidden="true" /> Default
+                          </button>
+                        </div>}
+                      </div>
+                      {settings[row.key]}
                     </section>}
                     {help && <section className="pane-legend-help"><h4>How to read it</h4>
                       <p>{help.summary}</p>

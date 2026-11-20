@@ -6,10 +6,11 @@ import { cvdSubscription } from "./cvdStreams.js";
 
 const inst = (exchange, symbol, extra = {}) => ({ exchange, market: "perpetual", symbol, priceDivisor: 1, ...extra });
 
-test("15 perpetual trade venues; spot keeps the 10 spot-capable venues", () => {
+test("15 perpetual trade venues; 11 spot venues (CoinEx has both)", () => {
   assert.equal(cvdExchangesFor("perpetual").length, 15);
-  assert.equal(cvdExchangesFor("spot").length, 10);
-  for (const exchange of ["aster", "hyperliquid", "bitmex", "deribit", "coinex"]) {
+  assert.equal(cvdExchangesFor("spot").length, 11);
+  assert.ok(cvdExchangesFor("spot").includes("coinex"));
+  for (const exchange of ["aster", "hyperliquid", "bitmex", "deribit"]) {
     assert.ok(CVD_EXCHANGES.includes(exchange));
     assert.ok(!cvdExchangesFor("spot").includes(exchange));
   }

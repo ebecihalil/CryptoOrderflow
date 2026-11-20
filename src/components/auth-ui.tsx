@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useSearch } from 'wouter';
 import { Star, X } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
@@ -55,6 +56,9 @@ export function AuthForm({ mode, next, lede }: { mode: 'signup' | 'signin'; next
     mutation.mutate({ email, password }, { onSuccess: () => navigate(next, { replace: true }) });
   };
   const other = `${isSignup ? '/signin' : '/signup'}?next=${encodeURIComponent(next)}`;
+  const providers = useQuery({ queryKey: ['auth-providers'], staleTime: Infinity, retry: 0,
+    queryFn: async () => (await (await fetch('/api/auth/providers')).json()) as { google: boolean } });
+  const googleError = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('error') : null;
 
   return (
     <form className="auth-card" onSubmit={submit} noValidate data-testid={`form-${mode}`}>
@@ -71,6 +75,19 @@ export function AuthForm({ mode, next, lede }: { mode: 'signup' | 'signin'; next
           data-testid="input-password" />
         {isSignup && <small>{t('At least 8 characters.')}</small>}
       </label>
+      {providers.data?.google && <>
+        <a className="auth-google" href={`/api/auth/google/start?next=${encodeURIComponent(next)}`} data-testid="link-google">
+          <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.8 6C12.3 13.6 17.6 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/>
+            <path fill="#FBBC05" d="M10.5 28.8c-.5-1.5-.8-3.1-.8-4.8s.3-3.3.8-4.8l-7.8-6C1 16.5 0 20.1 0 24s1 7.5 2.7 10.8l7.8-6z"/>
+            <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.4 0-11.7-4.1-13.5-9.7l-7.8 6C6.6 42.6 14.6 48 24 48z"/>
+          </svg>
+          {isSignup ? 'Sign up with Google' : 'Sign in with Google'}
+        </a>
+        <div className="auth-divider"><span>or with email</span></div>
+      </>}
+      {googleError && <div className="auth-error" role="alert">{googleError}</div>}
       {mutation.error && <div className="auth-error" role="alert" data-testid="text-auth-error">{mutation.error.message}</div>}
       <button type="submit" className="auth-primary" disabled={mutation.isPending} data-testid="button-auth-submit">
         {mutation.isPending ? '…' : t(isSignup ? 'Create account' : 'Sign in')}
