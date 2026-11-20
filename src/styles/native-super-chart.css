@@ -144,3 +144,5 @@
 .native-chart-stage { position:relative; }
 .pane-divider { position:absolute;left:0;right:0;z-index:2;height:0;border-top:2px solid rgba(232,238,240,.55);pointer-events:none; }
 :root:not(.dark) .pane-divider { border-top-color:rgba(40,56,59,.45); }
+.pane-note { position:absolute;left:0;right:64px;z-index:2;display:grid;place-items:center;pointer-events:none; }
+.pane-note span { padding:6px 12px;border:1px solid var(--lsar-border);border-radius:4px;background:color-mix(in srgb,var(--lsar-surface) 92%,transparent);color:var(--lsar-strong);font:11px var(--app-font-mono);text-align:center; }

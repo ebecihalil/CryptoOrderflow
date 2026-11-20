@@ -47,3 +47,9 @@ test('disabled bubbles do not render labels', () => {
     useMediaCoordinateSpace() { assert.fail('disabled renderer must not draw'); },
   });
 });
+
+test("chart draws a bubble only inside its candle's high-low range", async () => {
+  const { readFileSync } = await import("node:fs");
+  const chart = readFileSync(new URL("../src/components/native-super-chart.tsx", import.meta.url), "utf8");
+  assert.match(chart, /point\.nativePrice >= bar\.low \* 0\.999 && point\.nativePrice <= bar\.high \* 1\.001/);
+});

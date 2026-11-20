@@ -35,9 +35,6 @@ type Prefs = {
 
 /** Exchanges whose contracts, prices and charts the list supports today. */
 export const MARKET_LIST_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx', 'aster', 'hyperliquid', 'kucoin', 'htx'];
-/** Every exchange the site uses (home page), for the slot dropdowns; ones not chartable yet show (soon). */
-const ALL_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'kucoin', 'bingx', 'htx', 'kraken',
-  'hyperliquid', 'aster', 'lighter', 'paradex', 'deribit', 'coinex', 'bitmex', 'toobit'];
 // Defaults: the eight biggest chartable venues, last two slots empty (add Hyperliquid, Aster, HTX… if wanted).
 const DEFAULT_SLOTS: Array<string | null> = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx', 'kucoin', null, null];
 const EXCHANGE_NAMES: Record<string, string> = {
@@ -340,11 +337,10 @@ export function MarketList({ contracts, current, onSelect }: {
                   <select value={exchange ?? ''} aria-label={`Priority ${index + 1} exchange`} data-testid={`market-slot-select-${index + 1}`}
                     onChange={(event) => update({ slots: assignSlot(prefs.slots, index, event.target.value || null) })}>
                     <option value="">— Empty —</option>
-                    {ALL_EXCHANGES.map((option) => {
-                      const supported = MARKET_LIST_EXCHANGES.includes(option);
+                    {MARKET_LIST_EXCHANGES.map((option) => {
                       const at = prefs.slots.indexOf(option);
-                      return <option key={option} value={option} disabled={!supported}>
-                        {EXCHANGE_NAMES[option]}{!supported ? ' (soon)' : at >= 0 && at !== index ? ` (#${at + 1})` : ''}</option>;
+                      return <option key={option} value={option}>
+                        {EXCHANGE_NAMES[option]}{at >= 0 && at !== index ? ` (#${at + 1})` : ''}</option>;
                     })}
                   </select>
                 </span>
