@@ -28,7 +28,9 @@ type Prefs = {
   /** Exchange priority for "one row per coin" (first = preferred). */
   /** Ten priority slots (exchange id or empty); first = preferred. */
   slots: Array<string | null>; oneRow: boolean;
-  sort: { key: SortKey; dir: 1 | -1 }; move: Move; minMove: number; colorFilter: string;
+  sort: { key: SortKey; dir: 1 | -1 }; move: Move; minMove: number;
+  /** Colour sort: coloured rows first, grouped in palette order; the column sort applies inside each group. */
+  colorSort: boolean;
 };
 
 /** Exchanges whose contracts, prices and charts the list supports today. */
@@ -50,7 +52,7 @@ const COLOR_VALUE = Object.fromEntries(HIGHLIGHT_COLORS.map((color) => [color.id
 const KEY = 'cof:v1:market-list';
 const DEFAULTS: Prefs = {
   hidden: [], colors: {}, slots: DEFAULT_SLOTS, oneRow: true,
-  sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorFilter: 'all',
+  sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorSort: false,
 };
 const ROW_HEIGHT = 38;
 
@@ -99,7 +101,6 @@ export function MarketList({ contracts, current, onSelect }: {
   const [prefs, setPrefs] = useState<Prefs>(readPrefs);
   const [query, setQuery] = useState('');
   const [palette, setPalette] = useState<string | null>(null);
-  const [colorMenu, setColorMenu] = useState(false);
   // The exchange priority list opens together with Filters; its own button can fold it.
   // Filters fold away so the list gets the space; remembered in this browser.
   const [showFilters, setShowFilters] = useState(() => { try { return localStorage.getItem(`${KEY}:filters-open`) === '1'; } catch { return false; } });
@@ -196,7 +197,6 @@ export function MarketList({ contracts, current, onSelect }: {
       : contracts.filter((contract) => enabledOrder.includes(contract.exchange.toLowerCase()) && !isHidden(contract)).map((contract) => build(contract));
     const list = candidates.filter((row) => {
       if (wanted && !row.contract.exchangeAsset.toUpperCase().includes(wanted) && !row.contract.asset.toUpperCase().includes(wanted)) return false;
-      if (prefs.colorFilter !== 'all' && row.color !== prefs.colorFilter) return false;
       const move = row.changePercent;
       if (prefs.move === 'gainers' && !(move !== null && move > 0)) return false;
       if (prefs.move === 'losers' && !(move !== null && move < 0)) return false;
@@ -206,7 +206,9 @@ export function MarketList({ contracts, current, onSelect }: {
     const { key: sortKey, dir } = prefs.sort;
     const value = (row: Row) => sortKey === 'last' ? row.last : sortKey === 'change' ? row.change
       : sortKey === 'changePercent' ? row.changePercent : sortKey === 'volume' ? row.volume : null;
+    const colorRank = (row: Row) => { const index = HIGHLIGHT_COLORS.findIndex((color) => color.id === row.color); return index < 0 ? HIGHLIGHT_COLORS.length : index; };
     list.sort((a, b) => {
+      if (prefs.colorSort && colorRank(a) !== colorRank(b)) return colorRank(a) - colorRank(b);
       if (sortKey === 'symbol') return dir * (a.contract.exchangeAsset.localeCompare(b.contract.exchangeAsset) || a.contract.exchange.localeCompare(b.contract.exchange));
       const left = value(a), right = value(b);
       if (left === null && right === null) return a.contract.exchangeAsset.localeCompare(b.contract.exchangeAsset);
@@ -228,15 +230,13 @@ export function MarketList({ contracts, current, onSelect }: {
     return () => observer.disconnect();
   }, [user]);
   useEffect(() => {
-    if (!palette && !colorMenu) return;
+    if (!palette) return;
     const close = (event: PointerEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest?.('.market-list-palette, .market-list-flag')) setPalette(null);
-      if (!target.closest?.('.market-list-colfilter')) setColorMenu(false);
+      if (!(event.target as HTMLElement).closest?.('.market-list-palette, .market-list-flag')) setPalette(null);
     };
     document.addEventListener('pointerdown', close);
     return () => document.removeEventListener('pointerdown', close);
-  }, [palette, colorMenu]);
+  }, [palette]);
 
   const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 6);
   const visible = rows.slice(first, first + Math.ceil(viewport / ROW_HEIGHT) + 12);
@@ -250,8 +250,8 @@ export function MarketList({ contracts, current, onSelect }: {
     return next;
   });
   const filtered = prefs.hidden.length > 0 || prefs.move !== 'all'
-    || prefs.minMove > 0 || prefs.colorFilter !== 'all';
-  const activeFilters = [prefs.move !== 'all', prefs.minMove > 0, prefs.colorFilter !== 'all', prefs.hidden.length > 0, !prefs.oneRow].filter(Boolean).length;
+    || prefs.minMove > 0;
+  const activeFilters = [prefs.move !== 'all', prefs.minMove > 0, prefs.hidden.length > 0, !prefs.oneRow].filter(Boolean).length;
   const sortBy = (key: SortKey) => update({ sort: { key, dir: prefs.sort.key === key ? (prefs.sort.dir === 1 ? -1 : 1) : key === 'symbol' ? 1 : -1 } });
   const setColor = (key: string, color: string | null) => {
     const colors = { ...prefs.colors };
@@ -378,24 +378,11 @@ export function MarketList({ contracts, current, onSelect }: {
         </>}
       </div>
       <div className="market-list-columns">
-        {/* Colour filter, like a flag column: show only rows of one colour. */}
+        {/* Colour sort: coloured coins first (red, orange, yellow, green, blue, purple), then the column sort inside each colour. */}
         <div className="market-list-colfilter">
-          <button type="button" className={`market-list-colfilter-btn${prefs.colorFilter !== 'all' ? ' is-on' : ''}`}
-            style={prefs.colorFilter !== 'all' ? { background: COLOR_VALUE[prefs.colorFilter] } : undefined}
-            aria-expanded={colorMenu} aria-label="Show only one colour" title="Show only one colour"
-            onClick={() => setColorMenu(!colorMenu)} data-testid="market-color-filter" />
-          {colorMenu && (
-            <div className="market-list-colfilter-menu" role="menu" aria-label="Show colour">
-              <button type="button" role="menuitemradio" aria-checked={prefs.colorFilter === 'all'} className="market-list-colfilter-all"
-                onClick={() => { update({ colorFilter: 'all' }); setColorMenu(false); }}>All</button>
-              {HIGHLIGHT_COLORS.map((color) => (
-                <button type="button" key={color.id} role="menuitemradio" aria-checked={prefs.colorFilter === color.id}
-                  className={prefs.colorFilter === color.id ? 'is-on' : ''} style={{ background: color.value }}
-                  onClick={() => { update({ colorFilter: color.id }); setColorMenu(false); }}
-                  aria-label={`Show only ${color.id} coins`} data-testid={`market-filter-${color.id}`} />
-              ))}
-            </div>
-          )}
+          <button type="button" className={`market-list-colfilter-btn${prefs.colorSort ? ' is-on' : ''}`} aria-pressed={prefs.colorSort}
+            aria-label="Sort by colour" title={prefs.colorSort ? 'Sorted by colour (click to turn off)' : 'Sort by colour'}
+            onClick={() => update({ colorSort: !prefs.colorSort })} data-testid="market-color-sort" />
         </div>
         {header('symbol', 'Symbol', 'is-symbol')}{header('last', 'Last')}{header('change', 'Chg')}{header('changePercent', 'Chg%')}
       </div>

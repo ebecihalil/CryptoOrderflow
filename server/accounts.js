@@ -152,6 +152,21 @@ export function createAccountService({
       catch { throw new AccountError(409, "An account with this email already exists. Please sign in."); }
       return { user: { id, email }, ...startSession(id) };
     },
+    /**
+     * Sign in (or sign up) with an email Google has verified. New accounts get
+     * an unusable password ("google"), so only Google can sign them in until a
+     * password is added.
+     */
+    loginWithVerifiedEmail(emailInput) {
+      const email = normalizeEmail(emailInput);
+      let row = q.userByEmail.get(email);
+      if (!row) {
+        try { q.insertUser.run(email, "google", now()); } catch { /* created at the same moment */ }
+        row = q.userByEmail.get(email);
+      }
+      if (!row) throw new AccountError(500, "Account could not be created.");
+      return { user: { id: Number(row.id), email: row.email }, ...startSession(Number(row.id)) };
+    },
     async login(emailInput, passwordInput) {
       let email;
       try { email = normalizeEmail(emailInput); } catch { throw new AccountError(401, "Email or password is incorrect."); }

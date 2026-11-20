@@ -40,3 +40,7 @@
 .account-button:not(.signed-in):not(.placeholder) { border-color:#2563eb;background:#2563eb;color:#ffffff;font-weight:600; }
 .account-button:not(.signed-in):not(.placeholder):hover { border-color:#1d4ed8;background:#1d4ed8; }
 .account-button:not(.signed-in):not(.placeholder):focus-visible { outline:2px solid #93c5fd;outline-offset:2px; }
+.auth-google { display:flex;align-items:center;justify-content:center;gap:10px;height:42px;border:1px solid #dadce0;border-radius:4px;background:#fff;color:#1f1f1f;font:600 14px var(--app-font-sans);text-decoration:none; }
+.auth-google:hover { background:#f6f8fb; }
+.auth-divider { display:flex;align-items:center;gap:10px;color:var(--lsar-muted);font:10px var(--app-font-mono);text-transform:uppercase;letter-spacing:.08em; }
+.auth-divider::before,.auth-divider::after { content:"";flex:1;height:1px;background:var(--lsar-border); }
