@@ -122,7 +122,9 @@
 
 /* Full-screen chart: menus on top, chart in the middle, watchlist on the right. */
 .native-symbol-actions { display:flex;align-items:center;gap:6px; }
-.native-expand-button { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.native-fit-button.native-expand-button { border-color:#f97316;background:#f97316;color:#fff;font-weight:700; }
+.native-fit-button.native-expand-button:hover { border-color:#ea580c;background:#ea580c;color:#fff; }
+.native-fit-button.native-expand-button:focus-visible { outline:2px solid #fdba74;outline-offset:2px; }
 body.chart-fullscreen-open { overflow:hidden; }
 .super-charts-main.is-chart-expanded {
   position:fixed;inset:0;z-index:200;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto 1fr;align-items:center;gap:6px 10px;

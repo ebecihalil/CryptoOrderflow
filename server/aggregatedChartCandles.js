@@ -17,7 +17,7 @@ const safeError = error => Object.assign(new Error("Volume source is unavailable
 
 /** All provider calls go through the project's shared IP-wide request gates. */
 export function createAggregatedCandleService({
-  single = candleService, request = requestJson, gates = requestGates, now = Date.now,
+  single = candleService, request = requestJson, gates = requestGates, now = Date.now, venues = VOLUME_EXCHANGES,
 } = {}) {
   const catalogs = new Map(), catalogPending = new Map(), external = new Map(), externalPending = new Map();
   const aggregates = new Map(), aggregatePending = new Map();
@@ -160,7 +160,7 @@ export function createAggregatedCandleService({
         const price = await single.get(query);
         const identity = price.asset ? { asset: price.asset, priceDivisor: price.priceDivisor }
           : canonicalAsset(price.symbol.slice(0, -4));
-        const results = await Promise.all(VOLUME_EXCHANGES.map(async exchange => {
+        const results = await Promise.all(venues.map(async exchange => {
           let instrument = null;
           try {
             if (exchange === price.exchange) {
@@ -187,13 +187,13 @@ export function createAggregatedCandleService({
             matchedBars: included ? aligned.candles.length : 0, fetchedAt: source.fetchedAt };
         });
         const data = { ...price, candles: aligned.candles, volumeMode: "aggregated", volumeAsset: identity.asset,
-          volumeSources, matchedCandleCount: aligned.candles.length, partialVolume: aligned.exchanges.length < 4 };
+          volumeSources, matchedCandleCount: aligned.candles.length, partialVolume: aligned.exchanges.length < venues.length };
         aggregates.set(key, { data, expires: now() + 30_000 }); trim(aggregates);
         return data;
       } catch (cause) {
         const error = Object.assign(new Error(cause.status === 400 ? cause.message : "Aligned aggregate volume is currently unavailable. Please retry later."),
           { status: cause.status === 400 ? 400 : 503, retryAt: cause.retryAt ?? now() + 60_000 });
-        // Never reuse a former four-venue series as if it were a fresh partial one.
+        // Never reuse a former full-venue series as if it were a fresh partial one.
         if (cached?.data) {
           const data = { ...cached.data, stale: true, error: error.message, retryAt: error.retryAt };
           aggregates.set(key, { data, expires: error.retryAt }); return data;

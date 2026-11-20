@@ -26,7 +26,7 @@
 .market-list-colors > button:first-child { border:1px solid var(--lsar-border); }
 .market-list-swatch { width:16px;height:16px;border:2px solid transparent;border-radius:50%;cursor:pointer;opacity:.75; }
 .market-list-swatch.is-on { border-color:var(--lsar-ink);opacity:1; }
-.market-list-columns,.market-list-select { display:grid;grid-template-columns:minmax(0,1fr) 74px 66px 60px;align-items:center; }
+.market-list-columns,.market-list-select { display:grid;grid-template-columns:minmax(0,1fr) 66px 58px 56px;align-items:center; }
 .market-list-columns { padding:0 8px 0 22px;border-bottom:1px solid var(--lsar-border); }
 .market-list-col { display:inline-flex;align-items:center;justify-content:flex-end;gap:2px;height:28px;padding:0;border:0;background:transparent;color:var(--lsar-muted);font:10px var(--app-font-mono);cursor:pointer; }
 .market-list-col.is-symbol { justify-content:flex-start; }
@@ -44,7 +44,7 @@
 .market-list-symbol .coin-logo { width:18px;height:18px; }
 .market-list-symbol .coin-logo-fallback { font-size:7px; }
 .market-list-name { display:flex;flex-direction:column;min-width:0;line-height:1.1; }
-.market-list-name b { overflow:hidden;font:600 11.5px var(--app-font-mono);white-space:nowrap;text-overflow:ellipsis; }
+.market-list-name b { overflow:hidden;font:600 11px var(--app-font-mono);letter-spacing:-.02em;white-space:nowrap;text-overflow:ellipsis; }
 .market-list-name small { display:flex;align-items:center;gap:3px;color:var(--lsar-muted);font:8.5px var(--app-font-mono); }
 .market-list-name .exchange-logo { width:9px;height:9px;border-radius:2px; }
 .market-list-num { overflow:hidden;font:11px var(--app-font-mono);text-align:right;white-space:nowrap;text-overflow:clip; }
@@ -83,8 +83,23 @@
 .market-list-priority button:disabled { opacity:.3;cursor:default; }
 .market-list-priority button:hover:not(:disabled) { border-color:var(--lsar-accent);color:var(--lsar-accent); }
 .market-list-priority li.market-list-priority-note { display:block;height:auto;margin-top:3px;color:var(--lsar-muted);font:9px/1.45 var(--app-font-mono); }
-.market-list-more { flex:none;margin-left:auto;padding:1px 4px;border:1px solid var(--lsar-border);border-radius:3px;background:var(--lsar-page);color:var(--lsar-muted);font:8.5px var(--app-font-mono);cursor:pointer; }
+.market-list-more { flex:none;margin-left:auto;padding:0 3px;border:1px solid var(--lsar-border);border-radius:3px;background:var(--lsar-page);color:var(--lsar-muted);font:8.5px var(--app-font-mono);cursor:pointer; }
 .market-list-more:hover,.market-list-more.is-open { border-color:var(--lsar-accent);color:var(--lsar-accent); }
 .market-list-row.is-secondary { background:color-mix(in srgb,var(--lsar-page) 70%,transparent); }
 .market-list-row.is-secondary .market-list-symbol { padding-left:14px; }
 .market-list-row.is-secondary .market-list-name b { font-weight:400;color:var(--lsar-strong); }
+.market-list-slot { display:flex;align-items:center;gap:5px;min-width:0; }
+.market-list-slot select { flex:1;min-width:0;height:22px;padding:0 3px;border:1px solid var(--lsar-control-border);background:var(--lsar-surface);color:var(--lsar-ink);font:10px var(--app-font-mono);cursor:pointer; }
+.market-list-slot .exchange-logo,.market-list-slot-blank { flex:none;width:13px;height:13px;border-radius:3px; }
+.market-list-slot-blank { border:1px dashed var(--lsar-border); }
+.market-list-priority li.is-empty select { color:var(--lsar-muted); }
+.market-list-priority li.market-list-priority-actions { display:flex;height:auto;margin-top:3px; }
+.market-list-priority li.market-list-priority-actions button { width:auto;height:22px;padding:0 8px;font:9px var(--app-font-mono); }
+.market-list-searchrow { display:flex;gap:6px; }
+.market-list-searchrow .market-list-search { flex:1;min-width:0; }
+.market-list-filters-toggle { display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 8px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong);font:10px var(--app-font-mono);cursor:pointer;white-space:nowrap; }
+.market-list-filters-toggle:hover,.market-list-filters-toggle[aria-expanded="true"] { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.market-list-filters-toggle b { display:grid;place-items:center;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:#f97316;color:#fff;font:700 9px var(--app-font-mono); }
+.market-list-filters-toggle[aria-expanded="true"] .market-list-chevron { transform:rotate(180deg); }
+.market-list-head { padding:10px 12px 7px; }
+.market-list-tools { padding-bottom:8px; }

@@ -14,7 +14,7 @@ import { useCoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 
 type MenuId = 'technical' | 'orderflow' | null;
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage';
 const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'liquidity', label: 'Liquidity Zones' },
   { id: 'funding', label: 'Aggregated Funding Rate' },
@@ -22,6 +22,7 @@ const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'spot-cvd', label: 'Aggregated Spot CVD' },
   { id: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles' },
   { id: 'oi-driver', label: 'Aggregated Open Interest' },
+  { id: 'leverage', label: 'Leverage Estimate' },
 ];
 const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 

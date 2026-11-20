@@ -69,6 +69,7 @@ export const I18N_KEYS = [
   'Days & longer',
   'Data sources used by Crypto Order Flow',
   'EXCHANGES',
+  'We combine data from many exchanges so every coin is covered and the aggregated figures are as accurate as possible.',
 ];
 
 /** Languages offered in the header menu: code, native name, English name, flag (ISO country). */

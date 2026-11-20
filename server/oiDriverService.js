@@ -12,7 +12,11 @@ import { buildOiDriverCandles } from "./oiDriverMath.js";
 // supports 1m–1D; weekly/monthly/quarterly bars would be fabricated from too
 // little history and are refused with an explanation instead.
 export const OI_DRIVER_WINDOWS = { "1m": 60_000, "3m": 180_000, ...OI_WINDOWS };
-export const OI_DRIVER_EXCHANGES = ["binance", "bybit", "okx", "gate", "mexc", "bitget", "bingx", "kucoin", "kraken", "htx"];
+// Every perpetual venue whose open interest the site already collects (Open
+// Interest page). Bars only compare venues present in both bars, so a venue
+// with shorter history never creates a fake jump. CME is separate (futures).
+export const OI_DRIVER_EXCHANGES = ["binance", "bybit", "okx", "gate", "mexc", "bitget", "bingx", "kucoin", "kraken", "htx",
+  "hyperliquid", "aster", "deribit", "lighter", "paradex", "coinex", "bitmex"];
 const MAX_CANDLES = 1_500;
 
 function validateQuery(query, catalogue = marketContractService) {

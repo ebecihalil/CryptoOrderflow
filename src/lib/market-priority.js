@@ -29,3 +29,42 @@ export function groupByPriority(contracts, order, enabled, isHidden = () => fals
     return { primary: list[0], others: list.slice(1) };
   });
 }
+
+export const PRIORITY_SLOTS = 10;
+
+/**
+ * Ten priority slots, each an exchange id or null (empty). Unknown or
+ * unsupported exchanges and duplicates become empty. Older saves (an ordered
+ * list plus enabled exchanges) are converted.
+ */
+export function normalizeSlots(saved, supported, fallback, legacy) {
+  let source = Array.isArray(saved) ? saved
+    : legacy && Array.isArray(legacy.order) ? legacy.order.filter(exchange => !Array.isArray(legacy.exchanges) || legacy.exchanges.includes(exchange))
+    : fallback;
+  const seen = new Set();
+  const slots = Array.from({ length: PRIORITY_SLOTS }, (_, index) => {
+    const exchange = source[index];
+    if (typeof exchange !== "string" || !supported.includes(exchange) || seen.has(exchange)) return null;
+    seen.add(exchange);
+    return exchange;
+  });
+  return slots;
+}
+
+/** Put `exchange` in slot `index`; if it was in another slot, the two swap. */
+export function assignSlot(slots, index, exchange) {
+  const next = [...slots];
+  const previous = exchange ? next.indexOf(exchange) : -1;
+  if (previous >= 0 && previous !== index) next[previous] = next[index];
+  next[index] = exchange || null;
+  return next;
+}
+
+/** Swap slot `index` with its neighbour (step -1 up, +1 down). */
+export function moveSlot(slots, index, step) {
+  const target = index + step;
+  if (target < 0 || target >= slots.length) return slots;
+  const next = [...slots];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}

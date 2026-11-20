@@ -84,6 +84,6 @@ test("driver service rejects unverified contracts and assembles only supplied ex
   assert.equal(payload.candles[0].close, 10);
   assert.equal(payload.totals.oiCoin, 10);
   assert.equal(payload.totals.average20dVolumeCoin, null);
-  assert.equal(payload.sources.length, 10);
+  assert.equal(payload.sources.length, 17);
   assert.equal(cvdAnchor, "1d");
 });

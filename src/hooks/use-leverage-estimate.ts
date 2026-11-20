@@ -23,8 +23,9 @@ export type LeveragePayload = {
   settings: { lookback: number; volLen: number; buildWindow: number; minFlowPct: number };
 };
 
-export function useLeverageEstimate(asset: string, timeframe: LeverageTimeframe) {
+export function useLeverageEstimate(asset: string, timeframe: LeverageTimeframe, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['leverage-estimate', asset, timeframe],
     queryFn: async ({ signal }): Promise<LeveragePayload> => {
       const query = new URLSearchParams({ asset, timeframe });

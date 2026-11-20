@@ -41,6 +41,9 @@ type Props = {
   aggressiveBubblesEnabled: boolean;
   oiDriver: OiDriverPayload | null;
   oiDriverEnabled: boolean;
+  /** Leverage Estimate rows (time in ms); score 0–100. */
+  leverageRows?: Array<{ time: number; leverageScore: number | null }> | null;
+  leverageEnabled?: boolean;
   priceDivisor: number;
   /** Saved parameters for the popular-indicator registry, by indicator id. */
   extraSettings?: Record<string, Record<string, number>>;
@@ -92,7 +95,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, priceDivisor, extraSettings = {}, layerSettings = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, leverageRows = null, leverageEnabled = false, priceDivisor, extraSettings = {}, layerSettings = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -452,6 +455,18 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         return markers;
       }));
     }
+    const leveragePoints = (leverageRows ?? []).filter((row) => row.leverageScore !== null && Number.isFinite(row.leverageScore));
+    if (leverageEnabled && leveragePoints.length) {
+      const pane = nextPane();
+      const lev = pushSeries(chart.addSeries(LineSeries, {
+        color: '#b8862f', lineWidth: 2, priceLineVisible: false,
+        priceFormat: { type: 'custom', formatter: (value: number) => value.toFixed(0), minMove: 1 },
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+      }, pane));
+      lev.setData(leveragePoints.map((row) => ({ time: toTime(Math.floor(row.time / 1000)), value: row.leverageScore! })));
+      for (const [level, color] of [[80, '#c75a52'], [60, '#c4a05c'], [40, '#89928a']] as const)
+        lev.createPriceLine({ price: level, color: `${color}90`, lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+    }
     // Set proportions together after every pane exists. Sequential pixel-height
     // changes during add/remove can progressively squeeze sibling panes.
     const lowerPanes = [
@@ -464,6 +479,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       ...(perpetualCvdEnabled ? [{ key: 'perpetual-cvd', height: 142 }] : []),
       ...(spotCvdEnabled ? [{ key: 'spot-cvd', height: 142 }] : []),
       ...(oiDriverEnabled && oiDriver?.candles.length ? [{ key: 'oi-driver', height: 158 }] : []),
+      ...(leverageEnabled && leveragePoints.length ? [{ key: 'leverage', height: 120 }] : []),
     ];
     const priceHeight = Math.max(260, (mountRef.current?.clientHeight ?? 650) -
       lowerPanes.reduce((sum, pane) => sum + pane.height, 0) - 30);
@@ -539,7 +555,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
     };
     requestAnimationFrame(() => measureRef.current());
-  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled]);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled, leverageRows, leverageEnabled]);
 
   // ---- TradingView-style legends: name, inputs and value at the crosshair ----
   const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;
@@ -587,11 +603,18 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       if (key === 'perpetual-cvd') return [{ key: 'perpetual-cvd', label: 'Aggregated Perpetual CVD', params: (perpetualCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(perpetualCvd) }] }];
       if (key === 'spot-cvd') return [{ key: 'spot-cvd', label: 'Aggregated Spot CVD', params: (spotCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(spotCvd) }] }];
       if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6' }];
+      if (key === 'leverage') {
+        const row = (leverageRows ?? []).find((item) => Math.floor(item.time / 1000) === legendTime) ?? (leverageRows ?? []).at(-1);
+        const score = row?.leverageScore;
+        const regime = score === null || score === undefined ? '' : score >= 80 ? ' · extreme' : score >= 60 ? ' · elevated' : score >= 40 ? ' · normal' : ' · low';
+        return [{ key: 'leverage', label: 'Leverage Estimate', params: '0–100', color: '#b8862f',
+          values: [{ text: score === null || score === undefined ? '—' : `${score.toFixed(0)}${regime}`, color: '#b8862f' }] }];
+      }
       return [];
     };
     return paneLayout.map((pane) => ({ ...pane, rows: rowsFor(pane.key) })).filter((pane) => pane.rows.length);
   }, [paneLayout, legendTime, candles, studies, studyData, technicalSettings, extraData, extraSettings, liquidityEnabled, zones.length,
-    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, symbolLabel, timeframe]);
+    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, leverageRows, symbolLabel, timeframe]);
 
   return (
     <div className="native-chart-wrap">
