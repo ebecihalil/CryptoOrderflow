@@ -25,6 +25,15 @@ autocomplete. Native prices are independent of aggregate-volume availability.
 Funding/LSAR predictive search uses existing snapshots.
 See `docs/chart-workspace.md` for native candle adapters and request protections.
 
+Leverage Estimate (`/leverage-estimate`) combines per-venue OI/spot-turnover
+pressure, footprint-attributed OI build (taker buy/sell), and top-trader account
+and position ratios into a relative 0–100 score and long/short side bias. It is
+an estimate, not measured leverage. See `docs/leverage-estimate.md`.
+
+Binance refuses restricted regions (HTTP 451, e.g. US hosting). Spot data uses
+binance.vision; futures need a supported region or `BINANCE_RELAY_URL`
+(`scripts/binance-relay.js`). See `docs/binance-access.md`.
+
 Leave the home page area below the module navigation empty for now: the user intends to fill it with other information later, rather than adding content there ahead of that request.
 
 The current feature is a live Binance, Bybit, OKX, Gate.io, Bitget, and Toobit perpetual-futures screener for long-short account-ratio changes by timeframe.

@@ -9,6 +9,7 @@ export const MODULES: ModuleInfo[] = [
   { title: 'Long Short Account Ratio', mark: 'LS', path: '/long-short-account-ratio', description: 'OI-weighted account positioning across perpetual markets.' },
   { title: 'Funding Rate', mark: 'FR', path: '/funding-rate', description: 'Funding dynamics across perpetual venues.' },
   { title: 'Open Interest', mark: 'OI', path: '/open-interest', description: 'Open interest changes across markets.' },
+  { title: 'Leverage Estimate', mark: 'LE', path: '/leverage-estimate', description: 'Aggregated perp leverage from OI, top traders and footprint flow.' },
   { title: 'Liquidations', mark: 'LI', path: '/liquidations', description: 'Liquidation activity across perpetual markets.' },
   { title: 'CVD', mark: 'CV', path: '/cvd', description: 'Cumulative volume delta across markets.' },
   { title: 'Super Charts (Indicators)', mark: 'SC', path: '/super-charts', description: 'Charting tools and technical indicators.' },

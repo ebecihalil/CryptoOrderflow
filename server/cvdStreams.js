@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { requestJson, requestGates } from "./exchangeRequests.js";
 import { SPOT_URLS } from "./cvdMarkets.js";
 import { decodeTradeMessage, parseCvdTrades } from "./cvdTradeCodec.js";
+import { routeBinanceSocket, binanceGeoBlocks } from "./binanceAccess.js";
 
 const URLS = {
   binance: ["wss://stream.binance.com:9443/ws", "wss://fstream.binance.com/market/ws"],
@@ -62,6 +63,7 @@ export function parseLiquidation(exchange, message, instrument) {
 
 export function createCvdStreamFactory({
   request = requestJson, gates = requestGates, Socket = WebSocket, now = Date.now,
+  routeSocket = routeBinanceSocket, geoBlocks = binanceGeoBlocks,
   wait = delay => new Promise(resolve => setTimeout(resolve, delay)),
 } = {}) {
   const starts = new Map();
@@ -104,9 +106,15 @@ export function createCvdStreamFactory({
         // A different request can trip the shared exchange cooldown while a
         // stream is being prepared. Check immediately before opening a socket.
         if (gate?.isCoolingDown) throw gate.cooldownError();
-        const socket = new Socket(url, {
+        // Binance spot streams use data-stream.binance.vision; futures streams
+        // use the optional relay. Geo-blocked hosts wait for their pause.
+        const originalUrl = url;
+        if (exchange === "binance") geoBlocks.check(originalUrl);
+        const routed = exchange === "binance" ? routeSocket(url) : { url, headers: {} };
+        const headers = { ...routed.headers, ...(exchange === "gate" && market === "perpetual" ? { "X-Gate-Size-Decimal": "1" } : {}) };
+        const socket = new Socket(routed.url, {
           handshakeTimeout: 12_000, maxPayload: 4_000_000,
-          ...(exchange === "gate" && market === "perpetual" ? { headers: { "X-Gate-Size-Decimal": "1" } } : {}),
+          ...(Object.keys(headers).length ? { headers } : {}),
         });
         ws = socket;
         let receivedAt = now(), subscribedAt = 0, frameSequence = 0;
@@ -155,6 +163,9 @@ export function createCvdStreamFactory({
           } catch { onState("unavailable"); socket.close(); }
         });
         socket.on("unexpected-response", (_req, response) => {
+          if (exchange === "binance" && response.statusCode === 451) {
+            geoBlocks.mark(originalUrl); response.resume(); socket.terminate(); return;
+          }
           void gate?.inspect({ status: response.statusCode, headers: new Headers(
             Object.fromEntries(Object.entries(response.headers).filter(([,v]) => typeof v === "string"))) })
             .catch(() => {});
@@ -171,7 +182,8 @@ export function createCvdStreamFactory({
     let failures = 0, retryTimer;
     const retry = error => {
       clearTimeout(retryTimer);
-      const gateDeadline = Math.max(error?.retryAt ?? 0, gates[exchange]?.blockedUntil ?? 0);
+      const geoDeadline = exchange === "binance" ? geoBlocks.blockedUntil(URLS.binance[instrument.market === "spot" ? 0 : 1]) : 0;
+      const gateDeadline = Math.max(error?.retryAt ?? 0, gates[exchange]?.blockedUntil ?? 0, geoDeadline);
       const cooldownDelay = gateDeadline - now();
       // Sleep through an exchange ban instead of polling it every 30 seconds.
       // Recheck on wake because another in-flight response can extend the ban.

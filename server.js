@@ -6,7 +6,9 @@ import { aggregatedCandleService } from "./server/aggregatedChartCandles.js";
 import { fundingIndicatorService } from "./server/fundingIndicator.js";
 import { cvdIndicatorService } from "./server/cvdIndicator.js";
 import { chartWatchlistService } from "./server/chartWatchlist.js";
+import { leverageService } from "./server/leverageService.js";
 import { marketContractService } from "./server/marketContracts.js";
+import { binanceGeoBlocks, describeBinanceAccess } from "./server/binanceAccess.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -44,7 +46,8 @@ app.post("/api/chart/watchlist", watchMutation(req => chartWatchlistService.add(
 app.delete("/api/chart/watchlist/:asset", watchMutation(req => chartWatchlistService.remove(req.params.asset)));
 
 app.get("/api/healthz", (_req, res) => {
-  res.json({ status: "ok" });
+  // Exposes routing mode and any geo-blocked Binance hosts (no IPs or secrets).
+  res.json({ status: "ok", binance: { ...describeBinanceAccess(), geoBlocked: binanceGeoBlocks.status() } });
 });
 
 app.get("/api/market/contracts", (_req, res) => {
@@ -119,6 +122,13 @@ app.get("/api/indicators/open-interest-driver", (req, res) => {
   try { res.json(oiDriverService.get(req.query)); }
   catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
     ? error.message : "Aggregated OI indicator inputs are currently unavailable." }); }
+});
+
+app.get("/api/indicators/leverage", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(leverageService.get(req.query)); }
+  catch (error) { res.status([400, 503].includes(error.status) ? error.status : 503).json({ error: [400, 503].includes(error.status)
+    ? error.message : "Leverage estimate inputs are currently unavailable." }); }
 });
 
 app.get("/api/market/lsar", (req, res) => {

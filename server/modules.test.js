@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 test("home lists exactly the requested order-flow modules", () => {
     assert.deepEqual(HOME_MODULES.map(module => module.title), [
         "Long Short Account Ratio", "Funding Rate", "Open Interest",
-        "Super Charts (Indicators)",
+        "Leverage Estimate", "Super Charts (Indicators)",
     ]);
 });
 
@@ -44,7 +44,7 @@ test("account ratio is a direct module with no position ratio subsection", () =>
 
 test("each selected section has a two-letter mark and a unique local route", () => {
     const pages = MODULES;
-    assert.equal(new Set(pages.map(page => page.path)).size, 6);
+    assert.equal(new Set(pages.map(page => page.path)).size, 7);
     for (const page of pages) {
         assert.match(page.mark, /^[A-Z]{2}$/);
         assert.match(page.path, /^\/[a-z-]+$/);
