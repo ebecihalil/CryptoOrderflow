@@ -113,6 +113,11 @@ from the defaults.
 
 ## Market list
 
+Signed-out visitors see a locked panel with a blue Sign in button (it opens the
+normal Sign in page, which links to "Create a free account"). Once signed in,
+the list's colours, removed coins, filters and exchange priority are saved to
+the account (`GET/POST /api/me/prefs/market-list`) and follow you to any device.
+
 The right side of Super Charts lists every USDT perpetual on Binance, Bybit,
 OKX, Gate.io, Bitget, MEXC and BingX (the same coin on several exchanges is
 listed once per exchange) with last price, 24h change and 24h change %.

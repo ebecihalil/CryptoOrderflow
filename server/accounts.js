@@ -22,6 +22,9 @@ const scrypt = promisify(scryptCallback);
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 export const SESSION_TTL_MS = 30 * 86_400_000;
 export const WATCHLIST_MAX = 50;
+/** Per-account saved settings (e.g. the Super Charts market list). */
+export const PREF_KEYS = ["market-list"];
+export const PREF_MAX_BYTES = 16_000;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$/;
 const COIN = /^[A-Z0-9]{1,30}$/;
 
@@ -106,6 +109,13 @@ export function createAccountService({
       added_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, coin)
     );
+    CREATE TABLE IF NOT EXISTS user_prefs (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, key)
+    );
   `);
   const q = {
     userByEmail: db.prepare("SELECT id, email, password_hash FROM users WHERE email = ?"),
@@ -118,6 +128,9 @@ export function createAccountService({
     countWatch: db.prepare("SELECT COUNT(*) AS n FROM watchlist WHERE user_id = ?"),
     addWatch: db.prepare("INSERT OR IGNORE INTO watchlist (user_id, coin, added_at) VALUES (?, ?, ?)"),
     removeWatch: db.prepare("DELETE FROM watchlist WHERE user_id = ? AND coin = ?"),
+    getPref: db.prepare("SELECT value FROM user_prefs WHERE user_id = ? AND key = ?"),
+    setPref: db.prepare(`INSERT INTO user_prefs (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`),
   };
   q.purgeSessions.run(now());
 
@@ -173,6 +186,21 @@ export function createAccountService({
     removeWatch(userId, coinInput) {
       q.removeWatch.run(userId, normalizeCoin(coinInput));
       return this.watchlist(userId);
+    },
+    /** Saved settings object for one key, or null. */
+    getPref(userId, key) {
+      if (!PREF_KEYS.includes(key)) throw new AccountError(404, "Unknown setting.");
+      const row = q.getPref.get(userId, key);
+      if (!row) return null;
+      try { return JSON.parse(row.value); } catch { return null; }
+    },
+    setPref(userId, key, value) {
+      if (!PREF_KEYS.includes(key)) throw new AccountError(404, "Unknown setting.");
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new AccountError(400, "Settings must be an object.");
+      const json = JSON.stringify(value);
+      if (Buffer.byteLength(json) > PREF_MAX_BYTES) throw new AccountError(413, "Too many saved settings. Press Reset in the list and try again.");
+      q.setPref.run(userId, key, json, now());
+      return value;
     },
     purgeExpired() { q.purgeSessions.run(now()); },
     close() { db.close(); },
