@@ -6,7 +6,7 @@
 .section-watchlist-value.positive { color:var(--lsar-positive); }
 .section-watchlist-value.negative { color:var(--lsar-negative); }
 .section-watchlist-value.neutral { color:var(--lsar-strong); }
-.section-watchlist-locked strong { display:inline-flex;align-items:center;gap:6px; }
+.section-watchlist-locked strong { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
 @media (max-width:1100px) {
   .section-watchlist-layout { grid-template-columns:minmax(0,1fr); }
   .section-watchlist { position:static;max-height:none; }

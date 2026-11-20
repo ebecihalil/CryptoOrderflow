@@ -12,10 +12,10 @@ export const MODULES: ModuleInfo[] = [
   { title: 'Top Trader Long Short Account Ratio', mark: 'TT', path: '/top-trader-long-short-account-ratio', description: 'OI-weighted positioning of top traders on Binance, OKX and Gate.io.' },
   { title: 'Funding Rate', mark: 'FR', path: '/funding-rate', description: 'Funding dynamics across perpetual venues.' },
   { title: 'Open Interest', mark: 'OI', path: '/open-interest', description: 'Open interest changes across markets.' },
-  { title: 'Leverage Estimate', mark: 'LE', path: '/leverage-estimate', description: 'Aggregated perp leverage from OI, top traders and footprint flow.' },
+  { title: 'Leverage Estimate', mark: 'LE', path: '/leverage-estimate', description: 'Estimated average leverage across perpetual markets.' },
   { title: 'Liquidations', mark: 'LI', path: '/liquidations', description: 'Liquidation activity across perpetual markets.' },
   { title: 'CVD', mark: 'CV', path: '/cvd', description: 'Cumulative volume delta across markets.' },
-  { title: 'Super Charts (Indicators)', mark: 'SC', path: '/super-charts', description: 'Charting tools and technical indicators.' },
+  { title: 'Super Charts (Indicators)', mark: 'SC', path: '/super-charts', description: 'Charting tools, orderflow indicators and technical indicators.' },
 ];
 
 const LSAR_PATHS = ['/long-short-account-ratio', '/top-trader-long-short-account-ratio'];
