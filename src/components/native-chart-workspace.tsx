@@ -30,7 +30,9 @@ type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicat
   /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
   toolbarStart?: ReactNode; toolbarMenus?: ReactNode;
   /** Chart cell in a multi-chart layout: each cell keeps its own timeframe. */
-  cellId?: number };
+  cellId?: number;
+  /** Which chart this is in the layout (for crosshair/time sync) and what is synced. */
+  syncId?: number; sync?: { crosshair: boolean; time: boolean; range: boolean } };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 
 const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx', 'aster', 'hyperliquid', 'kucoin', 'htx']);
@@ -74,7 +76,7 @@ export function NativeChartWorkspace(props: Props) {
   }
   return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
     contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer}
-    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} cellId={props.cellId ?? 0} />;
+    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} cellId={props.cellId ?? 0} syncId={props.syncId ?? 0} sync={props.sync} />;
 }
 
 const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: false, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
@@ -113,7 +115,7 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus, cellId = 0 }: Props & { contract: MarketContract }) {
+function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus, cellId = 0, syncId = 0, sync }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
   const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>(cellId ? `timeframe:${cellId}` : 'timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
@@ -610,7 +612,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
-             oiDriver={hasOiDriver ? oiDriver.payload : null} oiDriverEnabled={indicators.includes('oi-driver')} oiStateMode={oiDriverSettings.stateColors} priceDivisor={contract.priceDivisor || 1}
+             oiDriver={hasOiDriver ? oiDriver.payload : null} oiDriverEnabled={indicators.includes('oi-driver')} oiStateMode={oiDriverSettings.stateColors} syncId={syncId} sync={sync} priceDivisor={contract.priceDivisor || 1}
              leverageRows={leverageRows} leverageEnabled={indicators.includes('leverage')} lsarPanes={lsarPanes} paneNotes={paneNotes} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>

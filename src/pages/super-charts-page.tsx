@@ -3,7 +3,7 @@ import { Check, ChevronDown, RotateCw } from 'lucide-react';
 import { Link } from 'wouter';
 import { AppHeader } from '@/components/app-header';
 import { MarketList } from '@/components/market-list';
-import { LayoutPicker } from '@/components/layout-picker';
+import { DEFAULT_LAYOUT_SYNC, LayoutPicker, type LayoutSync } from '@/components/layout-picker';
 import { CELL_AREAS, CHART_LAYOUTS, gridStyle, layoutById } from '@/lib/chart-layouts';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
@@ -127,9 +127,11 @@ function SuperChartsWorkspace() {
   const [cellKeys, setCellKeys] = useChartSetting<Array<{ exchange: string; symbol: string } | null>>('cellContracts', [],
     (value) => Array.isArray(value));
   const [activeCell, setActiveCell] = useState(0);
+  const [layoutSync, setLayoutSync] = useChartSetting<LayoutSync>('layoutSync', DEFAULT_LAYOUT_SYNC,
+    (value) => !!value && typeof value === 'object' && Object.keys(DEFAULT_LAYOUT_SYNC).every((key) => typeof (value as Record<string, unknown>)[key] === 'boolean'));
   const layout = layoutById(layoutId);
   const cellContract = (index: number): MarketContract | null => {
-    if (index === 0) return market;
+    if (index === 0 || layoutSync.symbol) return market; // Symbol sync: every chart shows the same coin
     const saved = cellKeys[index];
     const found = saved && contracts.find((contract) => contract.exchange === saved.exchange && contract.symbol === saved.symbol);
     if (found) return found;
@@ -138,7 +140,7 @@ function SuperChartsWorkspace() {
     return contracts.find((contract) => contract.exchange.toLowerCase() === 'binance' && contract.asset === fallback) ?? contracts[index] ?? null;
   };
   const selectWatchlistContract = (contract: MarketContract) => {
-    if (activeCell > 0 && activeCell < layout.count) {
+    if (activeCell > 0 && activeCell < layout.count && !layoutSync.symbol) {
       setCellKeys((current) => { const next = [...current]; next[activeCell] = { exchange: contract.exchange, symbol: contract.symbol }; return next; });
       setMarketDraft(contract.label);
       return;
@@ -183,14 +185,17 @@ function SuperChartsWorkspace() {
               <div key={area} className={`sc-cell${index === activeCell ? ' is-active' : ''}`} style={{ gridArea: area }}
                 onPointerDownCapture={() => { if (index !== activeCell) { setActiveCell(index); const contract = cellContract(index); if (contract) setMarketDraft(contract.label); } }}
                 data-testid={`chart-cell-${index}`}>
-              <NativeChartWorkspace contract={cellContract(index)} studies={studies} indicators={indicators} cellId={index}
+              <NativeChartWorkspace contract={cellContract(index)} studies={studies} indicators={indicators}
+                cellId={layoutSync.interval ? 0 : index} syncId={index}
+                sync={layout.count > 1 ? { crosshair: layoutSync.crosshair, time: layoutSync.time, range: layoutSync.range } : undefined}
                 toolbarStart={index !== activeCell ? undefined : <div className="sc-symbol">
                   <Link href="/" className="sc-home" aria-label="Crypto Order Flow home" title="Home">CO</Link>
                   <MarketAutocomplete value={marketDraft} onChange={selectMarket} options={options}
                     label="Search perpetual contracts" placeholder={catalogue.loading ? 'Loading…' : 'Symbol search'}
                     className="super-chart-contract-combo sc-symbol-search" inputClassName="super-chart-contract-input"
                     autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
-                  <LayoutPicker value={layout.id} onChange={(id) => { setLayoutId(id); if (activeCell >= layoutById(id).count) setActiveCell(0); }} />
+                  <LayoutPicker value={layout.id} onChange={(id) => { setLayoutId(id); if (activeCell >= layoutById(id).count) setActiveCell(0); }}
+                  sync={layoutSync} onSyncChange={setLayoutSync} />
                 </div>}
                 toolbarMenus={index !== activeCell ? undefined : 
             <div className="super-chart-menu-bar" ref={menuRef}>

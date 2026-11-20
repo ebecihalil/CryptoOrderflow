@@ -45,6 +45,9 @@ type Props = {
   oiDriverEnabled: boolean;
   /** Driver mode: state colours + spike/pullback alert labels (off = classic aggregated OI). */
   oiStateMode?: boolean;
+  /** Multi-chart sync: this chart's id and which things follow the other charts. */
+  syncId?: number;
+  sync?: { crosshair: boolean; time: boolean; range: boolean };
   /** Leverage Estimate rows (time in ms); score 0–100. */
   /** Perp Leverage Estimation rows (time in seconds; 100 = normal for this coin). */
   leverageRows?: Array<{ time: number; avg: number | null; long: number | null; short: number | null }> | null;
@@ -109,7 +112,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, oiStateMode = false, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, oiStateMode = false, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -121,6 +124,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const animationFrameRef = useRef<number | null>(null);
   const restoringRef = useRef(true);
   const savedViewRef = useRef<SavedView | null>(readChartPreference(viewKey, null, validChartView));
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+  const syncIdRef = useRef(syncId);
+  syncIdRef.current = syncId;
   const captureViewRef = useRef<() => void>(() => {});
   const [hover, setHover] = useState<Candle | null>(null);
   // Top offset of every pane, for the TradingView-style legends.
@@ -284,6 +291,51 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       setBubbleHover(point ? bundleRef.current?.bubblePrimitive?.findBubbleAt(point.x, point.y) ?? null : null);
     };
     chart.subscribeCrosshairMove(crosshairHandler);
+    // ---- Multi-chart sync (crosshair, time, date range) between charts in the layout ----
+    let applying = false;
+    const release = () => requestAnimationFrame(() => { applying = false; });
+    const broadcast = (detail: Record<string, unknown>) => window.dispatchEvent(new CustomEvent('sc-sync', { detail: { source: syncIdRef.current, ...detail } }));
+    const syncCrosshair = (param: Parameters<IChartApi['subscribeCrosshairMove']>[0] extends (arg: infer A) => void ? A : never) => {
+      if (applying || !syncRef.current?.crosshair) return;
+      broadcast({ type: 'crosshair', time: typeof param.time === 'number' ? param.time : null });
+    };
+    chart.subscribeCrosshairMove(syncCrosshair);
+    const syncRange = () => {
+      if (applying || !(syncRef.current?.range || syncRef.current?.time)) return;
+      const range = chart.timeScale().getVisibleRange();
+      if (range) broadcast({ type: 'range', from: range.from, to: range.to });
+    };
+    chart.timeScale().subscribeVisibleTimeRangeChange(syncRange);
+    const onSync = (event: Event) => {
+      const detail = (event as CustomEvent).detail ?? {};
+      if (detail.source === syncIdRef.current || !syncRef.current) return;
+      const bars = candleDataRef.current;
+      if (detail.type === 'crosshair' && syncRef.current.crosshair) {
+        applying = true;
+        if (detail.time === null || !bars.length) { chart.clearCrosshairPosition(); setHover(null); }
+        else {
+          // Same moment on this chart: the candle that contains it (timeframes can differ).
+          let bar = bars[0];
+          for (const item of bars) { if (item.time <= detail.time) bar = item; else break; }
+          chart.setCrosshairPosition(bar.close, bar.time as UTCTimestamp, candleSeries);
+          setHover(bar);
+        }
+        release();
+      } else if (detail.type === 'range' && (syncRef.current.range || syncRef.current.time)) {
+        applying = true;
+        try {
+          if (syncRef.current.range) chart.timeScale().setVisibleRange({ from: detail.from, to: detail.to });
+          else {
+            // Time: keep this chart's zoom, scroll so it ends at the same moment.
+            const own = chart.timeScale().getVisibleRange();
+            const width = own ? Number(own.to) - Number(own.from) : Number(detail.to) - Number(detail.from);
+            chart.timeScale().setVisibleRange({ from: (Number(detail.to) - width) as UTCTimestamp, to: detail.to });
+          }
+        } catch { /* range outside this chart's data */ }
+        release();
+      }
+    };
+    window.addEventListener('sc-sync', onSync);
     const fitHandler = () => chart.timeScale().fitContent();
     window.addEventListener('native-chart-fit', fitHandler);
     return () => {
@@ -297,6 +349,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       observer.disconnect();
       resize.disconnect();
       chart.unsubscribeCrosshairMove(crosshairHandler);
+      chart.unsubscribeCrosshairMove(syncCrosshair);
+      chart.timeScale().unsubscribeVisibleTimeRangeChange(syncRange);
+      window.removeEventListener('sc-sync', onSync);
       window.removeEventListener('native-chart-fit', fitHandler);
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
       const activeBundle = bundleRef.current;

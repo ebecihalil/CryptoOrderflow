@@ -60,17 +60,26 @@ export function useLiquidityCandles(
     }
     const load = async (initial: boolean) => {
       controller = new AbortController();
+      let failed = false;
       if (initial) setState((previous) => ({ ...previous, loading: true, error: null }));
       try {
         const query = new URLSearchParams({ exchange, symbol, timeframe, volumeMode });
         const response = await fetch(`/api/market/candles?${query.toString()}`, { signal: controller.signal });
-        const body = await response.json() as Partial<CandleResponse> & { error?: string };
+        // An empty or non-JSON reply (e.g. the proxy's 502 while the server restarts)
+        // gets a clear message instead of a JSON parse error.
+        const text = await response.text();
+        let body: Partial<CandleResponse> & { error?: string };
+        try { body = text ? JSON.parse(text) : {}; } catch { body = {}; }
+        if (!text || (!body.candles && !body.error)) {
+          throw new Error(response.ok ? 'Server sent an empty reply. Retrying…' : `Server not responding (${response.status}). Retrying…`);
+        }
         if (!response.ok) throw new Error(body.error || `Market data request failed (${response.status})`);
         if (!Array.isArray(body.candles) || typeof body.fetchedAt !== 'string') throw new Error('Market data response was incomplete.');
         if (!active) return;
         setState({ payload: body as CandleResponse, error: body.error ?? null, loading: false });
       } catch (error) {
         if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        failed = true;
         setState((previous) => ({
           ...previous,
           payload: previous.payload ? { ...previous.payload, stale: true } : null,
@@ -81,7 +90,7 @@ export function useLiquidityCandles(
         // Do not cancel a slow, rate-gated multi-venue load every 30 seconds.
         // Seconds candles come from the server's own trade recorder (no exchange
         // requests), so they refresh every 2 seconds.
-        if (active) timer = window.setTimeout(() => void load(false), /s$/.test(timeframe) ? 2_000 : 30_000);
+        if (active) timer = window.setTimeout(() => void load(false), /s$/.test(timeframe) ? 2_000 : failed ? 5_000 : 30_000);
       }
     };
 
