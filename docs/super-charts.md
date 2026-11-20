@@ -69,3 +69,15 @@ Overlays draw on the price pane (Ichimoku/Keltner/Donchian fills via
 levels. Parameters are editable under Study parameters and saved per coin.
 Volume-based studies use the selected exchange's candle volume. Values can
 differ slightly from other platforms when history depth or seeding differs.
+
+## Timeframes
+
+1m, 3m, 5m, 15m, 30m, 1h, 4h, 1D, 1W, 1M, 3M (`server/timeframes.js`, all UTC;
+weeks start Monday, months/quarters on the 1st). Native exchange candles are
+used where documented (Binance/Bybit/OKX/Bitget/BingX 1m–1M, OKX 3M); other
+frames are built from smaller native candles (Gate/MEXC 3m from 1m, Gate/MEXC/
+BingX 1W/1M from 1D, 3M from 1M), dropping an incomplete first bucket.
+Technical studies, Liquidity Zones, aggregated volume, CVD, aggressive bubbles
+and funding use the same buckets. CVD/bubbles come from recorded trades (up to
+14 days), so 1W/1M/3M show only the recorded part. Aggregated OI supports
+1m–1D; weekly and longer frames show an explanation instead of thin bars.

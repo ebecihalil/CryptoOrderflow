@@ -9,6 +9,7 @@ import { calculateTechnicalIndicators, type TechnicalSettings } from '@/lib/tech
 import type { ChartStudyId } from '@/lib/supercharts';
 import { computeExtraIndicator, extraIndicator, type ExtraResult } from '@/lib/extra-indicators';
 import { BandFillPrimitive } from '@/components/band-fill-primitive';
+import { TIMEFRAME_LABELS } from '../../server/timeframes.js';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
@@ -508,7 +509,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   return (
     <div className="native-chart-wrap">
       <div className="native-chart-readout" aria-live="polite">
-        <span>{timeframe} · UTC</span>
+        <span>{TIMEFRAME_LABELS[timeframe] ?? timeframe} · UTC</span>
         {hover ? <><b>O {hover.open.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>H {hover.high.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <b>L {hover.low.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>C {hover.close.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <span>V {volumeByTime.has(hover.time) ? volumeByTime.get(hover.time)!.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span></> : <span>OHLC · move pointer over a candle</span>}

@@ -2,9 +2,15 @@ import { candleService, parseCandles, validateCandleQuery } from "./chartCandles
 import { requestJson, requestGates } from "./exchangeRequests.js";
 import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
-import { aggregateCandleVolumes, CANDLE_SECONDS, VOLUME_EXCHANGES, parseGateVolumeRows, parseOkxVolumeRows } from "./candleVolumeMath.js";
+import { aggregateCandleVolumes, VOLUME_EXCHANGES, parseGateVolumeRows, parseOkxVolumeRows } from "./candleVolumeMath.js";
+import { derivedFrom } from "./chartCandles.js";
+import { okxBars } from "./venueCandles.js";
+import { aggregateCandles, bucketStart, isCalendarTimeframe, timeframeSeconds } from "./timeframes.js";
 
-const okxBars = { "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "24h": "1Dutc" };
+// Fixed-length frames step by their length (unchanged behaviour); calendar
+// months/quarters step to the previous calendar bucket.
+const previousBucket = (timeframe, startMs) => isCalendarTimeframe(timeframe)
+  ? bucketStart(timeframe, startMs / 1000 - 1) * 1000 : startMs - timeframeSeconds(timeframe) * 1000;
 const trim = map => { while (map.size > 100) map.delete(map.keys().next().value); };
 const safeError = error => Object.assign(new Error("Volume source is unavailable; requests are paused before retrying."),
   { retryAt: error.retryAt, status: 503 });
@@ -80,7 +86,12 @@ export function createAggregatedCandleService({
     const task = (async () => {
       try {
         let candles;
-        if (exchange === "gate") {
+        const baseTimeframe = derivedFrom(exchange, timeframe);
+        if (baseTimeframe) {
+          // Same derivation as the single-venue candles (e.g. Gate 3m from 1m).
+          const base = await externalCandles(exchange, instrument, baseTimeframe);
+          candles = aggregateCandles(base.candles, timeframe, now());
+        } else if (exchange === "gate") {
           const body = await request(`https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${encodeURIComponent(instrument.symbol)}&interval=${timeframe === "24h" ? "1d" : timeframe}&limit=1000&timezone=utc0`);
           candles = parseCandles("binance", parseGateVolumeRows(body, instrument.contractSize), timeframe, now());
         } else {
@@ -94,7 +105,7 @@ export function createAggregatedCandleService({
           // disconnected old pages merely because their combined count is large.
           const contiguous = new Map();
           for (let ts = Math.max(...merged.keys()); merged.has(ts) && contiguous.size < 1000;
-            ts -= CANDLE_SECONDS[timeframe] * 1000) contiguous.set(ts, merged.get(ts));
+            ts = previousBucket(timeframe, ts)) contiguous.set(ts, merged.get(ts));
           merged = contiguous;
           // Backfill once, then reuse older bars and fetch only the newest page.
           for (let page = 0; merged.size < 1000 && page < 4; page++) {

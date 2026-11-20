@@ -1,4 +1,5 @@
 import { CVD_FRAMES } from "./cvdMath.js";
+import { bucketStart } from "./timeframes.js";
 
 export const BUBBLE_PRICE_STEP = 1.0005; // 0.05% logarithmic price bands
 export function validateAggressiveBubblesQuery(query) {
@@ -56,7 +57,7 @@ export function createAggressiveBubbleLedger({
     let first = Infinity, last = -Infinity;
     for (const cell of cells.values()) {
       first = Math.min(first, cell.first); last = Math.max(last, cell.last);
-      const time = Math.floor(cell.minute / step) * step;
+      const time = bucketStart(timeframe, cell.minute);
       const id = `${market}:${time}:${cell.band}:${cell.side}`;
       if (!combined.has(id)) combined.set(id, { id, market, side: cell.side, time,
         value: 0, quantity: 0, tradeCount: 0, sources: new Set() });

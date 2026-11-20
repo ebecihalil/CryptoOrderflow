@@ -1,10 +1,12 @@
 export const VOLUME_EXCHANGES = ["binance", "okx", "gate", "bybit"];
-export const CANDLE_SECONDS = { "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400 };
+import { CHART_TIMEFRAMES, timeframeSeconds } from "./timeframes.js";
+// Nominal candle lengths (calendar months/quarters use their maximum length).
+export const CANDLE_SECONDS = Object.fromEntries(CHART_TIMEFRAMES.map(tf => [tf, timeframeSeconds(tf)]));
 
 /** Exact timestamps, one fixed set of venues, underlying-coin units throughout. */
 export function aggregateCandleVolumes(price, sources, timeframe) {
   if (!price.candles.length) throw new Error("No price candles to align.");
-  const seconds = CANDLE_SECONDS[timeframe];
+  const seconds = timeframeSeconds(timeframe);
   const latest = price.candles.at(-1).time;
   const eligible = sources.filter(source => !source.stale && source.candles?.length >= 50 &&
     latest - source.candles.at(-1).time <= seconds);

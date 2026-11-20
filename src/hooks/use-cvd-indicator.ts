@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type CvdMarket = 'spot' | 'perpetual';
 export type CvdAnchor = '1d' | '1w' | '1m' | '3m' | '6m' | '1y';
-export type CvdTimeframe = '5m' | '15m' | '30m' | '1h' | '4h' | '24h';
+export type CvdTimeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '24h' | '1w' | '1mo' | '3mo';
 export type CvdCandle = {
   time: number; open: number; high: number; low: number; close: number;
   buyValue: number; sellValue: number; trades: number; sourceCount: number;

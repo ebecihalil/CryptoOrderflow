@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Candle } from '@/lib/liquidity-zones';
 
 export type LiquidityExchange = 'binance' | 'gate' | 'okx' | 'bybit' | 'mexc' | 'bitget' | 'bingx';
-export type LiquidityTimeframe = '5m' | '15m' | '30m' | '1h' | '4h' | '24h';
+export type LiquidityTimeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '24h' | '1w' | '1mo' | '3mo';
 export type LiquidityVolumeMode = 'aggregated' | 'single';
 export type LiquidityVolumeSource = {
   exchange: 'binance' | 'okx' | 'gate' | 'bybit';

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RefreshCw, RotateCw } from 'lucide-react';
 import { NativeSuperChart } from '@/components/native-super-chart';
+import { CHART_TIMEFRAMES, TIMEFRAME_LABELS, nextBucket } from '../../server/timeframes.js';
 import { extraIndicator, extraParams } from '@/lib/extra-indicators';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { useLiquidityCandles, type LiquidityExchange, type LiquidityTimeframe, type LiquidityVolumeMode } from '@/hooks/use-liquidity-candles';
@@ -23,10 +24,9 @@ import '@/styles/native-super-chart.css';
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[] };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
-const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = [
-  { value: '5m', label: '5m' }, { value: '15m', label: '15m' }, { value: '30m', label: '30m' },
-  { value: '1h', label: '1h' }, { value: '4h', label: '4h' }, { value: '24h', label: '1D' },
-];
+// 1m … 3M. Weekly/monthly/quarterly buckets are calendar-aligned (UTC).
+const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = (CHART_TIMEFRAMES as LiquidityTimeframe[])
+  .map((value) => ({ value, label: TIMEFRAME_LABELS[value] }));
 const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 const DEFAULT_LIQUIDITY_SETTINGS: LiquiditySettings = { backBars: 300, volMult: 1.2 };
 const DEFAULT_ZONE_COLORS: ThemeColors = { resistance: '#ff0000', support: '#008000', inside: '#808080', transparency: 35 };
@@ -51,14 +51,10 @@ function fmtOi(value: number | null) {
   if (value >= 1_000) return `OI $${(value / 1_000).toFixed(0)}K`;
   return `OI $${value.toFixed(0)}`;
 }
-function timeframeSeconds(timeframe: LiquidityTimeframe) {
-  return ({ '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '4h': 14400, '24h': 86400 } as const)[timeframe];
-}
 function contiguousTail(candles: Candle[], timeframe: LiquidityTimeframe) {
   if (candles.length < 2) return candles;
-  const step = timeframeSeconds(timeframe);
   let start = candles.length - 1;
-  while (start > 0 && candles[start].time - candles[start - 1].time === step) start--;
+  while (start > 0 && nextBucket(timeframe, candles[start - 1].time) === candles[start].time) start--;
   return candles.slice(start);
 }
 

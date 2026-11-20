@@ -1,9 +1,12 @@
 import { parseGateVolumeRows } from "./candleVolumeMath.js";
 
-const durations = { "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400 };
-const okxBars = { "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "24h": "1Dutc" };
+// Native intervals only; other timeframes are built in chartCandles.derivedFrom.
+const durations = { "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400 };
+export const okxBars = { "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1H", "4h": "4H", "24h": "1Dutc",
+  "1w": "1Wutc", "1mo": "1Mutc", "3mo": "3Mutc" };
 const bitgetBars = { ...okxBars };
-const mexcBars = { "5m": "Min5", "15m": "Min15", "30m": "Min30", "1h": "Min60", "4h": "Hour4", "24h": "Day1" };
+const mexcBars = { "1m": "Min1", "5m": "Min5", "15m": "Min15", "30m": "Min30", "1h": "Min60", "4h": "Hour4", "24h": "Day1" };
+const bingxBars = { "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "4h", "24h": "1d" };
 
 /** Return Binance-shaped OHLCV rows, with volume in this native base asset. */
 export function parseVenueCandles(exchange, body, contract) {
@@ -44,7 +47,7 @@ export async function fetchVenueCandles(request, exchange, contract, timeframe, 
   else if (exchange === "gate") url = `https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${symbol}&interval=${timeframe === "24h" ? "1d" : timeframe}&limit=1000`;
   else if (exchange === "bitget") url = `https://api.bitget.com/api/v2/mix/market/candles?symbol=${symbol}&productType=USDT-FUTURES&granularity=${bitgetBars[timeframe]}&limit=1000`;
   else if (exchange === "mexc") url = `https://contract.mexc.com/api/v1/contract/kline/${symbol}?interval=${mexcBars[timeframe]}&start=${Math.floor(now / 1000) - 1000 * durations[timeframe]}&end=${Math.floor(now / 1000)}`;
-  else if (exchange === "bingx") url = `https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=${symbol}&interval=${timeframe === "24h" ? "1d" : timeframe}&limit=1000`;
+  else if (exchange === "bingx") url = `https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=${symbol}&interval=${bingxBars[timeframe]}&limit=1000`;
   else throw new Error("Unsupported candle exchange.");
   return parseVenueCandles(exchange, await request(url), contract);
 }
