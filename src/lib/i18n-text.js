@@ -66,7 +66,9 @@ Daha fazla
 Saniye
 Dakika
 Saat
-Gün ve üzeri`,
+Gün ve üzeri
+Crypto Order Flow tarafından kullanılan veri kaynakları
+BORSA`,
 
   hi: `मार्केट फ़ीड
 API उपलब्ध नहीं
@@ -132,7 +134,9 @@ Super Charts (इंडिकेटर्स)
 सेकंड
 मिनट
 घंटे
-दिन और अधिक`,
+दिन और अधिक
+Crypto Order Flow द्वारा उपयोग किए गए डेटा स्रोत
+एक्सचेंज`,
 
   ru: `Рыночный поток
 API недоступен
@@ -198,7 +202,9 @@ Super Charts (индикаторы)
 Секунды
 Минуты
 Часы
-Дни и больше`,
+Дни и больше
+Источники данных Crypto Order Flow
+БИРЖ`,
 
   el: `Ροή αγοράς
 Το API δεν είναι διαθέσιμο
@@ -264,7 +270,9 @@ Email
 Δευτερόλεπτα
 Λεπτά
 Ώρες
-Ημέρες και άνω`,
+Ημέρες και άνω
+Πηγές δεδομένων του Crypto Order Flow
+ΑΝΤΑΛΛΑΚΤΗΡΙΑ`,
 
   zh: `市场数据流
 API 无法访问
@@ -330,7 +338,9 @@ Super Charts（指标）
 秒
 分钟
 小时
-日及以上`,
+日及以上
+Crypto Order Flow 使用的数据来源
+家交易所`,
 
   es: `Flujo de mercado
 API no disponible
@@ -396,7 +406,9 @@ Más
 Segundos
 Minutos
 Horas
-Días y más`,
+Días y más
+Fuentes de datos usadas por Crypto Order Flow
+EXCHANGES`,
 
   pt: `Feed de mercado
 API indisponível
@@ -462,7 +474,9 @@ Mais
 Segundos
 Minutos
 Horas
-Dias e mais`,
+Dias e mais
+Fontes de dados usadas pelo Crypto Order Flow
+CORRETORAS`,
 
   fr: `Flux de marché
 API injoignable
@@ -528,7 +542,9 @@ Plus
 Secondes
 Minutes
 Heures
-Jours et plus`,
+Jours et plus
+Sources de données utilisées par Crypto Order Flow
+PLATEFORMES`,
 
   de: `Marktfeed
 API nicht erreichbar
@@ -594,7 +610,9 @@ Mehr
 Sekunden
 Minuten
 Stunden
-Tage und länger`,
+Tage und länger
+Von Crypto Order Flow genutzte Datenquellen
+BÖRSEN`,
 
   it: `Feed di mercato
 API non raggiungibile
@@ -660,7 +678,9 @@ Altro
 Secondi
 Minuti
 Ore
-Giorni e oltre`,
+Giorni e oltre
+Fonti di dati usate da Crypto Order Flow
+EXCHANGE`,
 
   ja: `マーケットフィード
 APIに接続できません
@@ -726,7 +746,9 @@ Super Charts（インジケーター）
 秒
 分
 時間
-日以上`,
+日以上
+Crypto Order Flow が使用するデータソース
+取引所`,
 
   ko: `마켓 피드
 API에 연결할 수 없음
@@ -792,7 +814,9 @@ Super Charts (지표)
 초
 분
 시간
-일 이상`,
+일 이상
+Crypto Order Flow가 사용하는 데이터 소스
+개 거래소`,
 
   vi: `Luồng thị trường
 Không kết nối được API
@@ -858,7 +882,9 @@ Thêm
 Giây
 Phút
 Giờ
-Ngày trở lên`,
+Ngày trở lên
+Nguồn dữ liệu được Crypto Order Flow sử dụng
+SÀN`,
 
   id: `Umpan pasar
 API tidak dapat dijangkau
@@ -924,7 +950,9 @@ Lainnya
 Detik
 Menit
 Jam
-Hari dan lebih`,
+Hari dan lebih
+Sumber data yang digunakan Crypto Order Flow
+BURSA`,
 
   fil: `Market feed
 Hindi maabot ang API
@@ -990,7 +1018,9 @@ Higit pa
 Segundo
 Minuto
 Oras
-Araw at higit pa`,
+Araw at higit pa
+Mga pinagmulan ng data na ginagamit ng Crypto Order Flow
+EXCHANGE`,
 
   th: `ฟีดตลาด
 เชื่อมต่อ API ไม่ได้
@@ -1056,7 +1086,9 @@ Super Charts (อินดิเคเตอร์)
 วินาที
 นาที
 ชั่วโมง
-วันขึ้นไป`,
+วันขึ้นไป
+แหล่งข้อมูลที่ Crypto Order Flow ใช้
+กระดานเทรด`,
 
   ar: `تدفق السوق
 تعذّر الوصول إلى API
@@ -1122,7 +1154,9 @@ Super Charts (المؤشرات)
 ثوانٍ
 دقائق
 ساعات
-أيام فأكثر`,
+أيام فأكثر
+مصادر البيانات التي يستخدمها Crypto Order Flow
+منصات`,
 
   ur: `مارکیٹ فیڈ
 API تک رسائی نہیں
@@ -1188,7 +1222,9 @@ Super Charts (انڈیکیٹرز)
 سیکنڈ
 منٹ
 گھنٹے
-دن اور زیادہ`,
+دن اور زیادہ
+Crypto Order Flow کے استعمال کردہ ڈیٹا ذرائع
+ایکسچینجز`,
 
   uk: `Ринковий потік
 API недоступний
@@ -1254,7 +1290,9 @@ Super Charts (індикатори)
 Секунди
 Хвилини
 Години
-Дні й більше`,
+Дні й більше
+Джерела даних Crypto Order Flow
+БІРЖ`,
 
   pl: `Strumień rynku
 API niedostępne
@@ -1320,7 +1358,9 @@ Więcej
 Sekundy
 Minuty
 Godziny
-Dni i dłużej`,
+Dni i dłużej
+Źródła danych używane przez Crypto Order Flow
+GIEŁD`,
 
   nl: `Marktfeed
 API onbereikbaar
@@ -1386,5 +1426,7 @@ Meer
 Seconden
 Minuten
 Uren
-Dagen en langer`,
+Dagen en langer
+Databronnen gebruikt door Crypto Order Flow
+BEURZEN`,
 };

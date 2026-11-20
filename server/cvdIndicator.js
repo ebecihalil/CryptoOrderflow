@@ -8,7 +8,7 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 import { CVD_EXCHANGES, createCvdMarketResolver } from "./cvdMarkets.js";
 import { createCvdStreamFactory } from "./cvdStreams.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
-import { createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
+import { AUTO_BUBBLE_MULTIPLIER, autoBubbleMinimum, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
 import { secondCandleRecorder } from "./secondCandles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
@@ -240,14 +240,17 @@ export function createCvdIndicatorService({
     const parsed = validateAggressiveBubblesQuery(query);
     parsed.asset = canonicalAsset(parsed.asset).asset;
     const markets = parsed.market === "both" ? ["spot", "perpetual"] : [parsed.market];
+    const auto = parsed.minValue === "auto";
     // Reuse CVD's collectors, deduplication, shared gates and reorder buffer.
     // TF, minimum size and browser refresh never create extra trade connections.
     const snapshots = markets.map(market => {
       const cvd = get({ asset: parsed.asset, market, timeframe: parsed.timeframe, anchor: "1w" });
       const group = groups.get(`${market}:${parsed.asset}`);
-      return { cvd, market, ledger: group.bubbles.snapshot(parsed.timeframe, parsed.minValue) };
+      return { cvd, market, ledger: group.bubbles.snapshot(parsed.timeframe, auto ? 0 : parsed.minValue) };
     });
-    const all = snapshots.flatMap(s => s.ledger.points).sort((a, b) => b.value - a.value);
+    // Auto: the minimum follows this coin/timeframe/market's own average bubble size.
+    const effectiveMinValue = auto ? autoBubbleMinimum(snapshots.flatMap(s => s.ledger.points)) : parsed.minValue;
+    const all = snapshots.flatMap(s => s.ledger.points).filter(p => p.value >= effectiveMinValue).sort((a, b) => b.value - a.value);
     const points = all.slice(0, 500).sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
     const firsts = snapshots.map(s => s.ledger.first).filter(t => t !== null);
     const lasts = snapshots.map(s => s.ledger.last).filter(t => t !== null);
@@ -264,7 +267,7 @@ export function createCvdIndicatorService({
     if (snapshots.some(s => s.cvd.warnings.some(w => /Late\/out-of-order|safety buffer/.test(w)))) {
       warnings.push("Some executions were excluded by the shared reorder/safety buffer; affected coverage is incomplete.");
     }
-    return { ...parsed, unit: "USD-equivalent", points,
+    return { ...parsed, effectiveMinValue, autoMultiplier: auto ? AUTO_BUBBLE_MULTIPLIER : null, unit: "USD-equivalent", points,
       recordingStartedAt: new Date(Math.min(...snapshots.map(s => s.ledger.startedAt))).toISOString(),
       historyStart: firsts.length ? new Date(Math.min(...firsts)).toISOString() : null,
       historyEnd: lasts.length ? new Date(Math.max(...lasts)).toISOString() : null,

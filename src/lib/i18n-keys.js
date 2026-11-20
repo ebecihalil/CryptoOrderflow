@@ -67,6 +67,8 @@ export const I18N_KEYS = [
   'Minutes',
   'Hours',
   'Days & longer',
+  'Data sources used by Crypto Order Flow',
+  'EXCHANGES',
 ];
 
 /** Languages offered in the header menu: code, native name, English name, flag (ISO country). */

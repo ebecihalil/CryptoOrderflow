@@ -100,3 +100,13 @@ together with "How to read it" (summary, lines/colours and common signals, see
 below the chart (study periods, Liquidity Zones, funding, CVD, bubbles, OI)
 live in these panels. Chart colours use a brighter pastel palette
 (`CHART_COLORS`) so candles, volume and indicators stay clearly visible.
+
+## Full screen and indicator settings
+
+"Full screen" (next to Fit view) fills the screen with the chart: the
+indicator menus stay on top, the timeframe row above the chart, and the coin
+watchlist on the right. Esc or "Exit full screen" returns to the normal page.
+
+Indicator settings stay while the indicator is on the chart (also across
+reloads). Removing an indicator resets its settings, so adding it back starts
+from the defaults.

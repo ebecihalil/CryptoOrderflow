@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CvdMarket, CvdSource, CvdTimeframe } from './use-cvd-indicator';
 
 export type AggressiveBubblesMarket = 'both' | CvdMarket;
+/** 'auto' = 3x the average bubble value for this coin, timeframe and market (server-computed). */
+export type BubbleMinimum = number | 'auto';
 export type AggressiveBubble = {
   id: string; market: CvdMarket; side: 'buy' | 'sell'; time: number;
   price: number; value: number; tradeCount: number; sourceCount: number;
 };
 export type AggressiveBubblesPayload = {
-  asset: string; timeframe: CvdTimeframe; market: AggressiveBubblesMarket; minValue: number;
+  asset: string; timeframe: CvdTimeframe; market: AggressiveBubblesMarket; minValue: BubbleMinimum;
+  /** The USD minimum actually applied (the computed value when minValue is 'auto'). */
+  effectiveMinValue: number; autoMultiplier: number | null;
   unit: 'USD-equivalent'; points: AggressiveBubble[];
   recordingStartedAt: string; historyStart: string | null; historyEnd: string | null;
   sources: Array<CvdSource & { market: CvdMarket }>;
@@ -17,7 +21,7 @@ type State = { payload: AggressiveBubblesPayload | null; loading: boolean; error
 
 export function useAggressiveBubbles(
   asset: string, timeframe: CvdTimeframe, market: AggressiveBubblesMarket,
-  minValue: number, enabled = true,
+  minValue: BubbleMinimum, enabled = true,
 ) {
   const [state, setState] = useState<State>({ payload: null, loading: false, error: null });
   const [retry, setRetry] = useState(0);
