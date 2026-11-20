@@ -21,6 +21,7 @@ import { createAccountService } from "./server/accounts.js";
 import { secondCandleService } from "./server/secondCandleService.js";
 import { isSecondTimeframe } from "./server/timeframes.js";
 import { createAccountRouter } from "./server/accountRoutes.js";
+import { getLsarChart } from "./server/lsarChart.js";
 
 // kind=global (default): all-accounts LSAR. kind=top: top-trader accounts LSAR.
 const lsarKind = (req, res) => {
@@ -153,6 +154,14 @@ app.get("/api/indicators/open-interest-driver", (req, res) => {
   try { res.json(oiDriverService.get(req.query)); }
   catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
     ? error.message : "Aggregated OI indicator inputs are currently unavailable." }); }
+});
+
+// Global / Top Trader Long Short Account Ratio pane for Super Charts.
+app.get("/api/indicators/lsar-chart", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(getLsarChart(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "Long/short ratio data is currently unavailable." }); }
 });
 
 app.get("/api/indicators/leverage", (req, res) => {

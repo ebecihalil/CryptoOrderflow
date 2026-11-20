@@ -695,10 +695,11 @@ export function getLsarMarketSummary(timeframe) {
 export function getLsarSourceReadings(exchange) {
     return globalCollector.readings(exchange);
 }
-export function getLsarChartReadings(asset, exchanges) {
+export const GLOBAL_LSAR_EXCHANGES = ["binance", "bybit", "okx", "gate", "bitget", "toobit"];
+export function getLsarChartReadings(asset, exchanges = GLOBAL_LSAR_EXCHANGES) {
     getLsarMarketSnapshot();
     return exchanges.flatMap(exchange => globalCollector.readings(exchange)
         .filter(reading => reading.asset === asset)
         .map(reading => ({ asset: reading.asset, exchange, symbol: reading.symbol, points: reading.points,
-            longWindowPoints: reading.longWindowPoints ?? [] })));
+            longWindowPoints: reading.longWindowPoints ?? [], openInterestUsd: reading.openInterestUsd })));
 }

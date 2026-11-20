@@ -40,18 +40,15 @@ export function AuthPromptHost() {
   );
 }
 
-export function AuthPage({ mode }: { mode: 'signup' | 'signin' }) {
-  const { user, signUp, signIn } = useAuth();
+/** Sign in / sign up form. `next` is where to go after success. */
+export function AuthForm({ mode, next, lede }: { mode: 'signup' | 'signin'; next: string; lede?: string }) {
+  const { signUp, signIn } = useAuth();
   const [, navigate] = useLocation();
-  const search = useSearch();
-  const next = safeNext(new URLSearchParams(search).get('next'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const mutation = mode === 'signup' ? signUp : signIn;
   const isSignup = mode === 'signup';
   const { t, lang } = useI18n();
-
-  useEffect(() => { if (user) navigate(next, { replace: true }); }, [user, next, navigate]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -60,30 +57,41 @@ export function AuthPage({ mode }: { mode: 'signup' | 'signin' }) {
   const other = `${isSignup ? '/signin' : '/signup'}?next=${encodeURIComponent(next)}`;
 
   return (
+    <form className="auth-card" onSubmit={submit} noValidate data-testid={`form-${mode}`}>
+      {lang === 'en' && <span className="eyebrow">{isSignup ? 'FREE ACCOUNT' : 'WELCOME BACK'}</span>}
+      <h1>{t(isSignup ? 'Create your account' : 'Sign in')}</h1>
+      <p className="auth-lede">{lede ?? t(isSignup ? 'Unlock your personal watchlist across every section. Free, no card needed.' : 'Sign in to use your watchlist.')}</p>
+      <label><span>{t('Email')}</span>
+        <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)}
+          required maxLength={254} data-testid="input-email" />
+      </label>
+      <label><span>{t('Password')}</span>
+        <input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} value={password}
+          onChange={(event) => setPassword(event.target.value)} required minLength={isSignup ? 8 : undefined} maxLength={128}
+          data-testid="input-password" />
+        {isSignup && <small>{t('At least 8 characters.')}</small>}
+      </label>
+      {mutation.error && <div className="auth-error" role="alert" data-testid="text-auth-error">{mutation.error.message}</div>}
+      <button type="submit" className="auth-primary" disabled={mutation.isPending} data-testid="button-auth-submit">
+        {mutation.isPending ? '…' : t(isSignup ? 'Create account' : 'Sign in')}
+      </button>
+      <p className="auth-switch">{t(isSignup ? 'Already have an account?' : 'New here?')} <Link href={other}>{t(isSignup ? 'Sign in' : 'Create a free account')}</Link></p>
+      <p className="auth-note">There is no email verification or password reset yet, so keep your password safe.</p>
+    </form>
+  );
+}
+
+export function AuthPage({ mode }: { mode: 'signup' | 'signin' }) {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const search = useSearch();
+  const next = safeNext(new URLSearchParams(search).get('next'));
+  useEffect(() => { if (user) navigate(next, { replace: true }); }, [user, next, navigate]);
+  return (
     <div className="terminal module-app">
-      <AppHeader title="Crypto Order Flow" mark="CO" sectionLabel={isSignup ? 'Sign up' : 'Sign in'} subtitle="Market Toolkit" />
+      <AppHeader title="Crypto Order Flow" mark="CO" sectionLabel={mode === 'signup' ? 'Sign up' : 'Sign in'} subtitle="Market Toolkit" />
       <main className="auth-main">
-        <form className="auth-card" onSubmit={submit} noValidate data-testid={`form-${mode}`}>
-          {lang === 'en' && <span className="eyebrow">{isSignup ? 'FREE ACCOUNT' : 'WELCOME BACK'}</span>}
-          <h1>{t(isSignup ? 'Create your account' : 'Sign in')}</h1>
-          <p className="auth-lede">{t(isSignup ? 'Unlock your personal watchlist across every section. Free, no card needed.' : 'Sign in to use your watchlist.')}</p>
-          <label><span>{t('Email')}</span>
-            <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)}
-              required maxLength={254} data-testid="input-email" />
-          </label>
-          <label><span>{t('Password')}</span>
-            <input type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} value={password}
-              onChange={(event) => setPassword(event.target.value)} required minLength={isSignup ? 8 : undefined} maxLength={128}
-              data-testid="input-password" />
-            {isSignup && <small>{t('At least 8 characters.')}</small>}
-          </label>
-          {mutation.error && <div className="auth-error" role="alert" data-testid="text-auth-error">{mutation.error.message}</div>}
-          <button type="submit" className="auth-primary" disabled={mutation.isPending} data-testid="button-auth-submit">
-            {mutation.isPending ? '…' : t(isSignup ? 'Create account' : 'Sign in')}
-          </button>
-          <p className="auth-switch">{t(isSignup ? 'Already have an account?' : 'New here?')} <Link href={other}>{t(isSignup ? 'Sign in' : 'Create a free account')}</Link></p>
-          <p className="auth-note">There is no email verification or password reset yet, so keep your password safe.</p>
-        </form>
+        <AuthForm mode={mode} next={next} />
       </main>
     </div>
   );

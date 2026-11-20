@@ -12,6 +12,7 @@ import {
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type CvdTimeframe } from '@/hooks/use-cvd-indicator';
 import { useLeverageEstimate, type LeverageTimeframe } from '@/hooks/use-leverage-estimate';
+import { LSAR_CHART_FRAMES, useLsarChart } from '@/hooks/use-lsar-chart';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
 import { OiIndicatorControls } from '@/components/oi-indicator-controls';
@@ -23,7 +24,7 @@ import { useChartSetting } from '@/hooks/use-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
 /** Leverage Estimate exists on these chart timeframes (24h = 1D). */
 const LEVERAGE_FRAMES: Partial<Record<string, LeverageTimeframe>> = { '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '24h': '1d' };
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
@@ -115,6 +116,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   const hasOiDriver = indicators.includes('oi-driver') && !secondsMode;
   const leverageFrame = LEVERAGE_FRAMES[timeframe];
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
+  const lsarFrameOk = LSAR_CHART_FRAMES.includes(timeframe);
+  const hasGlobalLsar = indicators.includes('global-lsar') && lsarFrameOk;
+  const hasTopLsar = indicators.includes('top-lsar') && lsarFrameOk;
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -198,6 +202,14 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     ? aggressiveBubbles.payload : null;
   const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
   const leverage = useLeverageEstimate(canonicalAsset, leverageFrame ?? '1h', hasLeverage);
+  const globalLsar = useLsarChart(canonicalAsset, timeframe, 'global', hasGlobalLsar);
+  const topLsar = useLsarChart(canonicalAsset, timeframe, 'top', hasTopLsar);
+  const lsarPanes = useMemo(() => [
+    ...(hasGlobalLsar ? [{ key: 'global-lsar', label: 'Global L/S Account Ratio', color: '#26a69a',
+      points: globalLsar.data?.asset === canonicalAsset && globalLsar.data.timeframe === timeframe ? globalLsar.data.points : [] }] : []),
+    ...(hasTopLsar ? [{ key: 'top-lsar', label: 'Top Trader L/S Account Ratio', color: '#f59e0b',
+      points: topLsar.data?.asset === canonicalAsset && topLsar.data.timeframe === timeframe ? topLsar.data.points : [] }] : []),
+  ], [hasGlobalLsar, hasTopLsar, globalLsar.data, topLsar.data, canonicalAsset, timeframe]);
   const leveragePayload = hasLeverage && leverage.data?.asset === canonicalAsset && leverage.data.timeframe === leverageFrame ? leverage.data : null;
 
   const commitBubbleMinimum = () => {
@@ -441,6 +453,10 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
         {(nativeFeed.error || nativePayloadCurrent && nativeFeed.payload?.error) && <span className="is-warning">{nativeFeed.error ?? nativeFeed.payload?.error}</span>}
         <span className="native-native-symbol">Native {contract.symbol}{contract.priceDivisor !== 1 ? ` · ×${contract.priceDivisor} contract` : ''}</span>
       </div>
+      {indicators.some((id) => id === 'global-lsar' || id === 'top-lsar') && !lsarFrameOk && <p className="native-seconds-note" role="status">
+        Long Short Account Ratio is available on 5m, 15m, 30m, 1h, 4h and 1D charts (exchanges publish it every 5 minutes).</p>}
+      {hasTopLsar && topLsar.isSuccess && !topLsar.data.points.length && <p className="native-seconds-note" role="status">
+        No top-trader ratio for {canonicalAsset} yet: Binance, OKX and Gate.io publish it only for some coins, and the server may still be collecting it.</p>}
       {indicators.includes('leverage') && !leverageFrame && <p className="native-seconds-note" role="status">
         Leverage Estimate is available on 5m, 15m, 30m, 1h, 4h and 1D charts.</p>}
       {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Leverage Estimate: {leverage.error.message}</p>}
@@ -485,7 +501,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
             perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
              aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
              oiDriver={oiDriver.payload} oiDriverEnabled={hasOiDriver} priceDivisor={contract.priceDivisor || 1}
-             leverageRows={leveragePayload?.rows ?? null} leverageEnabled={hasLeverage} />
+             leverageRows={leveragePayload?.rows ?? null} leverageEnabled={hasLeverage} lsarPanes={lsarPanes} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}

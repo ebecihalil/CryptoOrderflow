@@ -158,6 +158,8 @@ Estimate page. Available on 5m, 15m, 30m, 1h, 4h and 1D.
 | Perpetual / Spot CVD, Aggressive Volume Bubbles | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
 | Aggregated volume, Liquidity Zones | up to 7 (Binance, OKX, Gate.io, Bybit, Bitget, MEXC, BingX); a venue whose gaps would cut over 20% of the matched history is left out for that coin |
 | Leverage Estimate | 4 (Binance, OKX, Gate.io, Bybit: the venues publishing top-trader ratios) |
+| Global Long Short Account Ratio | 6 (Binance, Bybit, OKX, Gate.io, Bitget, Toobit: every venue publishing an all-accounts ratio) |
+| Top Trader Long Short Account Ratio | 3 (Binance, OKX, Gate.io: the venues publishing a top-trader account ratio) |
 
 ## Your setup follows your account
 
@@ -169,3 +171,20 @@ are saved to the account (`/api/me/prefs/super-charts`, `/api/me/prefs/market-li
 and load on any device. Signing out returns this browser to the defaults
 (RSI + Liquidity Zones, 1h; recent coins and chart zoom cleared; language and
 theme kept). Signing in again brings everything back.
+
+## Long Short Account Ratio panes
+
+Orderflow Indicators → Global / Top Trader Long Short Account Ratio add a pane
+with the ratio (long accounts ÷ short accounts; dashed line at 1.0) aggregated
+across exchanges, weighted by each contract's USD open interest — the same
+method as the LSAR pages. `GET /api/indicators/lsar-chart?asset=&timeframe=&kind=global|top`
+(`server/lsarChart.js`). Exchanges publish 5-minute history (about a day) and
+hourly history (about 12 days), so the panes cover 5m–1D. A candle is shown
+only when exchanges holding at least 80% of the OI have a reading.
+
+## Sign-in
+
+Super Charts requires a free account. Signed-out visitors see the sign-in
+form with example pictures of the main indicators and the exchange list
+(`src/components/super-charts-gate.tsx`; pictures are drawn from fixed sample
+data and labelled as examples).
