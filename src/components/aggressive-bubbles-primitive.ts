@@ -42,6 +42,7 @@ export class AggressiveBubblesPrimitive implements ISeriesPrimitive<Time> {
     if (!this.context.enabled) return null;
     const { series, timeScale, points } = this.context;
     const maxValue = Math.max(1, points.reduce((max, point) => Math.max(max, point.value), 0));
+    scaleMin = Math.max(1, points.reduce((min, point) => Math.min(min, point.value), Infinity));
     let nearest: PlottedAggressiveBubble | null = null;
     let nearestDistance = Infinity;
     for (const point of points) {
@@ -66,6 +67,7 @@ export class AggressiveBubblesPrimitive implements ISeriesPrimitive<Time> {
           const { series, timeScale, points, enabled } = this.context;
           if (!enabled || !points.length) return;
           const maxValue = Math.max(1, points.reduce((max, point) => Math.max(max, point.value), 0));
+          scaleMin = Math.max(1, points.reduce((min, point) => Math.min(min, point.value), Infinity));
           target.useMediaCoordinateSpace(({ context }) => {
             context.save();
             for (const point of [...points].sort((a, b) => b.value - a.value)) {
@@ -108,7 +110,15 @@ export class AggressiveBubblesPrimitive implements ISeriesPrimitive<Time> {
   }
 }
 
+/** Smallest shown bubble per chart (so sizes spread between the smallest and largest). */
+let scaleMin = 1;
+/**
+ * Bubble size from its USD notional on a log scale between the smallest and the
+ * largest bubble on screen: a 10x bigger trade is clearly bigger, not just slightly.
+ */
 function bubbleRadius(value: number, maxValue: number) {
-  const magnitude = Math.sqrt(Math.max(0, value) / maxValue);
-  return Math.max(5, Math.min(20, magnitude * 20));
+  const low = Math.min(scaleMin, maxValue);
+  const span = Math.log(maxValue / low);
+  const t = span > 0 ? Math.max(0, Math.min(1, Math.log(Math.max(value, low) / low) / span)) : 1;
+  return 5 + 21 * t ** 1.4;
 }

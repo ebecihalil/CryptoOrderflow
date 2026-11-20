@@ -24,7 +24,7 @@ const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'spot-cvd', label: 'Aggregated Spot CVD' },
   { id: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles' },
   { id: 'oi-driver', label: 'Aggregated Open Interest' },
-  { id: 'leverage', label: 'Leverage Estimate' },
+  { id: 'leverage', label: 'Perp Leverage Estimation' },
   { id: 'global-lsar', label: 'Global Long Short Account Ratio' },
   { id: 'top-lsar', label: 'Top Trader Long Short Account Ratio' },
 ];

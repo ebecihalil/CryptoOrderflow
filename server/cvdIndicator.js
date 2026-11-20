@@ -265,7 +265,9 @@ export function createCvdIndicatorService({
     const threshold = bubbleThreshold(snapshots.flatMap(s => s.ledger.points),
       { mode: parsed.minValue === "multiplier" ? "multiplier" : "auto", multiplier: parsed.multiplier });
     const effectiveMinValue = dynamic ? threshold.value : parsed.minValue;
-    const all = snapshots.flatMap(s => s.ledger.points).filter(p => p.value >= effectiveMinValue).sort((a, b) => b.value - a.value);
+    // Dynamic modes compare each bubble with ITS candle's minimum (k × 20-candle average volume).
+    const all = snapshots.flatMap(s => s.ledger.points).filter(p => p.value >= (dynamic ? threshold.at(p.time) : effectiveMinValue))
+      .sort((a, b) => b.value - a.value);
     const points = all.slice(0, BUBBLE_DISPLAY_LIMIT).sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
     const firsts = snapshots.map(s => s.ledger.first).filter(t => t !== null);
     const lasts = snapshots.map(s => s.ledger.last).filter(t => t !== null);
@@ -283,7 +285,7 @@ export function createCvdIndicatorService({
       warnings.push("Some executions were excluded by the shared reorder/safety buffer; affected coverage is incomplete.");
     }
     return { ...parsed, effectiveMinValue, averageCandleVolume: threshold.averageCandleVolume,
-      volumeMultiplier: effectiveMinValue && threshold.averageCandleVolume > 0 ? effectiveMinValue / threshold.averageCandleVolume : null,
+      volumeMultiplier: dynamic ? threshold.k : threshold.averageCandleVolume > 0 ? effectiveMinValue / threshold.averageCandleVolume : null,
       bubblesPerCandleTarget: parsed.minValue === "auto" ? AUTO_BUBBLES_PER_CANDLE : null, unit: "USD-equivalent", points,
       recordingStartedAt: new Date(Math.min(...snapshots.map(s => s.ledger.startedAt))).toISOString(),
       historyStart: firsts.length ? new Date(Math.min(...firsts)).toISOString() : null,
@@ -343,7 +345,14 @@ export function createCvdIndicatorService({
       }),
     };
   }
-  return { get, getBubbles, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
+  /** Recorded minutes with per-exchange [buy, sell] USD (starts the collector if needed). */
+  function flowMinutes(input, market) {
+    const asset = canonicalAsset(input).asset;
+    try { get({ asset, market, timeframe: "1h", anchor: "1d" }); } catch { /* capacity busy: use what is recorded */ }
+    const group = groups.get(`${market}:${asset}`);
+    return group ? [...group.minutes.values()].filter(minute => minute.byExchange) : [];
+  }
+  return { get, getBubbles, flowMinutes, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
     clearInterval(tick);
     groups.forEach(stopGroup);
     await Promise.all([...groups.values()].map(async group => {

@@ -28,6 +28,8 @@ type Props = {
   liquiditySettings: LiquiditySettings;
   zoneColors: { resistance: string; support: string; inside: string; transparency: number };
   funding: FundingPlot | null;
+  /** Show the funding pane even before its data arrives. */
+  fundingEnabled?: boolean;
   showVolume: boolean;
   timeframe: string;
   resetKey: string;
@@ -42,7 +44,8 @@ type Props = {
   oiDriver: OiDriverPayload | null;
   oiDriverEnabled: boolean;
   /** Leverage Estimate rows (time in ms); score 0–100. */
-  leverageRows?: Array<{ time: number; leverageScore: number | null }> | null;
+  /** Perp Leverage Estimation rows (time in seconds; 100 = normal for this coin). */
+  leverageRows?: Array<{ time: number; avg: number | null; long: number | null; short: number | null }> | null;
   leverageEnabled?: boolean;
   /** Long Short Account Ratio panes (global / top trader); time in seconds. */
   lsarPanes?: Array<{ key: string; label: string; color: string; points: Array<{ time: number; ratio: number; longPct: number }> }>;
@@ -91,6 +94,7 @@ function priceFormat(candles: Candle[]) {
 }
 
 const toTime = (time: number) => time as UTCTimestamp;
+const LEVERAGE_COLORS = { avg: '#f59e0b', long: '#22c55e', short: '#ef4444' };
 const NO_LSAR_PANES: NonNullable<Props['lsarPanes']> = [];
 
 function compactCvd(value: number) {
@@ -100,7 +104,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -399,9 +403,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       signal.setData(studyData.macd.signal.filter((point) => point.value !== null).map((point) => ({ time: toTime(point.time), value: point.value! })));
     }
     for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'pane') drawExtra(result, nextPane());
-    if (funding) {
+    if (funding || fundingEnabled) {
       const pane = nextPane();
-      const threshold = funding.threshold;
+      const threshold = funding?.threshold ?? 0.08;
       const fund = pushSeries(chart.addSeries(HistogramSeries, {
         priceFormat: { type: 'price', precision: 4, minMove: 0.0001 }, priceLineVisible: false, lastValueVisible: false,
         autoscaleInfoProvider: (original) => {
@@ -415,8 +419,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       fund.setData(fundingRows.map((point) => point.value === null
         ? { time: point.time }
         : { ...point, color: point.value >= 0 ? CHART_COLORS.histDown : CHART_COLORS.histUp }));
-      fund.createPriceLine({ price: funding.threshold, color: '#c76b6180', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '+' });
-      fund.createPriceLine({ price: -funding.threshold, color: '#4e9c6880', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '−' });
+      fund.createPriceLine({ price: threshold, color: '#c76b6180', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '+' });
+      fund.createPriceLine({ price: -threshold, color: '#4e9c6880', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '−' });
       fund.createPriceLine({ price: 0, color: '#89928a70', lineWidth: 1, lineStyle: 0, axisLabelVisible: false });
     }
     const addCvdPane = (payload: CvdPayload | null, enabled: boolean, key: string) => {
@@ -438,7 +442,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     };
     addCvdPane(perpetualCvd, perpetualCvdEnabled, 'perpetual-cvd');
     addCvdPane(spotCvd, spotCvdEnabled, 'spot-cvd');
-    if (oiDriverEnabled && oiDriver?.candles.length) {
+    if (oiDriverEnabled) {
       const pane = nextPane();
       const oiSeries = pushSeries(chart.addSeries(CandlestickSeries, {
         priceFormat: { type: 'custom', formatter: compactCvd, minMove: 0.01 },
@@ -446,11 +450,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         wickUpColor: '#3b82f6', wickDownColor: '#ef4444', priceLineVisible: false,
       }, pane));
       oiSeries.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } });
-      oiSeries.setData(oiDriver.candles.map(bar => ({
+      oiSeries.setData((oiDriver?.candles ?? []).map(bar => ({
         time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
         color: bar.color, wickColor: bar.color, borderColor: bar.color,
       })));
-      createSeriesMarkers(oiSeries, oiDriver.candles.flatMap(bar => {
+      createSeriesMarkers(oiSeries, (oiDriver?.candles ?? []).flatMap(bar => {
         const markers = [];
         if (bar.spikeTime === bar.time && bar.spikePct !== null)
           markers.push({ time: toTime(bar.time), position: 'aboveBar' as const, color: '#b91c1c', shape: 'arrowDown' as const,
@@ -460,20 +464,24 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         return markers;
       }));
     }
-    const leveragePoints = (leverageRows ?? []).filter((row) => row.leverageScore !== null && Number.isFinite(row.leverageScore));
-    if (leverageEnabled && leveragePoints.length) {
+    // The pane stays on the chart even before data arrives (empty, with its label).
+    if (leverageEnabled) {
       const pane = nextPane();
-      const lev = pushSeries(chart.addSeries(LineSeries, {
-        color: '#b8862f', lineWidth: 2, priceLineVisible: false,
-        priceFormat: { type: 'custom', formatter: (value: number) => value.toFixed(0), minMove: 1 },
-        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
-      }, pane));
-      lev.setData(leveragePoints.map((row) => ({ time: toTime(Math.floor(row.time / 1000)), value: row.leverageScore! })));
-      for (const [level, color] of [[80, '#c75a52'], [60, '#c4a05c'], [40, '#89928a']] as const)
-        lev.createPriceLine({ price: level, color: `${color}90`, lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+      const lineFor = (field: 'avg' | 'long' | 'short', color: string, width: 1 | 2 | 3) => {
+        const line = pushSeries(chart.addSeries(LineSeries, {
+          color, lineWidth: width, priceLineVisible: false, lastValueVisible: field === 'avg',
+          priceFormat: { type: 'custom', formatter: (value: number) => value.toFixed(0), minMove: 1 },
+        }, pane));
+        line.setData((leverageRows ?? []).map((row) => row[field] === null || !Number.isFinite(row[field]!)
+          ? { time: toTime(row.time) } : { time: toTime(row.time), value: row[field]! }));
+        return line;
+      };
+      lineFor('long', LEVERAGE_COLORS.long, 1);
+      lineFor('short', LEVERAGE_COLORS.short, 1);
+      const avg = lineFor('avg', LEVERAGE_COLORS.avg, 3);
+      avg.createPriceLine({ price: 100, color: '#89928a90', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
     }
     for (const lsar of lsarPanes) {
-      if (!lsar.points.length) continue;
       const pane = nextPane();
       const line = pushSeries(chart.addSeries(LineSeries, {
         color: lsar.color, lineWidth: 2, priceLineVisible: false,
@@ -491,12 +499,12 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       ...(studies.includes('macd') && studyData.macd.histogram.length ? [{ key: 'macd', height: 130 }] : []),
       ...extraData.filter(([id]) => extraIndicator(id)?.placement === 'pane')
         .map(([id]) => ({ key: `extra-${id}`, height: extraIndicator(id)?.paneHeight ?? 110 })),
-      ...(funding ? [{ key: 'funding', height: 112 }] : []),
+      ...(funding || fundingEnabled ? [{ key: 'funding', height: 112 }] : []),
       ...(perpetualCvdEnabled ? [{ key: 'perpetual-cvd', height: 142 }] : []),
       ...(spotCvdEnabled ? [{ key: 'spot-cvd', height: 142 }] : []),
-      ...(oiDriverEnabled && oiDriver?.candles.length ? [{ key: 'oi-driver', height: 158 }] : []),
-      ...(leverageEnabled && leveragePoints.length ? [{ key: 'leverage', height: 120 }] : []),
-      ...lsarPanes.filter((lsar) => lsar.points.length).map((lsar) => ({ key: lsar.key, height: 110 })),
+      ...(oiDriverEnabled ? [{ key: 'oi-driver', height: 158 }] : []),
+      ...(leverageEnabled ? [{ key: 'leverage', height: 140 }] : []),
+      ...lsarPanes.map((lsar) => ({ key: lsar.key, height: 110 })),
     ];
     const priceHeight = Math.max(260, (mountRef.current?.clientHeight ?? 650) -
       lowerPanes.reduce((sum, pane) => sum + pane.height, 0) - 30);
@@ -572,7 +580,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
     };
     requestAnimationFrame(() => measureRef.current());
-  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled, leverageRows, leverageEnabled, lsarPanes]);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled, fundingEnabled, leverageRows, leverageEnabled, lsarPanes]);
 
   // ---- TradingView-style legends: name, inputs and value at the crosshair ----
   const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;
@@ -619,19 +627,20 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         values: [{ text: (() => { const v = fundingRows.find((row) => row.time === legendTime)?.value; return v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(4)}%`; })() }] }];
       if (key === 'perpetual-cvd') return [{ key: 'perpetual-cvd', label: 'Aggregated Perpetual CVD', params: (perpetualCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(perpetualCvd) }] }];
       if (key === 'spot-cvd') return [{ key: 'spot-cvd', label: 'Aggregated Spot CVD', params: (spotCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(spotCvd) }] }];
-      if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6' }];
+      if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6',
+        values: oiDriver?.candles.length ? undefined : [{ text: 'Collecting data…' }] }];
       const lsar = lsarPanes.find((item) => item.key === key);
       if (lsar) {
         const point = lsar.points.find((item) => item.time === legendTime) ?? lsar.points.at(-1);
         return [{ key, label: lsar.label, params: 'OI-weighted', color: lsar.color,
-          values: point ? [{ text: point.ratio.toFixed(2), color: lsar.color }, { text: `${point.longPct.toFixed(1)}% long` }] : [{ text: '—' }] }];
+          values: point ? [{ text: point.ratio.toFixed(2), color: lsar.color }, { text: `${point.longPct.toFixed(1)}% long` }] : [{ text: 'No data for this coin yet' }] }];
       }
       if (key === 'leverage') {
-        const row = (leverageRows ?? []).find((item) => Math.floor(item.time / 1000) === legendTime) ?? (leverageRows ?? []).at(-1);
-        const score = row?.leverageScore;
-        const regime = score === null || score === undefined ? '' : score >= 80 ? ' · extreme' : score >= 60 ? ' · elevated' : score >= 40 ? ' · normal' : ' · low';
-        return [{ key: 'leverage', label: 'Leverage Estimate', params: '0–100', color: '#b8862f',
-          values: [{ text: score === null || score === undefined ? '—' : `${score.toFixed(0)}${regime}`, color: '#b8862f' }] }];
+        const rows = (leverageRows ?? []).filter((item) => item.avg !== null);
+        const row = rows.find((item) => item.time === legendTime) ?? rows.at(-1);
+        return [{ key: 'leverage', label: 'Perp Leverage Estimation', params: '100 = normal', color: LEVERAGE_COLORS.avg,
+          values: row ? [{ text: `Avg ${row.avg!.toFixed(0)}`, color: LEVERAGE_COLORS.avg }, { text: `Long ${row.long?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.long },
+            { text: `Short ${row.short?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.short }] : [{ text: 'Collecting data…' }] }];
       }
       return [];
     };
@@ -656,6 +665,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       </div>}
       <div className="native-chart-stage">
         <div className="native-chart-canvas" ref={mountRef} role="img" aria-label="Native exchange-fed candlestick chart with synchronized indicator panes" />
+        {/* Clear frames between panes (the chart's own separator stays draggable underneath). */}
+        {paneLayout.slice(1).map((pane) => <div key={pane.key} className="pane-divider" style={{ top: pane.top }} aria-hidden="true" />)}
         <ChartPaneLegends panes={legendPanes} settings={layerSettings} actions={layerActions} onRemove={onRemoveLayer} />
       </div>
     </div>

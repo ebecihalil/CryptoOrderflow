@@ -39,24 +39,45 @@ export function averageCandleVolume(points) {
   return { average: total / byCandle.size, candles: byCandle.size };
 }
 
+/** Length of the moving average of candle volume used by the dynamic minimum. */
+export const VOLUME_MA_LENGTH = 20;
+
+/** 20-candle moving average of traded USD per candle (all levels, buys + sells), per candle time. */
+export function candleVolumeAverages(points, length = VOLUME_MA_LENGTH) {
+  const byCandle = new Map();
+  for (const point of points) if (point.value > 0) byCandle.set(point.time, (byCandle.get(point.time) ?? 0) + point.value);
+  const times = [...byCandle.keys()].sort((a, b) => a - b);
+  const averages = new Map();
+  let sum = 0;
+  times.forEach((time, index) => {
+    sum += byCandle.get(time);
+    if (index >= length) sum -= byCandle.get(times[index - length]);
+    averages.set(time, sum / Math.min(index + 1, length));
+  });
+  return averages;
+}
+
 /**
- * Bubble minimum for the selected coin, timeframe and market.
- *  - auto: the value that leaves about 2–3 bubbles per candle on average
- *    (adapts to every coin and timeframe: busy coins get a higher bar).
- *  - multiplier: k × the average candle volume.
- * Also returns the equivalent "× average candle volume" for display.
+ * Dynamic bubble minimum, recalculated for every candle:
+ *   minimum(candle) = k × 20-candle average volume at that candle.
+ *  - auto: k is chosen so about 2–3 bubbles per candle remain on average.
+ *  - multiplier: k is the user's value.
+ * Returns k, the per-candle minimum function and the latest candle's values.
  */
 export function bubbleThreshold(points, { mode = "auto", multiplier = DEFAULT_VOLUME_MULTIPLIER, perCandle = AUTO_BUBBLES_PER_CANDLE } = {}) {
-  const { average, candles } = averageCandleVolume(points);
-  let raw;
-  if (mode === "multiplier") raw = multiplier * average;
-  else {
-    const values = points.map(point => point.value).filter(value => value > 0).sort((a, b) => b - a);
-    const target = Math.max(1, Math.round(perCandle * candles));
-    raw = values.length > target ? values[target - 1] : values.at(-1) ?? 0;
+  const averages = candleVolumeAverages(points);
+  let k = multiplier;
+  if (mode !== "multiplier") {
+    // Each bubble's size relative to its candle's average volume; pick the ratio that keeps ~2.5 per candle.
+    const ratios = points.map(point => point.value / (averages.get(point.time) || Infinity)).filter(r => r > 0 && Number.isFinite(r)).sort((a, b) => b - a);
+    const target = Math.max(1, Math.round(perCandle * averages.size));
+    k = ratios.length > target ? ratios[target - 1] : ratios.at(-1) ?? DEFAULT_VOLUME_MULTIPLIER;
+    k = Number(k.toPrecision(2));
   }
-  const value = tidy(Math.max(BUBBLE_FLOOR, raw || 0));
-  return { value, averageCandleVolume: average, multiplier: average > 0 ? value / average : null, candles };
+  const at = time => Math.max(BUBBLE_FLOOR, k * (averages.get(time) ?? 0));
+  const latestTime = [...averages.keys()].at(-1);
+  const latestAverage = latestTime === undefined ? 0 : averages.get(latestTime);
+  return { k, at, value: tidy(Math.max(BUBBLE_FLOOR, k * latestAverage)), averageCandleVolume: latestAverage, candles: averages.size };
 }
 
 export function createAggressiveBubbleLedger({

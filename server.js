@@ -22,6 +22,10 @@ import { secondCandleService } from "./server/secondCandleService.js";
 import { isSecondTimeframe } from "./server/timeframes.js";
 import { createAccountRouter } from "./server/accountRoutes.js";
 import { getLsarChart } from "./server/lsarChart.js";
+import { createPerpLeverageService } from "./server/perpLeverage.js";
+import { candleService } from "./server/chartCandles.js";
+import { getOiChartInputs } from "./server/openInterestMarketData.js";
+import { OI_DRIVER_EXCHANGES } from "./server/oiDriverService.js";
 
 // kind=global (default): all-accounts LSAR. kind=top: top-trader accounts LSAR.
 const lsarKind = (req, res) => {
@@ -154,6 +158,16 @@ app.get("/api/indicators/open-interest-driver", (req, res) => {
   try { res.json(oiDriverService.get(req.query)); }
   catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
     ? error.message : "Aggregated OI indicator inputs are currently unavailable." }); }
+});
+
+// Perp Leverage Estimation pane: built from recorded OI, perp/spot trades and liquidations.
+const perpLeverageService = createPerpLeverageService({ cvd: cvdIndicatorService, oiInputs: getOiChartInputs,
+  candles: candleService, oiExchanges: OI_DRIVER_EXCHANGES });
+app.get("/api/indicators/perp-leverage", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(await perpLeverageService.get(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "Perp leverage estimation inputs are currently unavailable." }); }
 });
 
 // Global / Top Trader Long Short Account Ratio pane for Super Charts.
