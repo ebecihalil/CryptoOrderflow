@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { gzipSync } from "node:zlib";
-import { parseCvdMarkets, createCvdMarketResolver, CVD_EXCHANGES } from "./cvdMarkets.js";
+import { parseCvdMarkets, createCvdMarketResolver, CVD_EXCHANGES, cvdExchangesFor } from "./cvdMarkets.js";
 import { decodeTradeMessage, parseCvdTrades, mexcTradeType } from "./cvdTradeCodec.js";
 import { cvdAnchorStart, newCvdMinute, addCvdTrade, buildCvdCandles, validateCvdQuery } from "./cvdMath.js";
 import { createCvdIndicatorService } from "./cvdIndicator.js";
@@ -19,7 +19,8 @@ function fixture(exchange, market, side) {
     exchange === "kucoin" ? market === "spot" ? "BTC-USDT" : "XBTUSDTM" :
     exchange === "okx" ? market === "spot" ? "BTC-USDT" : "BTC-USDT-SWAP" :
     exchange === "gate" || exchange === "mexc" && market === "perpetual" ? "BTC_USDT" :
-    exchange === "bingx" ? "BTC-USDT" : "BTCUSDT";
+    exchange === "bingx" ? "BTC-USDT" : exchange === "hyperliquid" ? "BTC" : exchange === "bitmex" ? "XBTUSDT" :
+    exchange === "deribit" ? "BTC_USDC-PERPETUAL" : "BTCUSDT";
   const instrument = { symbol, contractSize: ["okx", "gate", "mexc", "kucoin", "htx"].includes(exchange) && market === "perpetual" ? 0.1 : 1 };
   const messages = {
     binance: { e: "aggTrade", s: symbol, a: "123", T, m: maker, p: "100", q: "2" },
@@ -37,10 +38,15 @@ function fixture(exchange, market, side) {
     kraken: market === "spot" ? { channel: "trade", type: "update", data: [{ trade_id: "123", timestamp: new Date(T).toISOString(), symbol, side, price: 100, qty: 2 }] } :
       { feed: "trade", product_id: symbol, uid: "123", time: T, side, price: 100, qty: 2, type: "fill" },
     htx: { ch: `market.${symbol}.trade.detail`, tick: { data: [{ id: "123", ts: T, direction: side, price: 100, amount: 2 }] } },
+    aster: { e: "aggTrade", s: symbol, a: "123", T, m: maker, p: "100", q: "2" },
+    hyperliquid: { channel: "trades", data: [{ coin: symbol, side: side === "buy" ? "B" : "A", px: "100", sz: "2", time: T, tid: 123 }] },
+    bitmex: { table: "trade", action: "insert", data: [{ symbol, side: side === "buy" ? "Buy" : "Sell", price: 100, homeNotional: 2, trdMatchID: "123", timestamp: new Date(T).toISOString() }] },
+    deribit: { method: "subscription", params: { channel: `trades.${symbol}.100ms`, data: [{ trade_id: "123", timestamp: T, direction: side, price: 100, amount: 2 }] } },
+    coinex: { method: "deals.update", data: { market: symbol, deal_list: [{ deal_id: 123, created_at: T, side, price: "100", amount: "2" }] } },
   };
   return { instrument, message: messages[exchange] };
 }
-for (const exchange of CVD_EXCHANGES) for (const market of ["spot", "perpetual"]) {
+for (const market of ["spot", "perpetual"]) for (const exchange of cvdExchangesFor(market)) {
   test(`${exchange} ${market}: documented taker direction and quote/contract units`, () => {
     for (const side of ["buy", "sell"]) {
       const { instrument, message } = fixture(exchange, market, side);
@@ -200,7 +206,7 @@ test("recorded real minutes survive restart with explicit gap instead of invente
   await b.close(); await rm(dir, { recursive: true });
 });
 test("every venue uses a public market subscription, with no private credentials", () => {
-  for (const exchange of CVD_EXCHANGES) for (const market of ["spot", "perpetual"]) {
+  for (const market of ["spot", "perpetual"]) for (const exchange of cvdExchangesFor(market)) {
     const payload = cvdSubscription(exchange, market, "BTCUSDT", 1, T);
     assert.equal(typeof payload, "object");
     assert.doesNotMatch(JSON.stringify(payload), /apiKey|signature|secret/);

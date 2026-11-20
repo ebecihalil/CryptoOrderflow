@@ -158,7 +158,8 @@ Estimate page. Available on 5m, 15m, 30m, 1h, 4h and 1D.
 | --- | --- |
 | Aggregated Funding | 17 (all except CME and Toobit) |
 | Aggregated Open Interest | 17 perpetual venues (same data as the Open Interest page) |
-| Perpetual / Spot CVD, Aggressive Volume Bubbles | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
+| Perpetual CVD, Aggressive Volume Bubbles (perp) | 15 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX, Aster, Hyperliquid, BitMEX, Deribit, CoinEx) |
+| Spot CVD, Aggressive Volume Bubbles (spot) | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
 | Aggregated volume, Liquidity Zones | up to 7 (Binance, OKX, Gate.io, Bybit, Bitget, MEXC, BingX); a venue whose gaps would cut over 20% of the matched history is left out for that coin |
 | Leverage Estimate | 4 (Binance, OKX, Gate.io, Bybit: the venues publishing top-trader ratios) |
 | Global Long Short Account Ratio | 6 (Binance, Bybit, OKX, Gate.io, Bitget, Toobit: every venue publishing an all-accounts ratio) |
@@ -200,3 +201,9 @@ that indicator (used again when it is removed and added back, and saved to your
 account); Default restores the original settings and forgets the saved ones.
 
 In the market list, the circle left of "Symbol" filters by row colour.
+
+## Bubble placement
+
+Bubbles are recorded in 5-minute cells for 7 days (exact for 5m and larger
+charts) and in 1-minute cells for the last 12 hours, used by 1m and 3m charts,
+so every bubble sits on the candle in which its trades happened.

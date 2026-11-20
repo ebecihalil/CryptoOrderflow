@@ -86,6 +86,26 @@ export function parseCvdTrades(exchange, market, message, instrument, frameId = 
         if (message.feed !== "trade" || message.product_id !== instrument.symbol || message.type === "block") break;
         rows = [message]; transform = r => [r.uid, r.time, r.side, r.price, r.qty, instrument.contractSize];
       } break;
+    case "aster": // Binance-compatible futures stream
+      if (message.e !== "aggTrade" || message.s !== instrument.symbol) break;
+      rows = [message]; transform = r => [r.a, r.T, makerSide(r.m), r.p, r.q, 1]; break;
+    case "hyperliquid": // side B = buyer was the taker, A = seller was the taker
+      if (message.channel !== "trades" || !Array.isArray(message.data)) break;
+      rows = message.data.filter(r => r.coin === instrument.symbol);
+      transform = r => [r.tid ?? r.hash, r.time, r.side === "B" ? "buy" : r.side === "A" ? "sell" : null, r.px, r.sz, 1]; break;
+    case "bitmex": // homeNotional = coins traded (works for inverse and linear contracts)
+      if (message.table !== "trade" || message.action !== "insert" || !Array.isArray(message.data)) break;
+      rows = message.data.filter(r => r.symbol === instrument.symbol);
+      transform = r => [r.trdMatchID, r.timestamp, r.side?.toLowerCase(), r.price, r.homeNotional, 1]; break;
+    case "deribit": // inverse perpetuals quote amount in USD; linear (USDC) ones in coins
+      if (message.method !== "subscription" || !String(message.params?.channel ?? "").startsWith(`trades.${instrument.symbol}.`)) break;
+      rows = message.params.data ?? [];
+      transform = r => [r.trade_id, r.timestamp, r.direction, r.price,
+        instrument.inverse ? Number(r.amount) / Number(r.price) : r.amount, 1]; break;
+    case "coinex":
+      if (message.method !== "deals.update" || message.data?.market !== instrument.symbol) break;
+      rows = message.data.deal_list ?? [];
+      transform = r => [r.deal_id, r.created_at, r.side, r.price, r.amount, 1]; break;
     case "htx":
       if (message.ch !== `market.${instrument.symbol}.trade.detail`) break;
       rows = message.tick?.data ?? [];
