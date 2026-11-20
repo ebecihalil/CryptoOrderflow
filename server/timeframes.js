@@ -3,11 +3,16 @@
 // 3M (calendar quarter: Jan/Apr/Jul/Oct). Existing id "24h" means 1D.
 
 export const CHART_TIMEFRAMES = ["1m", "3m", "5m", "15m", "30m", "1h", "4h", "24h", "1w", "1mo", "3mo"];
+/** Sub-minute frames: built from live recorded trades of the selected contract (no exchange REST history). */
+export const SECOND_TIMEFRAMES = ["1s", "5s", "15s", "30s"];
+export const ALL_TIMEFRAMES = [...SECOND_TIMEFRAMES, ...CHART_TIMEFRAMES];
+export const isSecondTimeframe = tf => SECOND_TIMEFRAMES.includes(tf);
 export const TIMEFRAME_LABELS = {
+  "1s": "1s", "5s": "5s", "15s": "15s", "30s": "30s",
   "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "4h",
   "24h": "1D", "1w": "1W", "1mo": "1M", "3mo": "3M",
 };
-const FIXED = { "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400, "1w": 604800 };
+const FIXED = { "1s": 1, "5s": 5, "15s": 15, "30s": 30, "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "24h": 86400, "1w": 604800 };
 const MONDAY_OFFSET = 4 * 86400; // 1970-01-01 was a Thursday; 1970-01-05 a Monday.
 
 export const isTimeframe = value => CHART_TIMEFRAMES.includes(value);

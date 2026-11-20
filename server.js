@@ -17,6 +17,8 @@ import {
 } from "./server/lsarMarketData.js";
 import { getTopTraderLsarSnapshot, getTopTraderLsarSummary } from "./server/topTraderLsarMarketData.js";
 import { createAccountService } from "./server/accounts.js";
+import { secondCandleService } from "./server/secondCandleService.js";
+import { isSecondTimeframe } from "./server/timeframes.js";
 import { createAccountRouter } from "./server/accountRoutes.js";
 
 // kind=global (default): all-accounts LSAR. kind=top: top-trader accounts LSAR.
@@ -79,7 +81,8 @@ app.get("/api/market/contracts", (_req, res) => {
 app.get("/api/market/candles", async (req, res) => {
   res.set("Cache-Control", "no-store");
   try {
-    res.json(await aggregatedCandleService.get(req.query));
+    // 1s–30s are built from live trades; 1m and above come from exchange candles.
+    res.json(isSecondTimeframe(req.query.timeframe) ? await secondCandleService.get(req.query) : await aggregatedCandleService.get(req.query));
   } catch (error) {
     res.status(error.status ?? 503).json({ error: error.message, retryAt: error.retryAt });
   }

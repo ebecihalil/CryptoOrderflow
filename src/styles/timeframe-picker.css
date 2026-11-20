@@ -1,0 +1,16 @@
+.tf-picker { position:relative;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+.tf-picker-trigger { display:inline-flex;align-items:center;gap:5px;height:34px;padding:0 10px;border:1px solid var(--lsar-control-border);border-radius:4px;background:var(--lsar-surface);color:var(--lsar-strong);font:11px var(--app-font-mono);cursor:pointer; }
+.tf-picker-trigger:hover,.tf-picker-trigger[aria-expanded="true"] { border-color:var(--lsar-accent);color:var(--lsar-accent); }
+.tf-picker-trigger.is-current { border-color:var(--lsar-accent);background:var(--lsar-accent-soft);color:var(--lsar-accent);font-weight:600; }
+.tf-picker-menu { position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:220px;max-height:min(70vh,520px);overflow:auto;padding:6px;border:1px solid var(--lsar-control-border);border-radius:6px;background:var(--lsar-surface);box-shadow:0 14px 30px rgba(5,14,12,.3); }
+.tf-picker-group { margin:6px 8px 3px;color:var(--lsar-muted);font:9px var(--app-font-mono);letter-spacing:.08em;text-transform:uppercase; }
+.tf-picker-row { display:flex;align-items:center;border-radius:4px; }
+.tf-picker-row:hover,.tf-picker-row.is-selected { background:var(--lsar-row-hover); }
+.tf-picker-select { flex:1;display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border:0;background:transparent;color:var(--lsar-ink);font:12px var(--app-font-mono);text-align:left;cursor:pointer; }
+.tf-picker-row.is-selected .tf-picker-select { color:var(--lsar-accent);font-weight:600; }
+.tf-picker-select small { color:var(--lsar-muted);font-size:9px; }
+.tf-picker-star { display:grid;place-items:center;width:28px;height:28px;border:0;background:transparent;color:var(--lsar-muted);cursor:pointer; }
+.tf-picker-star.is-on { color:#e2b74f; }
+.tf-picker-star:hover { color:#e2b74f; }
+.tf-picker-menu p { margin:6px 8px 2px;padding-top:6px;border-top:1px solid var(--lsar-border);color:var(--lsar-muted);font:10px var(--app-font-mono); }
+.native-seconds-note { margin:6px 0;padding:8px 10px;border-left:2px solid var(--lsar-accent);background:var(--lsar-accent-soft);color:var(--lsar-body-ink);font-size:12px;line-height:1.5; }

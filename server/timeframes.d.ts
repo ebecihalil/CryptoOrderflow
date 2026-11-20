@@ -8,3 +8,6 @@ export function nextBucket(tf: string, start: number): number;
 export function aggregateCandles<T extends { time: number; open: number; high: number; low: number; close: number; volume: number; closed?: boolean }>(
   candles: T[], tf: string, nowMs?: number): Array<{ time: number; open: number; high: number; low: number; close: number; volume: number; closed: boolean }>;
 export function isContiguous(candles: Array<{ time: number }>, tf: string): boolean;
+export const SECOND_TIMEFRAMES: string[];
+export const ALL_TIMEFRAMES: string[];
+export function isSecondTimeframe(tf: string): boolean;

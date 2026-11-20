@@ -82,6 +82,15 @@ and funding use the same buckets. CVD/bubbles come from recorded trades (up to
 14 days), so 1W/1M/3M show only the recorded part. Aggregated OI supports
 1m–1D; weekly and longer frames show an explanation instead of thin bars.
 
+Seconds (1s, 5s, 15s, 30s): perpetual exchange APIs publish no seconds
+candles, so they are built from the selected contract's live executed trades
+(`server/secondCandles.js`), starting when the chart is first opened and kept
+for 2 hours (recording stops after 10 idle minutes). Volume is the single
+contract's; minute-based layers (CVD, bubbles, funding, OI) start at 1m.
+
+The timeframe control shows starred favourites as quick buttons; the dropdown
+lists every timeframe with a ☆ to pin or unpin it (stored in the browser).
+
 ## Pane legends and settings
 
 Each pane shows TradingView-style labels at its top-left: name, inputs and

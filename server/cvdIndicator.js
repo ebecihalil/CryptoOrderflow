@@ -9,6 +9,7 @@ import { CVD_EXCHANGES, createCvdMarketResolver } from "./cvdMarkets.js";
 import { createCvdStreamFactory } from "./cvdStreams.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
 import { createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
+import { secondCandleRecorder } from "./secondCandles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
 const RETENTION = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
@@ -26,6 +27,8 @@ const compress = promisify(gzip);
 export function createCvdIndicatorService({
   resolver = createCvdMarketResolver(), streams = createCvdStreamFactory(), now = Date.now,
   storageDir = process.env.WATCHLIST_DATA_DIR || fileURLToPath(new URL("../.cache/cvd-recordings/", import.meta.url)), timers = true,
+  // Live perpetual trades also feed the seconds-candle recorder (1s–30s charts).
+  onPerpetualTrade = trade => secondCandleRecorder.ingest(trade),
 } = {}) {
   const groups = new Map();
   const pinned = new Set();
@@ -39,6 +42,7 @@ export function createCvdIndicatorService({
     const id = `${trade.exchange}:${trade.symbol}:${trade.id}`;
     if (group.ids.has(id)) return;
     group.ids.set(id, trade.time);
+    if (group.market === "perpetual") { try { onPerpetualTrade(trade); } catch { /* never affects CVD */ } }
     const source = group.sources.find(s => s.exchange === trade.exchange);
     source.status = "live"; source.tradeCount++; source.lastTradeAt = new Date(trade.time).toISOString();
     if (group.queue.length >= MAX_QUEUE) {

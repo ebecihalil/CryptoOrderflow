@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RefreshCw, RotateCw } from 'lucide-react';
 import { NativeSuperChart } from '@/components/native-super-chart';
-import { CHART_TIMEFRAMES, TIMEFRAME_LABELS, nextBucket } from '../../server/timeframes.js';
+import { ALL_TIMEFRAMES, isSecondTimeframe, nextBucket } from '../../server/timeframes.js';
+import { TimeframePicker } from '@/components/timeframe-picker';
 import { extraIndicator, extraParams } from '@/lib/extra-indicators';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { useLiquidityCandles, type LiquidityExchange, type LiquidityTimeframe, type LiquidityVolumeMode } from '@/hooks/use-liquidity-candles';
@@ -9,7 +10,7 @@ import {
   normalizeFundingAsset, useFundingIndicator, type FundingIndicatorMethod, type FundingIndicatorTimeframe,
   type FundingIndicatorWindow, type FundingIndicatorPoint,
 } from '@/hooks/use-funding-indicator';
-import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload } from '@/hooks/use-cvd-indicator';
+import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type CvdTimeframe } from '@/hooks/use-cvd-indicator';
 import { useAggressiveBubbles, type AggressiveBubblesMarket } from '@/hooks/use-aggressive-bubbles';
 import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
 import { OiIndicatorControls } from '@/components/oi-indicator-controls';
@@ -24,9 +25,7 @@ import '@/styles/native-super-chart.css';
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
-// 1m … 3M. Weekly/monthly/quarterly buckets are calendar-aligned (UTC).
-const FRAMES: Array<{ value: LiquidityTimeframe; label: string }> = (CHART_TIMEFRAMES as LiquidityTimeframe[])
-  .map((value) => ({ value, label: TIMEFRAME_LABELS[value] }));
+
 const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
 const DEFAULT_LIQUIDITY_SETTINGS: LiquiditySettings = { backBars: 300, volMult: 1.2 };
 const DEFAULT_ZONE_COLORS: ThemeColors = { resistance: '#ff0000', support: '#008000', inside: '#808080', transparency: 35 };
@@ -73,9 +72,12 @@ export function NativeChartWorkspace(props: Props) {
 function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
   const [timeframe, setTimeframe] = useCoinChartSetting<LiquidityTimeframe>(asset, 'timeframe', '1h',
-    value => FRAMES.some(frame => frame.value === value));
-  const [volumeBasis, setVolumeBasis] = useCoinChartSetting<LiquidityVolumeMode>(asset, 'volumeBasis', 'aggregated',
+    value => (ALL_TIMEFRAMES as string[]).includes(value as string));
+  // 1s–30s candles are built from live trades of the selected contract only.
+  const secondsMode = isSecondTimeframe(timeframe);
+  const [storedVolumeBasis, setVolumeBasis] = useCoinChartSetting<LiquidityVolumeMode>(asset, 'volumeBasis', 'aggregated',
     value => value === 'single' || value === 'aggregated');
+  const volumeBasis: LiquidityVolumeMode = secondsMode ? 'single' : storedVolumeBasis;
   const [showVolume, setShowVolume] = useCoinChartSetting(asset, 'showVolume', true);
   const [technicalSettings, setTechnicalSettings] = useCoinChartSetting<TechnicalSettings>(asset, 'technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
   // Parameters for the popular-indicator registry (Ichimoku, Keltner, ...), saved per coin.
@@ -92,11 +94,11 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
     value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
       typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
   const hasLiquidity = indicators.includes('liquidity');
-  const hasFunding = indicators.includes('funding');
-  const hasPerpetualCvd = indicators.includes('perpetual-cvd');
-  const hasSpotCvd = indicators.includes('spot-cvd');
-  const hasAggressiveBubbles = indicators.includes('aggressive-bubbles');
-  const hasOiDriver = indicators.includes('oi-driver');
+  const hasFunding = indicators.includes('funding') && !secondsMode;
+  const hasPerpetualCvd = indicators.includes('perpetual-cvd') && !secondsMode;
+  const hasSpotCvd = indicators.includes('spot-cvd') && !secondsMode;
+  const hasAggressiveBubbles = indicators.includes('aggressive-bubbles') && !secondsMode;
+  const hasOiDriver = indicators.includes('oi-driver') && !secondsMode;
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -143,9 +145,11 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
   const [bubbleMinDraft, setBubbleMinDraft] = useCoinChartSetting(asset, 'bubbleMinDraft', String(bubbleMinValue));
   const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);
   const canonicalAsset = contract.asset.toUpperCase();
-  const perpetualCvd = useCvdIndicator(canonicalAsset, 'perpetual', timeframe, perpetualAnchor, hasPerpetualCvd);
-  const spotCvd = useCvdIndicator(canonicalAsset, 'spot', timeframe, spotAnchor, hasSpotCvd);
-  const aggressiveBubbles = useAggressiveBubbles(canonicalAsset, timeframe, bubbleMarket, bubbleMinValue, hasAggressiveBubbles);
+  // Minute-based layers are disabled on seconds timeframes; give their hooks a valid frame.
+  const flowTimeframe = (secondsMode ? '1m' : timeframe) as CvdTimeframe;
+  const perpetualCvd = useCvdIndicator(canonicalAsset, 'perpetual', flowTimeframe, perpetualAnchor, hasPerpetualCvd);
+  const spotCvd = useCvdIndicator(canonicalAsset, 'spot', flowTimeframe, spotAnchor, hasSpotCvd);
+  const aggressiveBubbles = useAggressiveBubbles(canonicalAsset, flowTimeframe, bubbleMarket, bubbleMinValue, hasAggressiveBubbles);
   const bubblePayload = aggressiveBubbles.payload && aggressiveBubbles.payload.asset.toUpperCase() === canonicalAsset &&
     aggressiveBubbles.payload.timeframe === timeframe && aggressiveBubbles.payload.market === bubbleMarket &&
     aggressiveBubbles.payload.minValue === bubbleMinValue
@@ -220,10 +224,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
     </section>;
   };
 
-  const frameButtons = <div className="super-chart-timeframes" role="group" aria-label="Chart timeframe">
-    {FRAMES.map((frame) => <button key={frame.value} type="button" className={timeframe === frame.value ? 'active' : ''}
-      aria-pressed={timeframe === frame.value} onClick={() => setTimeframe(frame.value)}>{frame.label}</button>)}
-  </div>;
+  const frameButtons = <TimeframePicker value={timeframe} onChange={(value) => setTimeframe(value as LiquidityTimeframe)} />;
   const settingsPanel = hasLiquidity && <section className="native-indicator-controls" aria-label="Liquidity zones controls">
     <div className="native-section-label"><span className="module-kicker">EXCHANGE VOLUME QUALIFIER</span><b>Liquidity Zones</b></div>
     <label className="liquidity-range-control"><span><b>Bars to apply</b><output>{liquiditySettings.backBars} bars</output></span>
@@ -390,6 +391,12 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer }:
         {(nativeFeed.error || nativePayloadCurrent && nativeFeed.payload?.error) && <span className="is-warning">{nativeFeed.error ?? nativeFeed.payload?.error}</span>}
         <span className="native-native-symbol">Native {contract.symbol}{contract.priceDivisor !== 1 ? ` · ×${contract.priceDivisor} contract` : ''}</span>
       </div>
+      {secondsMode && <p className="native-seconds-note" role="status">
+        Seconds candles are built from this contract’s live executed trades since recording started (kept 2 hours) and refresh every 2 seconds; seconds without trades have no candle.
+        {indicators.some((id) => ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'oi-driver'].includes(id)) &&
+          ' Funding, CVD, bubbles and Open Interest are minute-based data and show from 1m upward.'}
+        {nativePayloadCurrent && nativeFeed.payload?.candles.length === 0 && ' Waiting for the first trades…'}
+      </p>}
       <div className="native-volume-meta" role="status">
         <span className="native-volume-basis-label">VOLUME · {volumeBasis === 'aggregated' ? 'AGGREGATED FOUR-VENUE' : 'SELECTED NATIVE VENUE'}</span>
         {volumeBasis === 'single' ? <>
