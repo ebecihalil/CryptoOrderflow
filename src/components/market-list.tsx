@@ -50,7 +50,7 @@ const DEFAULTS: Prefs = {
   hidden: [], colors: {}, slots: DEFAULT_SLOTS, oneRow: true,
   sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorFilter: 'all',
 };
-const ROW_HEIGHT = 32;
+const ROW_HEIGHT = 38;
 
 function readPrefs(): Prefs {
   try {
@@ -89,12 +89,13 @@ export function MarketList({ contracts, current, onSelect }: {
   const [prefs, setPrefs] = useState<Prefs>(readPrefs);
   const [query, setQuery] = useState('');
   const [palette, setPalette] = useState<string | null>(null);
-  const [showPriority, setShowPriority] = useState(false);
+  // The exchange priority list opens together with Filters; its own button can fold it.
   // Filters fold away so the list gets the space; remembered in this browser.
   const [showFilters, setShowFilters] = useState(() => { try { return localStorage.getItem(`${KEY}:filters-open`) === '1'; } catch { return false; } });
+  const [showPriority, setShowPriority] = useState(showFilters);
   const toggleFilters = () => setShowFilters((open) => {
     try { localStorage.setItem(`${KEY}:filters-open`, open ? '0' : '1'); } catch { /* storage blocked */ }
-    if (open) setShowPriority(false);
+    setShowPriority(!open);
     return !open;
   });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
