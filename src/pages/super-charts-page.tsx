@@ -57,6 +57,8 @@ function SuperChartsWorkspace() {
   const cellStudies = (index: number) => index === 0 ? studies : cellLayers[index]?.studies ?? studies;
   const cellIndicators = (index: number) => index === 0 ? indicators : cellLayers[index]?.indicators ?? indicators;
   const [marketDraft, setMarketDraft] = useState('');
+  const [studyQuery, setStudyQuery] = useState('');
+  const studyMatches = (label: string) => !studyQuery.trim() || label.toLowerCase().includes(studyQuery.trim().toLowerCase());
   // Super Charts always opens as the big chart: one toolbar, the chart and the
   // market list fill the browser window (the computer's taskbar stays visible).
   const expanded = true;
@@ -220,10 +222,12 @@ function SuperChartsWorkspace() {
                   Technical Indicators <span className="super-chart-selection-count">{cellStudies(index).length}</span><ChevronDown size={14} aria-hidden="true" />
                 </button>
                 {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
-                  {CHART_STUDY_GROUPS.map((group) => (
+                  <input className="super-chart-menu-search" type="search" placeholder={`Search ${CHART_STUDIES.length} indicators…`} autoFocus
+                    value={studyQuery} onChange={(event) => setStudyQuery(event.target.value)} aria-label="Search technical indicators" data-testid="study-search" />
+                  {CHART_STUDY_GROUPS.filter((group) => CHART_STUDIES.some((study) => study.group === group && studyMatches(study.label))).map((group) => (
                     <div key={group} role="group" aria-label={group}>
                       <div className="super-chart-menu-group">{group}</div>
-                      {CHART_STUDIES.filter((study) => study.group === group).map((study) => (
+                      {CHART_STUDIES.filter((study) => study.group === group && studyMatches(study.label)).map((study) => (
                         <button type="button" key={study.id} className={cellStudies(index).includes(study.id) ? 'is-selected' : ''}
                           aria-pressed={cellStudies(index).includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
                           <span className="super-chart-menu-check">{cellStudies(index).includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
@@ -231,6 +235,7 @@ function SuperChartsWorkspace() {
                       ))}
                     </div>
                   ))}
+                  {!CHART_STUDIES.some((study) => studyMatches(study.label)) && <p>No indicator matches “{studyQuery}”.</p>}
                   <p>Native studies · standard default settings · shared price time axis</p>
                 </div>}
               </div>

@@ -437,9 +437,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         const series = item.type === 'histogram'
           ? pushSeries(chart.addSeries(HistogramSeries, { ...common }, pane))
           : pushSeries(chart.addSeries(LineSeries, { ...common, color: item.color, lineWidth: (item.width ?? 1) as 1 | 2 | 3 | 4,
-            lineStyle: item.dashed ? 2 : 0, ...(item.type === 'dots' ? { lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 2 } : {}) }, pane));
+            lineStyle: item.dashed ? 2 : 0, ...(item.step ? { lineType: 1 } : {}), ...(item.type === 'dots' ? { lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 2 } : {}) }, pane));
         series.setData(item.type === 'histogram'
-          ? data.map((point) => 'value' in point ? { ...point, color: (point.value as number) >= 0 ? CHART_COLORS.histUp : CHART_COLORS.histDown } : point)
+          ? data.map((point, index) => 'value' in point ? { ...point, color: item.data[index].color
+            ?? ((point.value as number) >= 0 ? CHART_COLORS.histUp : CHART_COLORS.histDown) } : point)
           : data);
         first ??= series;
       }
