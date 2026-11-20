@@ -44,3 +44,5 @@
 .auth-google:hover { background:#f6f8fb; }
 .auth-divider { display:flex;align-items:center;gap:10px;color:var(--lsar-muted);font:10px var(--app-font-mono);text-transform:uppercase;letter-spacing:.08em; }
 .auth-divider::before,.auth-divider::after { content:"";flex:1;height:1px;background:var(--lsar-border); }
+.auth-legal { margin:10px 0 0;color:var(--lsar-muted);font-size:11px;text-align:center; }
+.auth-legal a { color:inherit;text-decoration:underline; }
