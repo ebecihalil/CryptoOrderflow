@@ -83,6 +83,24 @@ export function createCvdIndicatorService({
     for (const t of group.gaps) if (t < earliest) group.gaps.delete(t);
     for (const [id, t] of group.ids) if (t < now() - 180_000) group.ids.delete(id);
   }
+  // Liquidations (and when each liquidation feed was connected) are kept 7 days
+  // and saved with the recording: the leverage model needs to know both what was
+  // liquidated and when the feeds could see it.
+  const LIQ_RETENTION_MS = 7 * 86400_000;
+  const trimLiquidations = group => {
+    const cutoff = now() - LIQ_RETENTION_MS;
+    group.liquidations = group.liquidations.filter(item => item.time >= cutoff).slice(-200_000);
+    for (const [exchange, spans] of group.liqCoverage) group.liqCoverage.set(exchange, spans.filter(span => span[1] >= cutoff));
+  };
+  /** Closed coverage spans plus each live feed's open span, ending now. */
+  const coverageSpans = group => {
+    const out = {};
+    for (const [exchange, spans] of group.liqCoverage) out[exchange] = spans.map(span => [...span]);
+    for (const source of group.sources ?? []) {
+      if (source.liquidationConnectedSince) (out[source.exchange] ??= []).push([source.liquidationConnectedSince, now()]);
+    }
+    return out;
+  };
   async function save(group) {
     if (group.saving) return group.saveTask;
     if (!storageDir || !group.loaded || !group.dirty) return;
@@ -94,7 +112,8 @@ export function createCvdIndicatorService({
         lastProcessedTime: group.lastProcessedTime, gaps: [...group.gaps],
         minutes: [...group.minutes.values()].map(r => ({ ...r, sources: [...r.sources],
           ...(r.byExchange ? { byExchange: Object.fromEntries(Object.entries(r.byExchange).map(([k, v]) => [k, [...v]])) } : {}) })),
-        bubbles: group.bubbles.serialize() };
+        bubbles: group.bubbles.serialize(),
+        ...(group.market === "perpetual" ? { liquidations: group.liquidations, liqCoverage: coverageSpans(group) } : {}) };
       await mkdir(storageDir, { recursive: true });
       const temporary = `${file(group)}.tmp`;
       await writeFile(temporary, await compress(JSON.stringify(payload)));
@@ -125,6 +144,19 @@ export function createCvdIndicatorService({
       group.lastProcessedTime = Number.isFinite(body.lastProcessedTime) ? body.lastProcessedTime : 0;
       if (Array.isArray(body.gaps)) body.gaps.filter(Number.isSafeInteger).forEach(t => group.gaps.add(t));
       if (body.bubbles) group.bubbles.restore(body.bubbles, CVD_EXCHANGES);
+      if (group.market === "perpetual" && Array.isArray(body.liquidations)) {
+        group.liquidations = body.liquidations.filter(item => item && LIQUIDATION_EXCHANGES.includes(item.exchange) &&
+          (item.side === "long" || item.side === "short") && Number.isFinite(item.time) && item.time <= now() &&
+          Number.isFinite(item.usd) && item.usd > 0).sort((a, b) => a.time - b.time);
+      }
+      if (group.market === "perpetual" && body.liqCoverage && typeof body.liqCoverage === "object") {
+        for (const [exchange, spans] of Object.entries(body.liqCoverage)) {
+          if (!LIQUIDATION_EXCHANGES.includes(exchange) || !Array.isArray(spans)) continue;
+          group.liqCoverage.set(exchange, spans.filter(span => Array.isArray(span) && span.length === 2 &&
+            span.every(Number.isFinite) && span[0] <= span[1] && span[1] <= now()).map(span => [span[0], span[1]]));
+        }
+      }
+      trimLiquidations(group);
       if (group.minutes.size) markGap(group); // downtime is unknown, not zero volume
     } catch (error) {
       if (error.code !== "ENOENT") group.storageFailed = true;
@@ -141,8 +173,14 @@ export function createCvdIndicatorService({
         if (source.status !== state && group.minutes.size) markGap(group);
         source.status = state;
         if (LIQUIDATION_EXCHANGES.includes(source.exchange)) {
-          source.liquidationConnectedSince = ["idle", "live"].includes(state)
-            ? source.liquidationConnectedSince ?? now() : null;
+          const connected = ["idle", "live"].includes(state);
+          if (!connected && source.liquidationConnectedSince) {
+            // Feed dropped: remember the span it covered.
+            const spans = group.liqCoverage.get(source.exchange) ?? [];
+            spans.push([source.liquidationConnectedSince, now()]);
+            group.liqCoverage.set(source.exchange, spans);
+          }
+          source.liquidationConnectedSince = connected ? source.liquidationConnectedSince ?? now() : null;
         }
       }, event => {
         if (!group.active || event.time < group.subscribedSince || event.time > now() + 5000) return;
@@ -150,7 +188,8 @@ export function createCvdIndicatorService({
           item.side === event.side && item.time === event.time && item.usd === event.usd)) {
           group.liquidations.push(event);
           group.liquidations.sort((a, b) => a.time - b.time);
-          group.liquidations = group.liquidations.filter(item => item.time >= now() - 30 * 3600_000).slice(-100_000);
+          trimLiquidations(group);
+          group.dirty = true;
         }
       });
       if (!group.active) handle.stop(); else group.handles.push(handle);
@@ -197,7 +236,7 @@ export function createCvdIndicatorService({
     if (!group) {
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
         sources: initialSources(market), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
-        handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [] };
+        handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [], liqCoverage: new Map() };
       // 5-minute cells for up to 7 days (5m and every larger chart timeframe are whole
       // multiples of 5 minutes, so each bubble lands on the candle it traded in).
       group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 7 * 86400,
@@ -336,7 +375,8 @@ export function createCvdIndicatorService({
     const group = groups.get(`perpetual:${canonicalAsset(asset).asset}`);
     const supported = new Set(LIQUIDATION_EXCHANGES);
     return {
-      events: (group?.liquidations ?? []).filter(item => item.time >= now() - 30 * 3600_000).map(item => ({ ...item })),
+      events: (group?.liquidations ?? []).filter(item => item.time >= now() - LIQ_RETENTION_MS).map(item => ({ ...item })),
+      spans: group ? coverageSpans(group) : {},
       coverage: CVD_EXCHANGES.filter(exchange => supported.has(exchange)).flatMap(exchange => {
         const source = group?.sources.find(item => item.exchange === exchange);
         return source?.liquidationConnectedSince

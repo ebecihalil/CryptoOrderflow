@@ -49,7 +49,7 @@ type Props = {
   syncId?: number;
   sync?: { crosshair: boolean; time: boolean; range: boolean };
   /** Leverage Estimate rows (time in ms); score 0–100. */
-  /** Perp Leverage Estimation rows (time in seconds; 100 = normal for this coin). */
+  /** Perp Leverage Estimation rows (time in seconds; values are leverage in ×). */
   leverageRows?: Array<{ time: number; avg: number | null; long: number | null; short: number | null }> | null;
   leverageEnabled?: boolean;
   /** Message shown in the middle of a pane that has no data for this timeframe (pane stays). */
@@ -564,7 +564,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       lineFor('long', LEVERAGE_COLORS.long, 1);
       lineFor('short', LEVERAGE_COLORS.short, 1);
       const avg = lineFor('avg', LEVERAGE_COLORS.avg, 3);
-      avg.createPriceLine({ price: 100, color: '#89928a90', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+      // Reference lines at 10× and 25× (typical retail leverage zones).
+      avg.createPriceLine({ price: 10, color: '#89928a90', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '10×' });
+      avg.createPriceLine({ price: 25, color: '#89928a60', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '25×' });
     }
     for (const lsar of lsarPanes) {
       const pane = nextPane();
@@ -729,9 +731,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       if (key === 'leverage') {
         const rows = (leverageRows ?? []).filter((item) => item.avg !== null);
         const row = rows.find((item) => item.time === legendTime) ?? rows.at(-1);
-        return [{ key: 'leverage', label: 'Perp Leverage Estimation', params: '100 = normal', color: LEVERAGE_COLORS.avg,
-          values: row ? [{ text: `Avg ${row.avg!.toFixed(0)}`, color: LEVERAGE_COLORS.avg }, { text: `Long ${row.long?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.long },
-            { text: `Short ${row.short?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.short }] : paneNotes.leverage ? [] : [{ text: 'Collecting data…' }] }];
+        const x = (value: number | null | undefined) => value === null || value === undefined ? '—' : `${value.toFixed(1)}×`;
+        return [{ key: 'leverage', label: 'Perp Leverage Estimation', params: 'avg leverage ×', color: LEVERAGE_COLORS.avg,
+          values: row ? [{ text: `Avg ${x(row.avg)}`, color: LEVERAGE_COLORS.avg }, { text: `Long ${x(row.long)}`, color: LEVERAGE_COLORS.long },
+            { text: `Short ${x(row.short)}`, color: LEVERAGE_COLORS.short }] : paneNotes.leverage ? [] : [{ text: 'Collecting data…' }] }];
       }
       return [];
     };
