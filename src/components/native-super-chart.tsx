@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  CandlestickSeries, ColorType, createChart, createSeriesMarkers, HistogramSeries, LineSeries, MismatchDirection,
+  CandlestickSeries, ColorType, createChart, HistogramSeries, LineSeries, MismatchDirection,
   type IChartApi, type ISeriesApi, type Time, type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, LiquidityZone, LiquiditySettings } from '@/lib/liquidity-zones';
@@ -15,7 +15,7 @@ import { extraParams } from '@/lib/extra-indicators';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
-import type { OiDriverPayload } from '@/hooks/use-oi-driver';
+import type { AggregatedOiPayload } from '@/hooks/use-aggregated-oi';
 import { AggressiveBubblesPrimitive, type PlottedAggressiveBubble } from '@/components/aggressive-bubbles-primitive';
 import { readChartPreference, writeChartPreference, validChartView, shiftedChartRange } from '@/lib/chart-preferences.js';
 
@@ -41,10 +41,9 @@ type Props = {
   spotCvdEnabled: boolean;
   aggressiveBubbles: { points: AggressiveBubble[] } | null;
   aggressiveBubblesEnabled: boolean;
-  oiDriver: OiDriverPayload | null;
+  oiDriver: Pick<AggregatedOiPayload, 'candles'> | null;
   oiDriverEnabled: boolean;
   /** Driver mode: state colours + spike/pullback alert labels (off = classic aggregated OI). */
-  oiStateMode?: boolean;
   /** Multi-chart sync: this chart's id and which things follow the other charts. */
   syncId?: number;
   sync?: { crosshair: boolean; time: boolean; range: boolean };
@@ -112,7 +111,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, oiStateMode = false, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -536,18 +535,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       oiSeries.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } });
       oiSeries.setData(oiUsdBars.map(bar => ({
         time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
-        ...(oiStateMode ? { color: bar.color, wickColor: bar.color, borderColor: bar.color }
-          : { color: bar.close >= bar.open ? '#26a69a' : '#ef5350', wickColor: bar.close >= bar.open ? '#26a69a' : '#ef5350', borderColor: bar.close >= bar.open ? '#26a69a' : '#ef5350' }),
+        color: bar.close >= bar.open ? '#26a69a' : '#ef5350', wickColor: bar.close >= bar.open ? '#26a69a' : '#ef5350', borderColor: bar.close >= bar.open ? '#26a69a' : '#ef5350',
       })));
-      if (oiStateMode) createSeriesMarkers(oiSeries, (oiDriver?.candles ?? []).flatMap(bar => {
-        const markers = [];
-        if (bar.spikeTime === bar.time && bar.spikePct !== null)
-          markers.push({ time: toTime(bar.time), position: 'aboveBar' as const, color: '#b91c1c', shape: 'arrowDown' as const,
-            text: `${bar.spikePct.toFixed(2)}%` });
-        if (bar.alerts.length) markers.push({ time: toTime(bar.time), position: 'belowBar' as const, color: '#facc15',
-          shape: 'circle' as const, text: bar.alerts.join(' · ') });
-        return markers;
-      }));
     }
     // The pane stays on the chart even before data arrives (empty, with its label).
     if (leverageEnabled) {
@@ -667,7 +656,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
     };
     requestAnimationFrame(() => measureRef.current());
-  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiUsdBars, oiDriverEnabled, oiStateMode, fundingEnabled, leverageRows, leverageEnabled, lsarPanes]);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiUsdBars, oiDriverEnabled, fundingEnabled, leverageRows, leverageEnabled, lsarPanes]);
 
   // ---- TradingView-style legends: name, inputs and value at the crosshair ----
   const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;

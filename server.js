@@ -23,6 +23,7 @@ import { isSecondTimeframe } from "./server/timeframes.js";
 import { createAccountRouter } from "./server/accountRoutes.js";
 import { getLsarChart } from "./server/lsarChart.js";
 import { createPerpLeverageService } from "./server/perpLeverage.js";
+import { aggregatedOiService } from "./server/aggregatedOi.js";
 import { candleService } from "./server/chartCandles.js";
 import { getOiChartInputs } from "./server/openInterestMarketData.js";
 import { OI_DRIVER_EXCHANGES } from "./server/oiDriverService.js";
@@ -153,6 +154,13 @@ app.get("/api/market/open-interest", (req, res) => {
   res.set("Cache-Control", "no-store").json(getOpenInterestSnapshot(timeframe, selection ? [...new Set(selection.split(","))] : [], comparison));
 });
 
+// Aggregated Open Interest pane: total OI of every USDT/USDC perpetual, as chart candles (coins).
+app.get("/api/indicators/aggregated-oi", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(await aggregatedOiService.get(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400
+    ? error.message : "Aggregated open interest is currently unavailable." }); }
+});
 app.get("/api/indicators/open-interest-driver", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try { res.json(oiDriverService.get(req.query)); }
