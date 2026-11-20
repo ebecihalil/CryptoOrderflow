@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, RotateCcw, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { assignSlot, groupByPriority, moveSlot, normalizeSlots } from '@/lib/market-priority';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
@@ -90,6 +90,13 @@ export function MarketList({ contracts, current, onSelect }: {
   const [query, setQuery] = useState('');
   const [palette, setPalette] = useState<string | null>(null);
   const [showPriority, setShowPriority] = useState(false);
+  // Filters fold away so the list gets the space; remembered in this browser.
+  const [showFilters, setShowFilters] = useState(() => { try { return localStorage.getItem(`${KEY}:filters-open`) === '1'; } catch { return false; } });
+  const toggleFilters = () => setShowFilters((open) => {
+    try { localStorage.setItem(`${KEY}:filters-open`, open ? '0' : '1'); } catch { /* storage blocked */ }
+    if (open) setShowPriority(false);
+    return !open;
+  });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(600);
@@ -104,7 +111,7 @@ export function MarketList({ contracts, current, onSelect }: {
     queryKey: ['market-tickers'],
     queryFn: async ({ signal }): Promise<TickersPayload> => {
       const response = await fetch('/api/market/tickers', { signal });
-      if (!response.ok) throw new Error('Prices unavailable');
+      if (!response.ok) throw new Error(response.status === 404 ? 'restart' : `HTTP ${response.status}`);
       return response.json();
     },
     refetchInterval: 15_000, staleTime: 10_000, retry: 1,
@@ -189,6 +196,7 @@ export function MarketList({ contracts, current, onSelect }: {
   });
   const filtered = prefs.hidden.length > 0 || prefs.move !== 'all'
     || prefs.minMove > 0 || prefs.colorFilter !== 'all';
+  const activeFilters = [prefs.move !== 'all', prefs.minMove > 0, prefs.colorFilter !== 'all', prefs.hidden.length > 0, !prefs.oneRow].filter(Boolean).length;
   const sortBy = (key: SortKey) => update({ sort: { key, dir: prefs.sort.key === key ? (prefs.sort.dir === 1 ? -1 : 1) : key === 'symbol' ? 1 : -1 } });
   const setColor = (key: string, color: string | null) => {
     const colors = { ...prefs.colors };
@@ -217,11 +225,19 @@ export function MarketList({ contracts, current, onSelect }: {
         </button>
       </header>
       <div className="market-list-tools">
-        <label className="market-list-search"><Search size={13} aria-hidden="true" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search coin" aria-label="Search coins"
-            spellCheck={false} autoCapitalize="characters" data-testid="market-search" />
-          {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
-        </label>
+        <div className="market-list-searchrow">
+          <label className="market-list-search"><Search size={13} aria-hidden="true" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search coin" aria-label="Search coins"
+              spellCheck={false} autoCapitalize="characters" data-testid="market-search" />
+            {query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
+          </label>
+          <button type="button" className={`market-list-filters-toggle${activeFilters ? ' has-active' : ''}`} aria-expanded={showFilters}
+            onClick={toggleFilters} title={showFilters ? 'Hide filters' : 'Show filters and exchange priority'} data-testid="market-filters-toggle">
+            <SlidersHorizontal size={12} aria-hidden="true" /> Filters{activeFilters ? <b>{activeFilters}</b> : null}
+            <ChevronDown size={12} aria-hidden="true" className="market-list-chevron" />
+          </button>
+        </div>
+        {showFilters && <>
         <div className="market-list-mode">
           <label className="market-list-onerow" title="Show each coin once, from your highest-priority exchange that lists it">
             <input type="checkbox" checked={prefs.oneRow} onChange={(event) => { update({ oneRow: event.target.checked }); setExpanded(new Set()); }}
@@ -288,6 +304,7 @@ export function MarketList({ contracts, current, onSelect }: {
               aria-label={`Show only ${color.id} coins`} title={`Only ${color.id}`} />
           ))}
         </div>
+        </>}
       </div>
       <div className="market-list-columns">
         {header('symbol', 'Symbol', 'is-symbol')}{header('last', 'Last')}{header('change', 'Chg')}{header('changePercent', 'Chg%')}
@@ -338,7 +355,9 @@ export function MarketList({ contracts, current, onSelect }: {
         {!rows.length && <p className="market-list-empty">{contracts.length ? 'No coins match these filters. Press Reset to show all again.' : 'Loading contracts…'}</p>}
       </div>
       <footer className="market-list-foot">
-        {tickers.isError ? 'Prices unavailable right now; retrying.' : unavailable.length ? `No prices from ${unavailable.join(', ')} right now.`
+        {tickers.isError ? (tickers.error?.message === 'restart'
+          ? 'Prices unavailable: the server is running an older version. Restart it after updating.'
+          : 'Prices unavailable right now; retrying.') : unavailable.length ? `No prices from ${unavailable.join(', ')} right now.`
           : `Click a coin to chart it · ● colour · × remove · +N other exchanges · prices refresh every 15–60 s.`}
       </footer>
     </aside>
