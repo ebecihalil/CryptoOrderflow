@@ -20,7 +20,7 @@ test("LSAR and Funding search suggestions derive from existing snapshots", () =>
 });
 test("verified shared market drives a native chart and synchronized orderflow layers", () => {
   const page = read("pages/super-charts-page.tsx");
-  assert.match(page, /market\.symbol/);
+  assert.match(read("components/native-chart-workspace.tsx"), /contract\.symbol/);
   assert.match(page, /market\?\.asset/);
   assert.match(page, /contract=\{market\}/);
   const workspace = read("components/native-chart-workspace.tsx");

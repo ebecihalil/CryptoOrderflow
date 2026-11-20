@@ -103,9 +103,12 @@ live in these panels. Chart colours use a brighter pastel palette
 
 ## Full screen and indicator settings
 
-"Big chart" (next to Fit view) fills the browser window with the chart (your taskbar stays visible): the
-indicator menus stay on top, the timeframe row above the chart, and the coin
-watchlist on the right. Esc or "Normal view" returns to the normal page.
+Super Charts always opens as a big chart filling the browser window (the
+computer's taskbar stays visible). One toolbar holds everything: CO (home),
+symbol search, the coin and price, timeframes (favourites + More), Technical
+Indicators, Orderflow Indicators, volume basis, Vol (volume pane), refresh and
+Fit. Indicators are removed with × on their chart label; the market list is on
+the right.
 
 Indicator settings stay while the indicator is on the chart (also across
 reloads). Removing an indicator resets its settings, so adding it back starts

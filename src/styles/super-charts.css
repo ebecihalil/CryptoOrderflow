@@ -148,3 +148,33 @@ body.chart-fullscreen-open { overflow:hidden; }
   .is-chart-expanded .super-chart-workspace-layout { grid-template-columns:minmax(0,1fr); }
   .is-chart-expanded .chart-watchlist { position:static;max-height:none; }
 }
+
+/* Super Charts always opens as the big chart: one compact toolbar above the chart. */
+.super-charts-main.is-chart-expanded { grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;gap:6px;padding:6px 8px 8px; }
+.super-chart-catalogue-status { display:flex;flex-wrap:wrap;gap:8px; }
+.super-chart-catalogue-status:empty { display:none; }
+.is-chart-expanded .native-chart-toolbar.sc-toolbar { gap:6px;padding:5px 8px;background:var(--lsar-surface); }
+.sc-toolbar .super-chart-timeframes { margin-right:0; }
+.sc-symbol { display:flex;align-items:center;gap:6px; }
+.sc-home { display:grid;place-items:center;width:30px;height:30px;border-radius:5px;background:var(--lsar-accent);color:#fff;font:800 12px var(--app-font-sans);text-decoration:none; }
+.sc-home:hover { filter:brightness(1.1); }
+.sc-symbol-search { width:160px; }
+.sc-symbol-search .super-chart-contract-input { height:30px;padding:0 9px; }
+.sc-toolbar-quote { display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap;color:var(--lsar-muted);font:10px var(--app-font-mono); }
+.sc-toolbar-quote b { color:var(--lsar-ink);font:700 14px var(--app-font-mono); }
+.sc-toolbar-quote i { padding:1px 4px;background:var(--lsar-accent-soft);color:var(--lsar-accent);font-style:normal;font-size:8px; }
+.sc-toolbar-quote strong { color:var(--lsar-ink);font:600 13px var(--app-font-mono); }
+.sc-sep { width:1px;height:22px;background:var(--lsar-border); }
+.sc-toolbar .super-chart-timeframes { padding:2px; }
+.sc-toolbar .super-chart-timeframes button { min-width:32px;height:26px;padding:0 6px; }
+.sc-toolbar .tf-picker-trigger { height:30px;padding:0 8px; }
+.sc-toolbar .super-chart-menu-bar { margin:0;padding:0;border:0;background:none;gap:6px; }
+.sc-toolbar .super-chart-menu-trigger { height:30px;min-height:30px;padding:0 9px;font-size:10px; }
+.sc-compact-select { height:30px;padding:0 6px;border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong);font:10px var(--app-font-mono); }
+.sc-compact-toggle { font-size:10px; }
+.sc-icon-button { width:30px;min-height:30px;padding:0; }
+.sc-fit { min-height:30px;padding:0 10px; }
+.is-chart-expanded .market-list { height:calc(100dvh - 16px); }
+/* The hover read-out floats over the chart instead of taking a line. */
+.is-chart-expanded .native-chart-wrap { position:relative; }
+.is-chart-expanded .native-chart-readout { position:absolute;left:8px;bottom:34px;z-index:3;max-width:calc(100% - 90px);padding:3px 7px;border-radius:4px;background:color-mix(in srgb,var(--lsar-surface) 88%,transparent);pointer-events:none; }
