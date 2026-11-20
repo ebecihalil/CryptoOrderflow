@@ -1,10 +1,11 @@
 // Exchange-fed adaptation of the user-supplied Pine market-driver and spike rules.
 export const OI_DRIVER_DEFAULTS = {
-  showTotals: true, stateColors: true, showLsar: true,
+  // Default look = classic aggregated OI (green up / red down); state colours and alerts are optional.
+  showTotals: true, stateColors: false, showLsar: true,
   flatBodyPct: 15, activityLength: 20, activityFactor: 3,
   pinbarBodyPct: 10, pinbarWickPct: 50, pinbarWickRatio: 2,
   spikeMult: 5, avgLength: 50, maxSidewaysBars: 10, pullback1: 10, pullback2: 20,
-  colors: { up: "#3b82f6", down: "#ef4444", longBuild: "#3b82f6", shortBuild: "#f23645",
+  colors: { up: "#26a69a", down: "#ef5350", longBuild: "#3b82f6", shortBuild: "#f23645",
     limitBuy: "#22c55e", limitSell: "#f97316", shortExit: "#facc15", longExit: "#a855f7", neutral: "#737373" },
 };
 const bounds = {
@@ -223,5 +224,34 @@ export function buildOiDriverCandles(contracts, duration, now) {
       provisional: time + duration > now });
     priorCohort = cohort;
   }
-  return output;
+  return chainOiCandles(output, duration, now);
+}
+
+/**
+ * Classic aggregated open-interest candles with no gaps:
+ *  - each candle's move comes from the exchanges present in it and the one
+ *    before (so an exchange joining or dropping never creates a fake jump),
+ *  - candles are chained: every candle opens exactly at the previous close,
+ *  - a missing candle is a flat candle at the previous close,
+ *  - the series is scaled so the latest candle equals the real current total.
+ */
+export function chainOiCandles(bars, duration, now) {
+  if (!bars.length) return [];
+  const step = duration / 1000;
+  const chained = [];
+  let level = bars[0].open;
+  for (const bar of bars) {
+    for (let time = (chained.at(-1)?.time ?? bar.time - step) + step; chained.length && time < bar.time; time += step) {
+      chained.push({ time, open: level, high: level, low: level, close: level, cohort: chained.at(-1).cohort,
+        sourceCount: chained.at(-1).sourceCount, segmentStart: false, provisional: false, filled: true });
+    }
+    const scale = bar.open > 0 ? level / bar.open : 1;
+    const close = bar.close * scale;
+    chained.push({ ...bar, open: level, high: Math.max(level, close, bar.high * scale), low: Math.min(level, close, bar.low * scale),
+      close, segmentStart: chained.length === 0, rawClose: bar.close });
+    level = close;
+  }
+  const anchor = bars.at(-1).close / chained.at(-1).close;
+  return chained.map(({ rawClose, ...bar }) => ({ ...bar, open: bar.open * anchor, high: bar.high * anchor,
+    low: bar.low * anchor, close: bar.close * anchor }));
 }

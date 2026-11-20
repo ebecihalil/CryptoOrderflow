@@ -246,3 +246,14 @@ Leverage Estimation are published every 5 minutes: on 1m, 3m and seconds
 charts they are shown as steps (each candle takes the latest 5-minute value).
 Where an indicator has no data for the timeframe (e.g. Aggregated OI on 1W,
 CVD on seconds charts), its pane stays with a message in the middle.
+
+## Aggregated Open Interest
+
+Classic aggregated OI candles in USD (open interest in coins × the chart's
+price) from up to 17 exchanges, like an aggregated OI chart: every candle opens
+at the previous close, a missing candle is drawn flat (no gaps), and a change in
+which exchanges report never creates a fake jump (each candle's move comes from
+the exchanges present in it and the one before; the series is scaled so the
+latest candle equals the real current total). Green = OI up, red = OI down. The
+driver's state colours and spike/pullback alerts are optional ("State colors"
+in its settings).

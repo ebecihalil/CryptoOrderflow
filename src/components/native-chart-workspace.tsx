@@ -77,10 +77,10 @@ export function NativeChartWorkspace(props: Props) {
     toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} cellId={props.cellId ?? 0} />;
 }
 
-const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
+const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: false, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
       pinbarBodyPct: 10, pinbarWickPct: 50, pinbarWickRatio: 2, spikeMult: 5, avgLength: 50,
       maxSidewaysBars: 10, pullback1: 10, pullback2: 20,
-      colors: { up: '#3b82f6', down: '#ef4444', longBuild: '#3b82f6', shortBuild: '#f23645',
+      colors: { up: '#26a69a', down: '#ef5350', longBuild: '#3b82f6', shortBuild: '#f23645',
         limitBuy: '#22c55e', limitSell: '#f97316', shortExit: '#facc15', longExit: '#a855f7', neutral: '#737373' } };
 
 /** Technical settings owned by each built-in study (reset when that study is removed). */
@@ -610,7 +610,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
-             oiDriver={hasOiDriver ? oiDriver.payload : null} oiDriverEnabled={indicators.includes('oi-driver')} priceDivisor={contract.priceDivisor || 1}
+             oiDriver={hasOiDriver ? oiDriver.payload : null} oiDriverEnabled={indicators.includes('oi-driver')} oiStateMode={oiDriverSettings.stateColors} priceDivisor={contract.priceDivisor || 1}
              leverageRows={leverageRows} leverageEnabled={indicators.includes('leverage')} lsarPanes={lsarPanes} paneNotes={paneNotes} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>

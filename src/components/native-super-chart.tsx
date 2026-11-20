@@ -43,6 +43,8 @@ type Props = {
   aggressiveBubblesEnabled: boolean;
   oiDriver: OiDriverPayload | null;
   oiDriverEnabled: boolean;
+  /** Driver mode: state colours + spike/pullback alert labels (off = classic aggregated OI). */
+  oiStateMode?: boolean;
   /** Leverage Estimate rows (time in ms); score 0–100. */
   /** Perp Leverage Estimation rows (time in seconds; 100 = normal for this coin). */
   leverageRows?: Array<{ time: number; avg: number | null; long: number | null; short: number | null }> | null;
@@ -107,7 +109,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, oiStateMode = false, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -150,6 +152,20 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         return !!bar && point.nativePrice >= bar.low * 0.999 && point.nativePrice <= bar.high * 1.001;
       });
   }, [aggressiveBubbles, priceDivisor, candles]);
+  // Aggregated OI in USD (coins x this chart's price), chained so each candle opens at the previous close.
+  const oiUsdBars = useMemo(() => {
+    const prices = new Map(candles.map((bar) => [bar.time, bar.close]));
+    let lastPrice: number | null = null, previousClose: number | null = null;
+    return (oiDriver?.candles ?? []).flatMap((bar) => {
+      const price = prices.get(bar.time) ?? lastPrice;
+      if (!price) return [];
+      lastPrice = price;
+      const close = bar.close * price;
+      const open = previousClose ?? bar.open * price;
+      previousClose = close;
+      return [{ ...bar, open, close, high: Math.max(open, close, bar.high * price), low: Math.min(open, close, bar.low * price) }];
+    });
+  }, [oiDriver, candles]);
   candleDataRef.current = candles;
   const volumeByTime = useMemo(() => new Map(volumeCandles.map((bar) => [bar.time, bar.volume])), [volumeCandles]);
   const studyData = useMemo(() => calculateTechnicalIndicators(candles, technicalSettings), [candles, technicalSettings]);
@@ -462,11 +478,12 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         wickUpColor: '#3b82f6', wickDownColor: '#ef4444', priceLineVisible: false,
       }, pane));
       oiSeries.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.08 } });
-      oiSeries.setData((oiDriver?.candles ?? []).map(bar => ({
+      oiSeries.setData(oiUsdBars.map(bar => ({
         time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
-        color: bar.color, wickColor: bar.color, borderColor: bar.color,
+        ...(oiStateMode ? { color: bar.color, wickColor: bar.color, borderColor: bar.color }
+          : { color: bar.close >= bar.open ? '#26a69a' : '#ef5350', wickColor: bar.close >= bar.open ? '#26a69a' : '#ef5350', borderColor: bar.close >= bar.open ? '#26a69a' : '#ef5350' }),
       })));
-      createSeriesMarkers(oiSeries, (oiDriver?.candles ?? []).flatMap(bar => {
+      if (oiStateMode) createSeriesMarkers(oiSeries, (oiDriver?.candles ?? []).flatMap(bar => {
         const markers = [];
         if (bar.spikeTime === bar.time && bar.spikePct !== null)
           markers.push({ time: toTime(bar.time), position: 'aboveBar' as const, color: '#b91c1c', shape: 'arrowDown' as const,
@@ -592,7 +609,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
     };
     requestAnimationFrame(() => measureRef.current());
-  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled, fundingEnabled, leverageRows, leverageEnabled, lsarPanes]);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiUsdBars, oiDriverEnabled, oiStateMode, fundingEnabled, leverageRows, leverageEnabled, lsarPanes]);
 
   // ---- TradingView-style legends: name, inputs and value at the crosshair ----
   const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;
@@ -640,8 +657,13 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         values: [{ text: (() => { const v = fundingRows.find((row) => row.time === legendTime)?.value; return v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(4)}%`; })() }] }];
       if (key === 'perpetual-cvd') return [{ key: 'perpetual-cvd', label: 'Aggregated Perpetual CVD', params: (perpetualCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(perpetualCvd) }] }];
       if (key === 'spot-cvd') return [{ key: 'spot-cvd', label: 'Aggregated Spot CVD', params: (spotCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(spotCvd) }] }];
-      if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6',
-        values: oiDriver?.candles.length || paneNotes['oi-driver'] ? undefined : [{ text: 'Collecting data…' }] }];
+      if (key === 'oi-driver') {
+        const bar = oiUsdBars.find((item) => item.time === legendTime) ?? oiUsdBars.at(-1);
+        const tone = bar ? (bar.close >= bar.open ? '#3b82f6' : '#ef4444') : undefined;
+        return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: `· Agg · USD`, color: '#3b82f6',
+          values: bar ? [bar.open, bar.high, bar.low, bar.close].map((value, index) => ({ text: `${'OHLC'[index]} ${compactCvd(value)}`, color: tone }))
+            : paneNotes['oi-driver'] ? undefined : [{ text: 'Collecting data…' }] }];
+      }
       const lsar = lsarPanes.find((item) => item.key === key);
       if (lsar) {
         const point = lsar.points.find((item) => item.time === legendTime) ?? lsar.points.at(-1);
@@ -659,7 +681,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     };
     return paneLayout.map((pane) => ({ ...pane, rows: rowsFor(pane.key) })).filter((pane) => pane.rows.length);
   }, [paneLayout, legendTime, candles, studies, studyData, technicalSettings, extraData, extraSettings, liquidityEnabled, zones.length,
-    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, leverageRows, lsarPanes, paneNotes, symbolLabel, timeframe]);
+    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, oiUsdBars, leverageRows, lsarPanes, paneNotes, symbolLabel, timeframe]);
 
   return (
     <div className="native-chart-wrap">
