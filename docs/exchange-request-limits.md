@@ -6,7 +6,7 @@ Limits can change; recheck before adding endpoints or increasing throughput.
 
 | Exchange | Published rule relevant to this app | App allowance |
 | --- | --- | --- |
-| Binance | USD-M global account ratio: **1,000 requests / 5 minutes / IP**, independently of its zero request weight. General futures routes have weighted limits; bulk tickers cost more than single-symbol OI. | Both USD-M and COIN-M share **800 history calls / rolling 5 minutes**, at least 100 ms apart. General requests share **500 conservative weight units / minute**; reserve 50 for bulk/unknown requests, 5 for metadata, 1 for single-symbol OI. Pause when reported IP weight reaches 1,000. |
+| Binance | General futures routes: **2,400 weight / minute / IP**. `/futures/data/*` history: **1,000 requests / 5 minutes / IP** per endpoint. Exceeding limits gives 429; continuing gives an automated **418 IP ban (2 minutes up to 3 days)**, longer for repeat offenders. | Budgets assume the hosting IP may be **shared with other tenants** (Render's outbound IPs are). General requests: **400 weight / minute** (~17%). All `/futures/data` endpoints together: **450 / rolling 5 minutes** (~45% of one endpoint's quota). Funding history: 200 / 5 minutes. At least 150 ms apart. Pause 60 s when Binance reports the IP's used weight ≥ **600**. **Probe mode:** after every process start and every pause, exactly one request is sent; nothing else is admitted until Binance answers normally. |
 | Bybit | General public HTTP ceiling **600 requests / 5 seconds / IP**; endpoint quotas and `X-Bapi-*` headers also apply. HTTP 403 "access too frequent": stop all sessions and wait **at least 10 minutes**. JSON `10006` is a rate limit; `10009` an IP ban. | **30 calls / rolling 5 seconds**, at least 160 ms apart. Entire provider pauses for rate errors; 403/IP-ban fallback at least **15 minutes**. |
 | OKX | Contract account ratio: **5 calls / 2 seconds / IP + instrument ID**. Public instruments and open interest: 20 / 2 seconds; tickers: 20 / 2 seconds. JSON `50011` can report throttling with HTTP 200. | All used routes and instruments together: **3 calls / rolling 2 seconds**, at least 600 ms apart. Detect JSON and HTTP rate errors. |
 | Gate.io | Published futures public endpoint allowance **200 calls / 10 seconds / endpoint / IP**. | All used public routes together: **80 calls / rolling 10 seconds**, at least 150 ms apart. Respect quota/reset headers and HTTP 429. |
@@ -38,6 +38,17 @@ Limits can change; recheck before adding endpoints or increasing throughput.
 - The Leverage Estimate's per-asset history calls (Binance futures/data,
   OKX rubik, Gate contract_stats, Bybit OI/account-ratio, spot candles) use the
   same shared gates. See `leverage-estimate.md`.
+
+- Visitor actions (Refresh buttons, switching coin/timeframe) only read
+  cached server snapshots: LSAR scans run at most every 5 minutes, chart
+  candles cache 30 s per market (max 4 in flight), leverage history refreshes
+  every 2–5 minutes, metadata hourly. Any extra demand queues behind the
+  shared gate; it can never raise the request rate above the budgets above.
+  `server/binanceBanSafety.test.js` verifies this with a 1,500-request flood.
+- Why probe mode exists: Render (and similar hosts) wipe `.cache/` on every
+  restart and free instances restart on each wake, so a saved ban deadline is
+  lost. Without probing, a restart would send a burst into a live ban and
+  Binance escalates ban length for that.
 
 ## Persistence and hosting constraints
 

@@ -15,10 +15,18 @@ export class BinanceRequestGate {
     constructor({
         now = Date.now, sleep = wait, spacingMs = 75,
         historyLimit = 900, historyWindowMs = 300_000,
-        generalLimit = 500, generalWindowMs = 60_000,
+        generalLimit = 500, generalWindowMs = 60_000, fundingLimit = 350,
+        usedWeightPause = 1000, probe = false, probeTimeoutMs = 15_000,
         state, save = () => {},
     } = {}) {
-        Object.assign(this, { now, sleep, spacingMs, historyLimit, historyWindowMs, generalLimit, generalWindowMs, save });
+        Object.assign(this, { now, sleep, spacingMs, historyLimit, historyWindowMs, generalLimit, generalWindowMs,
+            fundingLimit, usedWeightPause, probe, probeTimeoutMs, save });
+        // Probe mode: after a process start (Render wipes the saved ban state on
+        // restart) and after every pause, exactly ONE request is sent first.
+        // Nothing else is admitted until Binance answers it normally, so a
+        // restart or an expiring pause can never fire a burst into a live ban.
+        this.verified = !probe;
+        this.probeHeldUntil = 0;
         this.history = [];
         this.funding = [];
         this.general = [];
@@ -87,7 +95,7 @@ export class BinanceRequestGate {
                 : parsed.pathname.endsWith("/openInterest") ? 1
                 : parsed.searchParams.has("symbol") ? 2 : 50;
             const windowMs = funding ? 300_000 : history ? this.historyWindowMs : this.generalWindowMs;
-            const limit = funding ? 350 : history ? this.historyLimit : this.generalLimit;
+            const limit = funding ? this.fundingLimit : history ? this.historyLimit : this.generalLimit;
             if (!history && !funding && cost > limit) throw new Error("Binance request exceeds configured weight allowance");
             while (true) {
                 this.checkCooldown();
@@ -108,11 +116,15 @@ export class BinanceRequestGate {
                         quotaDelay = starts[i] + windowMs - now + 1;
                     }
                 }
-                const delay = Math.max(0, this.nextStart - now, quotaDelay);
+                // While the probe is unanswered, everyone else waits (bounded by
+                // probeTimeoutMs for probes that never get an HTTP answer).
+                const probeDelay = !this.verified && now < this.probeHeldUntil ? Math.min(250, this.probeHeldUntil - now) : 0;
+                const delay = Math.max(0, this.nextStart - now, quotaDelay, probeDelay);
                 if (delay) {
                     await this.sleep(delay);
                     continue;
                 }
+                if (!this.verified) this.probeHeldUntil = now + this.probeTimeoutMs;
                 starts.push(now);
                 if (!history && !funding) this.generalCosts.push(cost);
                 this.nextStart = now + this.spacingMs;
@@ -124,12 +136,18 @@ export class BinanceRequestGate {
         await task;
     }
 
+    /** Release a probe that ended without a usable answer (e.g. geo block). */
+    releaseProbe() { this.probeHeldUntil = 0; }
+
     async inspect(response) {
         if (![418, 429, 403].includes(response.status)) {
-            // Headers reflect usage by the whole outgoing IP, not just us.
-            // Leave substantial headroom below the usual futures weight limit.
+            // Binance answered normally: the IP is not banned, open the gate.
+            this.verified = true; this.probeHeldUntil = 0;
+            // Headers reflect usage by the whole outgoing IP, not just us
+            // (shared hosting IPs carry other tenants' traffic). Back off well
+            // before Binance's 2,400/minute limit.
             const weight = Number(response.headers.get("x-mbx-used-weight-1m"));
-            if (response.ok && Number.isFinite(weight) && weight >= 1000) {
+            if (response.ok && Number.isFinite(weight) && weight >= this.usedWeightPause) {
                 this.nextStart = Math.max(this.nextStart, this.now() + 60_000);
                 this.checkpoint();
             }
@@ -137,6 +155,8 @@ export class BinanceRequestGate {
         }
         // Pause immediately, before reading the error body, so queued requests
         // cannot keep hitting Binance while its ban deadline is being parsed.
+        // After the pause, start again with a single probe request.
+        this.verified = !this.probe; this.probeHeldUntil = 0;
         const now = this.now();
         const ongoingBan = this.isCoolingDown && [418, 403].includes(this.blockedStatus);
         const priorDeadline = this.blockedUntil;
