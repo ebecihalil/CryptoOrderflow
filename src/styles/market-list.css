@@ -88,3 +88,10 @@
 .market-list-row.is-secondary { background:color-mix(in srgb,var(--lsar-page) 70%,transparent); }
 .market-list-row.is-secondary .market-list-symbol { padding-left:14px; }
 .market-list-row.is-secondary .market-list-name b { font-weight:400;color:var(--lsar-strong); }
+.market-list-slot { display:flex;align-items:center;gap:5px;min-width:0; }
+.market-list-slot select { flex:1;min-width:0;height:22px;padding:0 3px;border:1px solid var(--lsar-control-border);background:var(--lsar-surface);color:var(--lsar-ink);font:10px var(--app-font-mono);cursor:pointer; }
+.market-list-slot .exchange-logo,.market-list-slot-blank { flex:none;width:13px;height:13px;border-radius:3px; }
+.market-list-slot-blank { border:1px dashed var(--lsar-border); }
+.market-list-priority li.is-empty select { color:var(--lsar-muted); }
+.market-list-priority li.market-list-priority-actions { display:flex;height:auto;margin-top:3px; }
+.market-list-priority li.market-list-priority-actions button { width:auto;height:22px;padding:0 8px;font:9px var(--app-font-mono); }

@@ -36,12 +36,13 @@ export function DataSources() {
         {DATA_SOURCES.map((source) => (
           <li key={source.id} className="data-source" data-testid={`data-source-${source.id}`}>
             <span className={`data-source-logo${source.id === 'cme' ? ' is-wide' : ''}`}>
-              <img src={source.logo} alt="" width={44} height={44} loading="lazy" decoding="async" />
+              <img src={source.logo} alt="" width={44} height={44} loading="lazy" decoding="async" draggable={false} />
             </span>
             <span className="data-source-name">{source.name}</span>
           </li>
         ))}
       </ul>
+      <p className="data-sources-note">{t('We combine data from many exchanges so every coin is covered and the aggregated figures are as accurate as possible.')}</p>
     </section>
   );
 }

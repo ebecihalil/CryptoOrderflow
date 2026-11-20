@@ -7,7 +7,7 @@ export type IndicatorHelp = { summary: string; lines?: Array<[string, string]>; 
 export const INDICATOR_HELP: Record<string, IndicatorHelp> = {
   price: { summary: 'Candlesticks from the selected exchange contract. Each candle shows the open, high, low and close for one bar of the chosen timeframe (UTC).',
     lines: [['Green candle', 'Close above open (price rose in the bar).'], ['Red candle', 'Close below open (price fell in the bar).'], ['Wicks', 'The bar\'s high and low.']] },
-  volume: { summary: 'Traded volume per bar, in the underlying coin. Aggregated mode sums exactly matched bars from up to four venues; missing bars are never filled.',
+  volume: { summary: 'Traded volume per bar, in the underlying coin. Aggregated mode sums exactly matched bars from up to seven venues; missing bars are never filled.',
     lines: [['Green bar', 'Candle closed up.'], ['Red bar', 'Candle closed down.']],
     signals: ['Rising volume confirms a move; a breakout on low volume is weaker.', 'Volume spikes often mark climaxes or the start of a new trend.'] },
   ema: { summary: 'Exponential Moving Average of the close: a smoothed price line that reacts faster to recent bars than a simple average.',
@@ -84,6 +84,9 @@ export const INDICATOR_HELP: Record<string, IndicatorHelp> = {
   'aggressive-bubbles': { summary: 'Aggressive Volume Bubbles: large market buys/sells recorded at their price level. Bubble size reflects the USD value.',
     lines: [['Green bubble', 'Aggressive buying.'], ['Red bubble', 'Aggressive selling.']],
     signals: ['Clusters of large bubbles mark where big participants hit the market.', 'Absorption: large aggressive selling with no price drop can signal strong passive buyers.'] },
+  leverage: { summary: 'Leverage Estimate: estimated average leverage across perpetual markets on a 0–100 scale, from open interest versus spot turnover, leveraged position build-up, top-trader crowding and position size.',
+    lines: [['Score', '0–100. 80+ extreme, 60–80 elevated, 40–60 normal, below 40 low leverage.']],
+    signals: ['Extreme leverage makes sharp liquidation moves more likely in either direction.', 'Rising score while price stalls = crowded positioning building up.'] },
   'oi-driver': { summary: 'Aggregated Open Interest: total open futures positions across exchanges, combined with CVD and price to classify who is driving the move.',
     lines: [['Candles', 'OI change per bar, coloured by the detected state (long build, short build, closes).']],
     signals: ['OI up + price up = new longs; OI up + price down = new shorts.', 'OI down + price up = short covering; OI down + price down = long liquidation.'] },

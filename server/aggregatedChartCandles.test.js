@@ -39,7 +39,9 @@ function fixture(options = {}) {
     if (url.includes("market/candles")) return { data: rawOkx(1000).slice(0, 300) };
     throw new Error(`Unexpected fixture URL: ${url}`);
   };
-  return { service: createAggregatedCandleService({ single, request, gates: {}, now: () => clock }),
+  return { service: createAggregatedCandleService({ single, request, gates: {}, now: () => clock,
+    // These fixtures model the original four venues; the 7-venue default is covered elsewhere.
+    venues: ["binance", "okx", "gate", "bybit"] }),
     calls, singleCalls, advance: ms => { clock += ms; } };
 }
 const query = { exchange: "binance", symbol: "PEPEUSDT", timeframe: "1h", volumeMode: "aggregated" };

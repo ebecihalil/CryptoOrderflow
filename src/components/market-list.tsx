@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, RotateCcw, Search, X } from 'lucide-react';
-import { groupByPriority, normalizeOrder } from '@/lib/market-priority';
+import { assignSlot, groupByPriority, moveSlot, normalizeSlots } from '@/lib/market-priority';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import type { MarketContract } from '@/hooks/use-market-contracts';
@@ -22,15 +22,23 @@ type TickersPayload = {
 type SortKey = 'symbol' | 'last' | 'change' | 'changePercent' | 'volume';
 type Move = 'all' | 'gainers' | 'losers';
 type Prefs = {
-  exchanges: string[]; hidden: string[]; colors: Record<string, string>;
+  hidden: string[]; colors: Record<string, string>;
   /** Exchange priority for "one row per coin" (first = preferred). */
-  order: string[]; oneRow: boolean;
+  /** Ten priority slots (exchange id or empty); first = preferred. */
+  slots: Array<string | null>; oneRow: boolean;
   sort: { key: SortKey; dir: 1 | -1 }; move: Move; minMove: number; colorFilter: string;
 };
 
+/** Exchanges whose contracts, prices and charts the list supports today. */
 export const MARKET_LIST_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx'];
+/** Every exchange the site uses (home page), for the slot dropdowns; the rest are not chartable yet. */
+const ALL_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'kucoin', 'bingx', 'htx', 'kraken',
+  'hyperliquid', 'aster', 'lighter', 'paradex', 'deribit', 'coinex', 'bitmex', 'toobit'];
+const DEFAULT_SLOTS: Array<string | null> = [...MARKET_LIST_EXCHANGES, null, null, null];
 const EXCHANGE_NAMES: Record<string, string> = {
   binance: 'Binance', bybit: 'Bybit', okx: 'OKX', gate: 'Gate.io', bitget: 'Bitget', mexc: 'MEXC', bingx: 'BingX',
+  kucoin: 'KuCoin', htx: 'HTX', kraken: 'Kraken', hyperliquid: 'Hyperliquid', aster: 'Aster', lighter: 'Lighter',
+  paradex: 'Paradex', deribit: 'Deribit', coinex: 'CoinEx', bitmex: 'BitMEX', toobit: 'Toobit',
 };
 export const HIGHLIGHT_COLORS = [
   { id: 'red', value: '#f23645' }, { id: 'orange', value: '#ff9800' }, { id: 'yellow', value: '#f5d33b' },
@@ -39,7 +47,7 @@ export const HIGHLIGHT_COLORS = [
 const COLOR_VALUE = Object.fromEntries(HIGHLIGHT_COLORS.map((color) => [color.id, color.value]));
 const KEY = 'cof:v1:market-list';
 const DEFAULTS: Prefs = {
-  exchanges: MARKET_LIST_EXCHANGES, hidden: [], colors: {}, order: MARKET_LIST_EXCHANGES, oneRow: true,
+  hidden: [], colors: {}, slots: DEFAULT_SLOTS, oneRow: true,
   sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorFilter: 'all',
 };
 const ROW_HEIGHT = 32;
@@ -48,7 +56,7 @@ function readPrefs(): Prefs {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null');
     if (saved && typeof saved === 'object') return { ...DEFAULTS, ...saved, sort: { ...DEFAULTS.sort, ...saved.sort },
-      order: normalizeOrder(saved.order, MARKET_LIST_EXCHANGES) };
+      slots: normalizeSlots(saved.slots, MARKET_LIST_EXCHANGES, DEFAULT_SLOTS, saved) };
   } catch { /* storage blocked */ }
   return DEFAULTS;
 }
@@ -110,6 +118,7 @@ export function MarketList({ contracts, current, onSelect }: {
     return map;
   }, [tickers.data]);
 
+  const enabledOrder = useMemo(() => prefs.slots.filter((slot): slot is string => !!slot), [prefs.slots]);
   const rows = useMemo<Row[]>(() => {
     const hidden = new Set(prefs.hidden);
     const wanted = query.trim().toUpperCase();
@@ -125,8 +134,8 @@ export function MarketList({ contracts, current, onSelect }: {
     };
     // One row per coin: from the first exchange in your priority order that lists it.
     const candidates: Row[] = prefs.oneRow
-      ? groupByPriority(contracts, prefs.order, prefs.exchanges, isHidden).map(({ primary, others }) => build(primary, others))
-      : contracts.filter((contract) => prefs.exchanges.includes(contract.exchange.toLowerCase()) && !isHidden(contract)).map((contract) => build(contract));
+      ? groupByPriority(contracts, enabledOrder, enabledOrder, isHidden).map(({ primary, others }) => build(primary, others))
+      : contracts.filter((contract) => enabledOrder.includes(contract.exchange.toLowerCase()) && !isHidden(contract)).map((contract) => build(contract));
     const list = candidates.filter((row) => {
       if (wanted && !row.contract.exchangeAsset.toUpperCase().includes(wanted) && !row.contract.asset.toUpperCase().includes(wanted)) return false;
       if (prefs.colorFilter !== 'all' && row.color !== prefs.colorFilter) return false;
@@ -151,7 +160,7 @@ export function MarketList({ contracts, current, onSelect }: {
     // "+N" opened: the coin's other exchanges listed under its main row.
     return list.flatMap((row) => expanded.has(row.contract.asset.toUpperCase())
       ? [row, ...row.others.map((other) => build(other, [], true))] : [row]);
-  }, [contracts, prices, prefs, query, expanded]);
+  }, [contracts, prices, prefs, query, expanded, enabledOrder]);
 
   useEffect(() => {
     const element = listRef.current;
@@ -173,24 +182,14 @@ export function MarketList({ contracts, current, onSelect }: {
   const total = prefs.oneRow ? new Set(contracts.map((contract) => contract.asset.toUpperCase())).size
     : contracts.filter((contract) => MARKET_LIST_EXCHANGES.includes(contract.exchange.toLowerCase())).length;
   const shown = rows.filter((row) => !row.secondary).length;
-  const enabledOrder = prefs.order.filter((exchange) => prefs.exchanges.includes(exchange));
-  const move = (exchange: string, step: -1 | 1) => {
-    const order = [...prefs.order];
-    const index = order.indexOf(exchange), target = index + step;
-    if (index < 0 || target < 0 || target >= order.length) return;
-    [order[index], order[target]] = [order[target], order[index]];
-    update({ order });
-  };
   const toggleExpanded = (coin: string) => setExpanded((current) => {
     const next = new Set(current);
     if (next.has(coin)) next.delete(coin); else next.add(coin);
     return next;
   });
-  const filtered = prefs.hidden.length > 0 || prefs.exchanges.length < MARKET_LIST_EXCHANGES.length || prefs.move !== 'all'
+  const filtered = prefs.hidden.length > 0 || prefs.move !== 'all'
     || prefs.minMove > 0 || prefs.colorFilter !== 'all';
   const sortBy = (key: SortKey) => update({ sort: { key, dir: prefs.sort.key === key ? (prefs.sort.dir === 1 ? -1 : 1) : key === 'symbol' ? 1 : -1 } });
-  const toggleExchange = (exchange: string) => update({ exchanges: prefs.exchanges.includes(exchange)
-    ? prefs.exchanges.filter((item) => item !== exchange) : [...prefs.exchanges, exchange] });
   const setColor = (key: string, color: string | null) => {
     const colors = { ...prefs.colors };
     if (color) colors[key] = color; else delete colors[key];
@@ -203,7 +202,7 @@ export function MarketList({ contracts, current, onSelect }: {
     </button>
   );
   const unavailable = Object.entries(tickers.data?.exchanges ?? {})
-    .filter(([exchange, entry]) => prefs.exchanges.includes(exchange) && entry.status === 'unavailable').map(([exchange]) => EXCHANGE_NAMES[exchange] ?? exchange);
+    .filter(([exchange, entry]) => enabledOrder.includes(exchange) && entry.status === 'unavailable').map(([exchange]) => EXCHANGE_NAMES[exchange] ?? exchange);
 
   return (
     <aside className="market-list" aria-label="Market list" data-testid="market-list">
@@ -212,7 +211,7 @@ export function MarketList({ contracts, current, onSelect }: {
           <div className="market-list-eyebrow">USDT perpetuals · 24h</div>
           <h2>Markets <span>{shown.toLocaleString()}{shown !== total ? ` / ${total.toLocaleString()}` : ''} {prefs.oneRow ? 'coins' : 'contracts'}</span></h2>
         </div>
-        <button type="button" className="market-list-reset" onClick={() => { update({ ...DEFAULTS, colors: prefs.colors, order: prefs.order, oneRow: prefs.oneRow }); setQuery(''); setExpanded(new Set()); }}
+        <button type="button" className="market-list-reset" onClick={() => { update({ ...DEFAULTS, colors: prefs.colors, slots: prefs.slots, oneRow: prefs.oneRow }); setQuery(''); setExpanded(new Set()); }}
           disabled={!filtered && !query} title="Show every coin on every exchange again (keeps your colours and exchange priority)" data-testid="market-reset">
           <RotateCcw size={12} aria-hidden="true" /> Reset
         </button>
@@ -237,19 +236,33 @@ export function MarketList({ contracts, current, onSelect }: {
         </div>
         {showPriority && (
           <ol className="market-list-priority" aria-label="Exchange priority" data-testid="market-priority">
-            {prefs.order.map((exchange, index) => (
-              <li key={exchange} className={prefs.exchanges.includes(exchange) ? '' : 'is-off'}>
+            {prefs.slots.map((exchange, index) => (
+              <li key={index} className={exchange ? '' : 'is-empty'} data-testid={`market-slot-${index + 1}`}>
                 <span className="market-list-rank">{index + 1}</span>
-                <label><input type="checkbox" checked={prefs.exchanges.includes(exchange)} onChange={() => toggleExchange(exchange)}
-                  data-testid={`market-exchange-${exchange}`} /><ExchangeLogo exchange={exchange} />{EXCHANGE_NAMES[exchange]}</label>
-                <button type="button" onClick={() => move(exchange, -1)} disabled={index === 0} aria-label={`Move ${EXCHANGE_NAMES[exchange]} up`}
-                  data-testid={`market-up-${exchange}`}><ChevronUp size={13} /></button>
-                <button type="button" onClick={() => move(exchange, 1)} disabled={index === prefs.order.length - 1} aria-label={`Move ${EXCHANGE_NAMES[exchange]} down`}
-                  data-testid={`market-down-${exchange}`}><ChevronDown size={13} /></button>
+                <span className="market-list-slot">
+                  {exchange ? <ExchangeLogo exchange={exchange} /> : <span className="market-list-slot-blank" aria-hidden="true" />}
+                  <select value={exchange ?? ''} aria-label={`Priority ${index + 1} exchange`} data-testid={`market-slot-select-${index + 1}`}
+                    onChange={(event) => update({ slots: assignSlot(prefs.slots, index, event.target.value || null) })}>
+                    <option value="">— Empty —</option>
+                    {ALL_EXCHANGES.map((option) => {
+                      const supported = MARKET_LIST_EXCHANGES.includes(option);
+                      const at = prefs.slots.indexOf(option);
+                      return <option key={option} value={option} disabled={!supported}>
+                        {EXCHANGE_NAMES[option]}{!supported ? ' (soon)' : at >= 0 && at !== index ? ` (#${at + 1})` : ''}</option>;
+                    })}
+                  </select>
+                </span>
+                <button type="button" onClick={() => update({ slots: moveSlot(prefs.slots, index, -1) })} disabled={index === 0}
+                  aria-label={`Move priority ${index + 1} up`} data-testid={`market-up-${index + 1}`}><ChevronUp size={13} /></button>
+                <button type="button" onClick={() => update({ slots: moveSlot(prefs.slots, index, 1) })} disabled={index === prefs.slots.length - 1}
+                  aria-label={`Move priority ${index + 1} down`} data-testid={`market-down-${index + 1}`}><ChevronDown size={13} /></button>
               </li>
             ))}
+            <li className="market-list-priority-actions">
+              <button type="button" onClick={() => update({ slots: DEFAULT_SLOTS })} data-testid="market-slots-default">Default exchanges</button>
+            </li>
             <li className="market-list-priority-note">{prefs.oneRow
-              ? 'Each coin comes from the first exchange above that lists it; coins it lacks come from the next one.'
+              ? 'Each coin comes from the first exchange above that lists it; coins it lacks come from the next one. Pick an exchange per slot, leave slots empty to skip them. Exchanges marked (soon) are not chartable yet.'
               : 'One row per coin is off: every exchange’s contract is listed.'}</li>
           </ol>
         )}

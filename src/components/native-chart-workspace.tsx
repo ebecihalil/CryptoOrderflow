@@ -11,6 +11,7 @@ import {
   type FundingIndicatorWindow, type FundingIndicatorPoint,
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type CvdTimeframe } from '@/hooks/use-cvd-indicator';
+import { useLeverageEstimate, type LeverageTimeframe } from '@/hooks/use-leverage-estimate';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
 import { OiIndicatorControls } from '@/components/oi-indicator-controls';
@@ -22,7 +23,9 @@ import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage';
+/** Leverage Estimate exists on these chart timeframes (24h = 1D). */
+const LEVERAGE_FRAMES: Partial<Record<string, LeverageTimeframe>> = { '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '24h': '1d' };
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
   /** Full-screen chart mode (owned by the page so the watchlist and menus follow). */
   expanded?: boolean; onToggleExpanded?: () => void };
@@ -110,6 +113,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   const hasSpotCvd = indicators.includes('spot-cvd') && !secondsMode;
   const hasAggressiveBubbles = indicators.includes('aggressive-bubbles') && !secondsMode;
   const hasOiDriver = indicators.includes('oi-driver') && !secondsMode;
+  const leverageFrame = LEVERAGE_FRAMES[timeframe];
+  const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -192,6 +197,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
   const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
+  const leverage = useLeverageEstimate(canonicalAsset, leverageFrame ?? '1h', hasLeverage);
+  const leveragePayload = hasLeverage && leverage.data?.asset === canonicalAsset && leverage.data.timeframe === leverageFrame ? leverage.data : null;
 
   const commitBubbleMinimum = () => {
     if (bubbleMinDraft === null) return;
@@ -342,7 +349,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     const layerSettings: Record<string, ReactNode | undefined> = {
       volume: <label className="super-chart-control"><span>Volume basis</span><select value={volumeBasis}
         onChange={(event) => setVolumeBasis(event.target.value as LiquidityVolumeMode)} aria-label="Volume pane basis">
-        <option value="single">Selected venue</option><option value="aggregated">Aggregated · 4 venues</option></select></label>,
+        <option value="single">Selected venue</option><option value="aggregated">Aggregated · up to 7 venues</option></select></label>,
       liquidity: hasLiquidity ? <>{settingsPanel}{<section className="native-signals">
         <div><span className="module-kicker">QUALIFIED ZONES</span><b>{liquidity.zones.length}</b><small>{liquidity.signals.length} signals in visible feed history</small></div>
         <ul>{[...liquidity.signals].sort((a, b) => b.time - a.time).slice(0, 5).map((signal, index) =>
@@ -414,7 +421,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
         {frameButtons}
         <label className="super-chart-control"><span>Volume basis</span><select value={volumeBasis}
           onChange={(event) => setVolumeBasis(event.target.value as LiquidityVolumeMode)} aria-label="Chart volume basis">
-          <option value="single">Selected venue</option><option value="aggregated">Aggregated · 4 venues</option>
+          <option value="single">Selected venue</option><option value="aggregated">Aggregated · up to 7 venues</option>
         </select></label>
         <label className="native-volume-toggle"><input type="checkbox" checked={showVolume}
           onChange={(event) => setShowVolume(event.target.checked)} /> Volume pane</label>
@@ -434,6 +441,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
         {(nativeFeed.error || nativePayloadCurrent && nativeFeed.payload?.error) && <span className="is-warning">{nativeFeed.error ?? nativeFeed.payload?.error}</span>}
         <span className="native-native-symbol">Native {contract.symbol}{contract.priceDivisor !== 1 ? ` · ×${contract.priceDivisor} contract` : ''}</span>
       </div>
+      {indicators.includes('leverage') && !leverageFrame && <p className="native-seconds-note" role="status">
+        Leverage Estimate is available on 5m, 15m, 30m, 1h, 4h and 1D charts.</p>}
+      {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Leverage Estimate: {leverage.error.message}</p>}
       {secondsMode && <p className="native-seconds-note" role="status">
         Seconds candles are built from this contract’s live executed trades since recording started (kept 2 hours) and refresh every 2 seconds; seconds without trades have no candle.
         {indicators.some((id) => ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'oi-driver'].includes(id)) &&
@@ -441,7 +451,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
         {nativePayloadCurrent && nativeFeed.payload?.candles.length === 0 && ' Waiting for the first trades…'}
       </p>}
       <div className="native-volume-meta" role="status">
-        <span className="native-volume-basis-label">VOLUME · {volumeBasis === 'aggregated' ? 'AGGREGATED FOUR-VENUE' : 'SELECTED NATIVE VENUE'}</span>
+        <span className="native-volume-basis-label">VOLUME · {volumeBasis === 'aggregated' ? 'AGGREGATED MULTI-VENUE' : 'SELECTED NATIVE VENUE'}</span>
         {volumeBasis === 'single' ? <>
           <span>{nativePayloadCurrent ? `${candles.length} native volume bars · ${contract.exchangeAsset}` : nativeFeed.loading ? 'Waiting for native volume' : 'Native volume unavailable'}</span>
           {nativePayloadCurrent && nativeFeed.payload?.stale && <span className="is-warning">Cached volume · freshness unverified</span>}
@@ -450,7 +460,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
           : <>
             <span>{aggregatePayloadCurrent ? `${aggregateVolumes.length} exact timestamp matches · ${aggregateFeed.payload?.volumeAsset ?? contract.exchangeAsset}` :
               aggregateFeed.loading ? 'Loading matched volume sources' : 'No matching aggregated-volume payload'}</span>
-            <span>{aggregatePayloadCurrent ? `${aggregateFeed.payload?.matchedCandleCount ?? aggregateVolumes.length} server-aligned bars · ${aggregateFeed.payload?.volumeSources?.filter((s) => s.status === 'ok').length ?? 0}/4 sources`
+            <span>{aggregatePayloadCurrent ? `${aggregateFeed.payload?.matchedCandleCount ?? aggregateVolumes.length} server-aligned bars · ${aggregateFeed.payload?.volumeSources?.filter((s) => s.status === 'ok').length ?? 0}/${aggregateFeed.payload?.volumeSources?.length ?? 7} sources`
               : 'Aggregation is separate from selected-venue price OHLC.'}</span>
             {aggregatePayloadCurrent && <span className={aggregateFeed.payload?.stale ? 'is-warning' : ''}>
               {aggregateFeed.payload?.stale ? 'Cached volume · freshness unverified' : 'Aggregate volume snapshot'}
@@ -474,7 +484,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
              aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
-             oiDriver={oiDriver.payload} oiDriverEnabled={hasOiDriver} priceDivisor={contract.priceDivisor || 1} />
+             oiDriver={oiDriver.payload} oiDriverEnabled={hasOiDriver} priceDivisor={contract.priceDivisor || 1}
+             leverageRows={leveragePayload?.rows ?? null} leverageEnabled={hasLeverage} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}
@@ -494,7 +505,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
 
       <div className="native-method-note">
         <span>i</span><p>Prices and OHLC are from the selected native exchange contract. {volumeBasis === 'aggregated'
-          ? 'Volume sums exactly matched underlying-coin volume from up to four venues; it is not open-interest weighted.'
+          ? 'Volume sums exactly matched underlying-coin volume from up to seven venues (a venue with gaps is left out); it is not open-interest weighted.'
           : 'Volume is from the selected venue only.'}
           {' '}Liquidity zones use the selected volume basis. Missing volume timestamps are left unmatched, never zero-filled or replaced with selected-venue values. Funding values are verified venue observations or settled payments, normalized to an 8-hour rate; red is positive and green is negative. Missing timestamps are left as gaps. Price, volume and funding use roughly 30-second snapshot polling and exchange/server caches. CVD and Aggressive Volume Bubbles reuse recorded public trade streams; bubble points describe newly recorded executions only.</p>
       </div>

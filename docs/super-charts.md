@@ -118,8 +118,11 @@ OKX, Gate.io, Bitget, MEXC and BingX (the same coin on several exchanges is
 listed once per exchange) with last price, 24h change and 24h change %.
 
 - Click a row to chart it. Click a column title to sort (default: 24h volume).
-- "One row per coin" (on by default): open the exchange priority list, tick
-  the exchanges you want and order them with the arrows. Each coin is shown
+- "One row per coin" (on by default): open the exchange priority list. It has
+  10 slots; pick an exchange in each slot from the dropdown (or leave it empty)
+  and reorder with the arrows. Defaults: Binance, Bybit, OKX, Gate.io, Bitget,
+  MEXC, BingX and three empty slots. Other exchanges are listed as "(soon)"
+  until the list can chart them. Each coin is shown
   once, from the first exchange in that order that lists it; coins it lacks
   come from the next one, and so on. "+N" on a row lists the same coin on the
   other exchanges underneath it. Turn it off to list every exchange's contract.
@@ -134,3 +137,19 @@ listed once per exchange) with last price, 24h change and 24h change %.
 
 The old server "coin watchlist" panel is no longer shown on this page; coins it
 was already recording keep recording.
+
+## Leverage Estimate on the chart
+
+Orderflow Indicators → Leverage Estimate adds a 0–100 pane (80+ extreme,
+60–80 elevated, 40–60 normal, below 40 low), the same estimate as the Leverage
+Estimate page. Available on 5m, 15m, 30m, 1h, 4h and 1D.
+
+## Exchanges behind each indicator
+
+| Indicator | Exchanges |
+| --- | --- |
+| Aggregated Funding | 17 (all except CME and Toobit) |
+| Aggregated Open Interest | 17 perpetual venues (same data as the Open Interest page) |
+| Perpetual / Spot CVD, Aggressive Volume Bubbles | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
+| Aggregated volume, Liquidity Zones | up to 7 (Binance, OKX, Gate.io, Bybit, Bitget, MEXC, BingX); a venue whose gaps would cut over 20% of the matched history is left out for that coin |
+| Leverage Estimate | 4 (Binance, OKX, Gate.io, Bybit: the venues publishing top-trader ratios) |

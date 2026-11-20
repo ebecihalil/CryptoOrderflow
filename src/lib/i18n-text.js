@@ -68,7 +68,8 @@ Dakika
 Saat
 Gün ve üzeri
 Crypto Order Flow tarafından kullanılan veri kaynakları
-BORSA`,
+BORSA
+Her coinin kapsanması ve toplu verilerin olabildiğince doğru olması için birçok borsadan veri birleştiriyoruz.`,
 
   hi: `मार्केट फ़ीड
 API उपलब्ध नहीं
@@ -136,7 +137,8 @@ Super Charts (इंडिकेटर्स)
 घंटे
 दिन और अधिक
 Crypto Order Flow द्वारा उपयोग किए गए डेटा स्रोत
-एक्सचेंज`,
+एक्सचेंज
+हम कई एक्सचेंजों का डेटा जोड़ते हैं ताकि हर कॉइन शामिल हो और कुल आँकड़े यथासंभव सटीक हों।`,
 
   ru: `Рыночный поток
 API недоступен
@@ -204,7 +206,8 @@ Super Charts (индикаторы)
 Часы
 Дни и больше
 Источники данных Crypto Order Flow
-БИРЖ`,
+БИРЖ
+Мы объединяем данные многих бирж, чтобы охватить каждую монету и сделать сводные показатели максимально точными.`,
 
   el: `Ροή αγοράς
 Το API δεν είναι διαθέσιμο
@@ -272,7 +275,8 @@ Email
 Ώρες
 Ημέρες και άνω
 Πηγές δεδομένων του Crypto Order Flow
-ΑΝΤΑΛΛΑΚΤΗΡΙΑ`,
+ΑΝΤΑΛΛΑΚΤΗΡΙΑ
+Συνδυάζουμε δεδομένα από πολλά ανταλλακτήρια ώστε να καλύπτεται κάθε νόμισμα και τα συγκεντρωτικά στοιχεία να είναι όσο το δυνατόν πιο ακριβή.`,
 
   zh: `市场数据流
 API 无法访问
@@ -340,7 +344,8 @@ Super Charts（指标）
 小时
 日及以上
 Crypto Order Flow 使用的数据来源
-家交易所`,
+家交易所
+我们整合多家交易所的数据，覆盖每个币种，并让汇总数据尽可能准确。`,
 
   es: `Flujo de mercado
 API no disponible
@@ -408,7 +413,8 @@ Minutos
 Horas
 Días y más
 Fuentes de datos usadas por Crypto Order Flow
-EXCHANGES`,
+EXCHANGES
+Combinamos datos de muchos exchanges para cubrir todas las monedas y que las cifras agregadas sean lo más precisas posible.`,
 
   pt: `Feed de mercado
 API indisponível
@@ -476,7 +482,8 @@ Minutos
 Horas
 Dias e mais
 Fontes de dados usadas pelo Crypto Order Flow
-CORRETORAS`,
+CORRETORAS
+Combinamos dados de várias corretoras para cobrir todas as moedas e deixar os números agregados o mais precisos possível.`,
 
   fr: `Flux de marché
 API injoignable
@@ -544,7 +551,8 @@ Minutes
 Heures
 Jours et plus
 Sources de données utilisées par Crypto Order Flow
-PLATEFORMES`,
+PLATEFORMES
+Nous combinons les données de nombreuses plateformes pour couvrir chaque crypto et rendre les chiffres agrégés aussi précis que possible.`,
 
   de: `Marktfeed
 API nicht erreichbar
@@ -612,7 +620,8 @@ Minuten
 Stunden
 Tage und länger
 Von Crypto Order Flow genutzte Datenquellen
-BÖRSEN`,
+BÖRSEN
+Wir kombinieren Daten vieler Börsen, damit jeder Coin abgedeckt ist und die aggregierten Werte so genau wie möglich sind.`,
 
   it: `Feed di mercato
 API non raggiungibile
@@ -680,7 +689,8 @@ Minuti
 Ore
 Giorni e oltre
 Fonti di dati usate da Crypto Order Flow
-EXCHANGE`,
+EXCHANGE
+Combiniamo i dati di molti exchange per coprire ogni moneta e rendere i dati aggregati il più precisi possibile.`,
 
   ja: `マーケットフィード
 APIに接続できません
@@ -748,7 +758,8 @@ Super Charts（インジケーター）
 時間
 日以上
 Crypto Order Flow が使用するデータソース
-取引所`,
+取引所
+多くの取引所のデータを組み合わせ、すべての銘柄をカバーし、集計値をできるだけ正確にしています。`,
 
   ko: `마켓 피드
 API에 연결할 수 없음
@@ -816,7 +827,8 @@ Super Charts (지표)
 시간
 일 이상
 Crypto Order Flow가 사용하는 데이터 소스
-개 거래소`,
+개 거래소
+여러 거래소의 데이터를 결합해 모든 코인을 다루고 집계 수치를 최대한 정확하게 제공합니다.`,
 
   vi: `Luồng thị trường
 Không kết nối được API
@@ -884,7 +896,8 @@ Phút
 Giờ
 Ngày trở lên
 Nguồn dữ liệu được Crypto Order Flow sử dụng
-SÀN`,
+SÀN
+Chúng tôi kết hợp dữ liệu từ nhiều sàn để bao quát mọi coin và giúp số liệu tổng hợp chính xác nhất có thể.`,
 
   id: `Umpan pasar
 API tidak dapat dijangkau
@@ -952,7 +965,8 @@ Menit
 Jam
 Hari dan lebih
 Sumber data yang digunakan Crypto Order Flow
-BURSA`,
+BURSA
+Kami menggabungkan data dari banyak bursa agar setiap koin tercakup dan angka gabungannya seakurat mungkin.`,
 
   fil: `Market feed
 Hindi maabot ang API
@@ -1020,7 +1034,8 @@ Minuto
 Oras
 Araw at higit pa
 Mga pinagmulan ng data na ginagamit ng Crypto Order Flow
-EXCHANGE`,
+EXCHANGE
+Pinagsasama namin ang data mula sa maraming exchange para masaklaw ang bawat coin at maging tumpak hangga’t maaari ang pinagsamang datos.`,
 
   th: `ฟีดตลาด
 เชื่อมต่อ API ไม่ได้
@@ -1088,7 +1103,8 @@ Super Charts (อินดิเคเตอร์)
 ชั่วโมง
 วันขึ้นไป
 แหล่งข้อมูลที่ Crypto Order Flow ใช้
-กระดานเทรด`,
+กระดานเทรด
+เรารวมข้อมูลจากหลายกระดานเทรด เพื่อให้ครอบคลุมทุกเหรียญและตัวเลขรวมแม่นยำที่สุด`,
 
   ar: `تدفق السوق
 تعذّر الوصول إلى API
@@ -1156,7 +1172,8 @@ Super Charts (المؤشرات)
 ساعات
 أيام فأكثر
 مصادر البيانات التي يستخدمها Crypto Order Flow
-منصات`,
+منصات
+نجمع البيانات من منصات كثيرة لتغطية كل عملة ولتكون الأرقام المجمّعة دقيقة قدر الإمكان.`,
 
   ur: `مارکیٹ فیڈ
 API تک رسائی نہیں
@@ -1224,7 +1241,8 @@ Super Charts (انڈیکیٹرز)
 گھنٹے
 دن اور زیادہ
 Crypto Order Flow کے استعمال کردہ ڈیٹا ذرائع
-ایکسچینجز`,
+ایکسچینجز
+ہم بہت سے ایکسچینجز کا ڈیٹا یکجا کرتے ہیں تاکہ ہر کوائن شامل ہو اور مجموعی اعداد و شمار زیادہ سے زیادہ درست ہوں۔`,
 
   uk: `Ринковий потік
 API недоступний
@@ -1292,7 +1310,8 @@ Super Charts (індикатори)
 Години
 Дні й більше
 Джерела даних Crypto Order Flow
-БІРЖ`,
+БІРЖ
+Ми поєднуємо дані багатьох бірж, щоб охопити кожну монету і зробити зведені показники максимально точними.`,
 
   pl: `Strumień rynku
 API niedostępne
@@ -1360,7 +1379,8 @@ Minuty
 Godziny
 Dni i dłużej
 Źródła danych używane przez Crypto Order Flow
-GIEŁD`,
+GIEŁD
+Łączymy dane z wielu giełd, aby objąć każdą monetę, a zbiorcze dane były jak najdokładniejsze.`,
 
   nl: `Marktfeed
 API onbereikbaar
@@ -1428,5 +1448,6 @@ Minuten
 Uren
 Dagen en langer
 Databronnen gebruikt door Crypto Order Flow
-BEURZEN`,
+BEURZEN
+We combineren data van veel beurzen, zodat elke coin is gedekt en de samengevoegde cijfers zo nauwkeurig mogelijk zijn.`,
 };

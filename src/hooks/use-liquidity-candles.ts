@@ -78,7 +78,7 @@ export function useLiquidityCandles(
           error: error instanceof Error ? error.message : 'Unable to load market candles.',
         }));
       } finally {
-        // Do not cancel a slow, rate-gated four-venue load every 30 seconds.
+        // Do not cancel a slow, rate-gated multi-venue load every 30 seconds.
         // Seconds candles come from the server's own trade recorder (no exchange
         // requests), so they refresh every 2 seconds.
         if (active) timer = window.setTimeout(() => void load(false), /s$/.test(timeframe) ? 2_000 : 30_000);
