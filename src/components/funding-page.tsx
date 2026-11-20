@@ -432,7 +432,7 @@ export function FundingPage() {
         </nav>}
         <footer className="funding-footline"><span>CRYPTO ORDER FLOW / FUNDING RATE</span><span>{snapshot ? `${exchanges.length} ELIGIBLE VENUES · ${timeframe.toUpperCase()}` : 'AWAITING MARKET SNAPSHOT'}</span></footer>
         </div>
-        <SectionWatchlist memory={memory} section="Funding Rate"
+        <SectionWatchlist memory={memory} coins={snapshot?.rows.map((row) => row.asset)} section="Funding Rate"
           currentCoin={snapshot?.rows.some((row) => normalizeCoin(row.asset) === normalizeCoin(search)) ? search : null}
           onSelect={(coin) => { setSearch(coin); setPage(0); }}
           metric={(coin) => {

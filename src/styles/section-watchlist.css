@@ -11,3 +11,18 @@
   .section-watchlist-layout { grid-template-columns:minmax(0,1fr); }
   .section-watchlist { position:static;max-height:none; }
 }
+/* Type-to-add search with + button and suggestions */
+.section-watchlist-search { position:relative;display:flex;gap:6px;margin:12px 14px 0; }
+.section-watchlist-search input { flex:1;min-width:0;height:38px;padding:0 10px;border:1px solid var(--lsar-control-border);border-radius:4px;background:var(--lsar-page);color:var(--lsar-ink);font:12px var(--app-font-mono);outline:0; }
+.section-watchlist-search input:focus { border-color:var(--lsar-accent); }
+.section-watchlist-search input::placeholder { color:var(--lsar-muted); }
+.section-watchlist-plus { display:grid;place-items:center;flex:none;width:38px;height:38px;border:1px solid var(--lsar-accent);border-radius:4px;background:var(--lsar-accent);color:#0f1f1c;cursor:pointer; }
+.section-watchlist-plus:hover { filter:brightness(1.08); }
+.section-watchlist-plus:disabled { opacity:.5;cursor:default; }
+.section-watchlist-suggestions { position:absolute;top:calc(100% + 4px);left:0;right:44px;z-index:10;margin:0;padding:4px;list-style:none;border:1px solid var(--lsar-control-border);border-radius:4px;background:var(--lsar-surface);box-shadow:0 10px 24px rgba(5,14,12,.3); }
+.section-watchlist-suggestions button { display:flex;align-items:center;justify-content:space-between;width:100%;height:30px;padding:0 8px;border:0;border-radius:3px;background:transparent;color:var(--lsar-ink);font:12px var(--app-font-mono);cursor:pointer; }
+.section-watchlist-suggestions button:hover,.section-watchlist-suggestions button.is-active { background:var(--lsar-row-hover); }
+.section-watchlist-suggestions small { color:var(--lsar-muted);font-size:10px; }
+.section-watchlist-message { margin:6px 14px 0;color:var(--lsar-muted);font:11px var(--app-font-mono); }
+.section-watchlist-remove-current { margin:8px 14px 0;padding:0;border:0;background:none;color:var(--lsar-muted);font:11px var(--app-font-mono);text-decoration:underline;cursor:pointer; }
+.section-watchlist-search + * , .section-watchlist-message + * { margin-top:12px; }
