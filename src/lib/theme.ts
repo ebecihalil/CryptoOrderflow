@@ -5,8 +5,10 @@ export function savedTheme(value: string | null): Theme | null {
   return value === 'light' || value === 'dark' ? value : null;
 }
 
-export function resolveTheme(value: string | null, systemDark: boolean): Theme {
-  return savedTheme(value) ?? (systemDark ? 'dark' : 'light');
+/** First visit (nothing saved): dark. After that, the visitor's own choice. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function resolveTheme(value: string | null, _systemDark = false): Theme {
+  return savedTheme(value) ?? 'dark';
 }
 
 export function nextTheme(theme: Theme): Theme {

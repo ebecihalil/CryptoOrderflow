@@ -32,7 +32,7 @@
 .market-list-col.is-symbol { justify-content:flex-start; }
 .market-list-col:hover,.market-list-col.is-sorted { color:var(--lsar-ink); }
 .market-list-rows { position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain; }
-.market-list-row { position:absolute;left:0;right:0;height:32px;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb,var(--lsar-border) 55%,transparent); }
+.market-list-row { position:absolute;left:0;right:0;height:38px;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb,var(--lsar-border) 55%,transparent); }
 .market-list-row:hover { background:var(--lsar-row-hover); }
 .market-list-row.is-colored { background:color-mix(in srgb,var(--row-color) 13%,transparent);box-shadow:inset 3px 0 0 var(--row-color); }
 .market-list-row.is-current { outline:1px solid var(--lsar-accent);outline-offset:-1px; }
@@ -41,19 +41,19 @@
 .market-list-flag:hover { border-color:var(--lsar-ink); }
 .market-list-select { flex:1;min-width:0;height:100%;padding:0 8px 0 0;border:0;background:transparent;color:var(--lsar-ink);text-align:left;cursor:pointer; }
 .market-list-symbol { display:flex;align-items:center;gap:6px;min-width:0;padding-right:4px; }
-.market-list-symbol .coin-logo { width:18px;height:18px; }
+.market-list-symbol .coin-logo { width:20px;height:20px; }
 .market-list-symbol .coin-logo-fallback { font-size:7px; }
 .market-list-name { display:flex;flex-direction:column;min-width:0;line-height:1.1; }
-.market-list-name b { overflow:hidden;font:600 11px var(--app-font-mono);letter-spacing:-.02em;white-space:nowrap;text-overflow:ellipsis; }
-.market-list-name small { display:flex;align-items:center;gap:3px;color:var(--lsar-muted);font:8.5px var(--app-font-mono); }
+.market-list-name b { overflow:hidden;font:600 13px var(--app-font-mono);letter-spacing:-.02em;white-space:nowrap;text-overflow:ellipsis; }
+.market-list-name small { display:flex;align-items:center;gap:3px;color:var(--lsar-muted);font:9.5px var(--app-font-mono); }
 .market-list-name .exchange-logo { width:9px;height:9px;border-radius:2px; }
-.market-list-num { overflow:hidden;font:11px var(--app-font-mono);text-align:right;white-space:nowrap;text-overflow:clip; }
+.market-list-num { overflow:hidden;font:12px var(--app-font-mono);text-align:right;white-space:nowrap;text-overflow:clip; }
 .market-list-num.is-up { color:#22ab94; }
 .market-list-num.is-down { color:#f23645; }
 .market-list-hide { position:absolute;right:2px;display:none;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:3px;background:var(--lsar-surface);color:var(--lsar-muted);cursor:pointer; }
 .market-list-row:hover .market-list-hide,.market-list-hide:focus-visible { display:grid; }
 .market-list-hide:hover { color:#f23645; }
-.market-list-palette { position:absolute;left:20px;top:28px;z-index:5;display:flex;gap:5px;padding:6px;border:1px solid var(--lsar-control-border);border-radius:5px;background:var(--lsar-surface);box-shadow:0 8px 20px rgba(0,0,0,.3); }
+.market-list-palette { position:absolute;left:20px;top:34px;z-index:5;display:flex;gap:5px;padding:6px;border:1px solid var(--lsar-control-border);border-radius:5px;background:var(--lsar-surface);box-shadow:0 8px 20px rgba(0,0,0,.3); }
 .market-list-palette button { width:18px;height:18px;padding:0;border:2px solid transparent;border-radius:50%;cursor:pointer; }
 .market-list-palette button.is-on { border-color:var(--lsar-ink); }
 .market-list-palette-clear { display:grid;place-items:center;background:var(--lsar-page) !important;border-color:var(--lsar-border) !important;color:var(--lsar-muted); }

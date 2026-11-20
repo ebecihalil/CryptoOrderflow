@@ -23,7 +23,7 @@ export function ThemeToggle() {
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-color-scheme: dark)');
     const followSystem = () => {
-      if (preference.current === null) setTheme(media?.matches ? 'dark' : 'light');
+      if (preference.current === null) setTheme(resolveTheme(null, media?.matches ?? false));
     };
     const followStorage = (event: StorageEvent) => {
       if (event.key !== THEME_STORAGE_KEY && event.key !== null) return;
