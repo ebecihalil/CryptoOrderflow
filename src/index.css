@@ -946,3 +946,10 @@
     inset: -1px;
   }
 }
+
+/* Global / Top trader LSAR tabs */
+.lsar-tabs { display:flex;gap:4px;margin-top:12px;border-bottom:1px solid var(--lsar-border);width:max-content;max-width:100%; }
+.lsar-tabs a { position:relative;padding:8px 13px;color:var(--lsar-muted);font:11px var(--app-font-mono);text-decoration:none;letter-spacing:.04em;text-transform:uppercase; }
+.lsar-tabs a:hover { color:var(--lsar-strong); }
+.lsar-tabs a.active { color:var(--lsar-accent);font-weight:600; }
+.lsar-tabs a.active::after { content:'';position:absolute;right:10px;bottom:-1px;left:10px;height:2px;background:var(--lsar-accent); }

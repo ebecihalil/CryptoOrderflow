@@ -30,33 +30,7 @@ const WINDOWS = [
     { timeframe: "4h", ms: 4 * 60 * 60_000 },
     { timeframe: "24h", ms: 24 * 60 * 60_000 },
 ];
-const exchangeStates = {
-    binance: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
-    bybit: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
-    okx: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
-    gate: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
-    bitget: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
-    toobit: { status: "connecting", marketCount: 0, updatedAt: null, error: null },
-};
-const sourceReadings = {
-    binance: [],
-    bybit: [],
-    okx: [],
-    gate: [],
-    bitget: [],
-    toobit: [],
-};
-const activeProviderTasks = new Map();
-const lastProviderAttempts = new Map();
-let lastPartialPublishAt = 0;
-let cachedSnapshot = {
-    generatedAt: null,
-    isRefreshing: false,
-    totalMarkets: 0,
-    coverage: { binance: 0, bybit: 0, both: 0, binanceOnly: 0, bybitOnly: 0 },
-    sources: Object.keys(exchangeStates).map(makeSourceStatus),
-    rows: [],
-};
+// Global (all-accounts) LSAR collector state lives in createLsarCollector below.
 function finiteNumber(value) {
     if (value === undefined)
         return null;
@@ -109,13 +83,7 @@ function parseRatioHistory(items, timestampField, ratioField) {
         .sort((a, b) => a.timestamp - b.timestamp);
 }
 function publishReading(reading) {
-    if (!reading?.points?.length) return;
-    const retained = sourceReadings[reading.exchange].filter((item) => item.symbol !== reading.symbol);
-    sourceReadings[reading.exchange] = [...retained, reading];
-    if (Date.now() - lastPartialPublishAt >= 5000) {
-        lastPartialPublishAt = Date.now();
-        publishSnapshot();
-    }
+    globalCollector.publishReading(reading);
 }
 async function fetchOkx() {
     const [instrumentsBody, openInterestBody, tickerBody] = await Promise.all([
@@ -161,11 +129,15 @@ async function fetchGate() {
             const stats = await fetchJson(`${GATE_BASE}/futures/usdt/contract_stats?contract=${encodeURIComponent(contract.name)}&interval=5m&limit=${HISTORY_LIMIT}`);
             const points = stats.map((item) => ({ timestamp: Number(item.time) * 1000, ratio: finiteNumber(item.lsr_account) ?? 0 }))
                 .filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp);
+            // Same response also carries Gate's top-trader account ratio; the
+            // Top Trader LSAR screener reuses it without another request.
+            const topPoints = stats.map((item) => ({ timestamp: Number(item.time) * 1000, ratio: finiteNumber(item.top_lsr_account) ?? 0 }))
+                .filter((item) => item.timestamp > 0 && item.ratio > 0).sort((a, b) => a.timestamp - b.timestamp);
             const latest = stats.at(-1);
             const openInterestUsd = finiteNumber(latest?.open_interest_usd);
             const normalized = canonicalAsset(contract.name.split("_")[0]);
             const reading = openInterestUsd > 0 ? { exchange: "gate", symbol: contract.name, asset: normalized.asset, exchangeAsset: contract.name.split("_")[0], price: price / normalized.priceDivisor,
-                priceChange24hPct: null, openInterestUsd, points } : null;
+                priceChange24hPct: null, openInterestUsd, points, topPoints } : null;
             publishReading(reading);
             return reading;
         } catch { errorCount += 1; return null; }
@@ -339,6 +311,7 @@ export async function fetchBinanceCoinM({ request = fetchJson, onReading = publi
                 price: price / normalized.priceDivisor,
                 priceChange24hPct: changes.get(contract.symbol) ?? null,
                 openInterestUsd: openInterest * contractSize,
+                pair: contract.pair,
                 points: parseBinanceHistory(history),
             };
             onReading(reading);
@@ -594,116 +567,137 @@ export function createRows(readings) {
     })
         .sort((a, b) => a.asset.localeCompare(b.asset));
 }
-function makeSourceStatus(exchange) {
-    const state = exchangeStates[exchange];
-    return {
-        exchange,
-        status: state.status,
-        marketCount: countFetchedReadings(sourceReadings[exchange]),
-        updatedAt: state.updatedAt,
-        error: state.error,
+/**
+ * One LSAR screener: per-exchange scan scheduling, progressive publishing,
+ * OI-weighted rows and summaries. Used for the global (all-accounts) ratio and
+ * for the Top Trader ratio, each with its own state and fetchers.
+ */
+export function createLsarCollector({ fetchers, label = "account-ratio", beforeSnapshot = () => {}, now = Date.now }) {
+    const exchanges = Object.keys(fetchers);
+    const exchangeStates = Object.fromEntries(exchanges.map((exchange) =>
+        [exchange, { status: "connecting", marketCount: 0, updatedAt: null, error: null }]));
+    const sourceReadings = Object.fromEntries(exchanges.map((exchange) => [exchange, []]));
+    const activeProviderTasks = new Map();
+    const lastProviderAttempts = new Map();
+    let lastPartialPublishAt = 0;
+    const makeSourceStatus = (exchange) => {
+        const state = exchangeStates[exchange];
+        return { exchange, status: state.status, marketCount: countFetchedReadings(sourceReadings[exchange]),
+            updatedAt: state.updatedAt, error: state.error };
     };
-}
-function publishSnapshot() {
-    const exchanges = Object.keys(exchangeStates);
-    const rows = createRows(exchanges.flatMap((exchange) => sourceReadings[exchange])
-        .filter(reading => isCryptoAsset(reading.asset)));
-    let binance = 0;
-    let bybit = 0;
-    let both = 0;
-    let binanceOnly = 0;
-    let bybitOnly = 0;
-    for (const row of rows) {
-        const hasBinance = row.exchanges.includes("binance");
-        const hasBybit = row.exchanges.includes("bybit");
-        if (hasBinance)
-            binance += 1;
-        if (hasBybit)
-            bybit += 1;
-        if (hasBinance && hasBybit)
-            both += 1;
-        else if (hasBinance)
-            binanceOnly += 1;
-        else if (hasBybit)
-            bybitOnly += 1;
-    }
-    cachedSnapshot = {
-        generatedAt: new Date(),
-        isRefreshing: activeProviderTasks.size > 0,
-        totalMarkets: rows.length,
-        coverage: { binance, bybit, both, binanceOnly, bybitOnly },
-        sources: exchanges.map(makeSourceStatus),
-        rows,
+    let cachedSnapshot = {
+        generatedAt: null, isRefreshing: false, totalMarkets: 0,
+        coverage: { binance: 0, bybit: 0, both: 0, binanceOnly: 0, bybitOnly: 0 },
+        sources: exchanges.map(makeSourceStatus), rows: [],
     };
-}
-export function getLsarMarketSnapshot() {
-    const fetchers = { binance: fetchBinance, bybit: fetchBybit, okx: fetchOkx, gate: fetchGate, bitget: fetchBitget, toobit: fetchToobit };
-    for (const [exchange, fetcher] of Object.entries(fetchers)) {
-        const gate = requestGates[exchange];
-        if (gate.isCoolingDown) {
-            lastProviderAttempts.delete(exchange);
-            exchangeStates[exchange] = {
-                ...exchangeStates[exchange],
-                status: sourceReadings[exchange].length ? "delayed" : "error",
-                error: gate.cooldownError().message,
-            };
-            continue;
+    function publishSnapshot() {
+        const rows = createRows(exchanges.flatMap((exchange) => sourceReadings[exchange])
+            .filter(reading => isCryptoAsset(reading.asset)));
+        let binance = 0, bybit = 0, both = 0, binanceOnly = 0, bybitOnly = 0;
+        for (const row of rows) {
+            const hasBinance = row.exchanges.includes("binance");
+            const hasBybit = row.exchanges.includes("bybit");
+            if (hasBinance) binance += 1;
+            if (hasBybit) bybit += 1;
+            if (hasBinance && hasBybit) both += 1;
+            else if (hasBinance) binanceOnly += 1;
+            else if (hasBybit) bybitOnly += 1;
         }
-        if (activeProviderTasks.has(exchange) || Date.now() - (lastProviderAttempts.get(exchange) ?? 0) < REFRESH_INTERVAL_MS) continue;
-        lastProviderAttempts.set(exchange, Date.now());
-        exchangeStates[exchange] = { ...exchangeStates[exchange], status: "refreshing", error: null };
-        const task = fetcher().then((result) => {
-            if (result.readings.length) sourceReadings[exchange] = result.readings;
-            exchangeStates[exchange] = {
-                status: !result.readings.length ? "error" : result.errorCount ? "delayed" : "live",
-                marketCount: result.readings.length,
-                updatedAt: new Date(),
-                error: gate.isCoolingDown ? gate.cooldownError().message
-                    : result.error ?? (result.errorCount ? `${result.errorCount} markets did not return complete account-ratio data.` : null),
-            };
-            logger.info({ exchange, markets: result.readings.length }, "Exchange account-ratio scan completed");
-        }).catch((error) => {
-            exchangeStates[exchange] = { ...exchangeStates[exchange], status: sourceReadings[exchange].length ? "delayed" : "error", error: String(error.message ?? error) };
-            logger.error({ exchange, error: exchangeStates[exchange].error }, "Exchange account-ratio scan failed");
-        }).finally(() => {
-            activeProviderTasks.delete(exchange);
-            publishSnapshot();
-        });
-        activeProviderTasks.set(exchange, task);
+        cachedSnapshot = {
+            generatedAt: new Date(), isRefreshing: activeProviderTasks.size > 0, totalMarkets: rows.length,
+            coverage: { binance, bybit, both, binanceOnly, bybitOnly },
+            sources: exchanges.map(makeSourceStatus), rows,
+        };
     }
-    publishSnapshot();
-    return cachedSnapshot;
-}
-export function getLsarMarketSummary(timeframe) {
-    const changes = cachedSnapshot.rows
-        .map((row) => ({
-        asset: row.asset,
-        ratioChangePct: row.changes.find((change) => change.timeframe === timeframe)?.ratioChangePct ?? null,
-        exchangeCount: row.exchanges.length,
-    }))
-        .filter((row) => row.ratioChangePct !== null && Number.isFinite(row.ratioChangePct));
-    const strongestIncrease = [...changes].sort((a, b) => b.ratioChangePct - a.ratioChangePct)[0];
-    const strongestDecrease = [...changes].sort((a, b) => a.ratioChangePct - b.ratioChangePct)[0];
-    return {
-        timeframe,
-        generatedAt: cachedSnapshot.generatedAt,
-        isRefreshing: cachedSnapshot.isRefreshing,
-        totalMarkets: cachedSnapshot.totalMarkets,
-        dualListed: cachedSnapshot.coverage.both,
-        binanceOnly: cachedSnapshot.coverage.binanceOnly,
-        bybitOnly: cachedSnapshot.coverage.bybitOnly,
-        strongestIncrease: strongestIncrease
-            ? { asset: strongestIncrease.asset, ratioChangePct: strongestIncrease.ratioChangePct }
-            : null,
-        strongestDecrease: strongestDecrease
-            ? { asset: strongestDecrease.asset, ratioChangePct: strongestDecrease.ratioChangePct }
-            : null,
-    };
+    function publishReading(reading) {
+        if (!reading?.points?.length || !sourceReadings[reading.exchange]) return;
+        const retained = sourceReadings[reading.exchange].filter((item) => item.symbol !== reading.symbol);
+        sourceReadings[reading.exchange] = [...retained, reading];
+        if (now() - lastPartialPublishAt >= 5000) {
+            lastPartialPublishAt = now();
+            publishSnapshot();
+        }
+    }
+    function getSnapshot() {
+        beforeSnapshot();
+        for (const exchange of exchanges) {
+            const gate = requestGates[exchange];
+            if (gate?.isCoolingDown) {
+                lastProviderAttempts.delete(exchange);
+                exchangeStates[exchange] = { ...exchangeStates[exchange],
+                    status: sourceReadings[exchange].length ? "delayed" : "error", error: gate.cooldownError().message };
+                continue;
+            }
+            if (activeProviderTasks.has(exchange) || now() - (lastProviderAttempts.get(exchange) ?? 0) < REFRESH_INTERVAL_MS) continue;
+            lastProviderAttempts.set(exchange, now());
+            exchangeStates[exchange] = { ...exchangeStates[exchange], status: "refreshing", error: null };
+            const task = fetchers[exchange]({ onReading: publishReading }).then((result) => {
+                if (result.waiting) {
+                    // Inputs not ready yet (e.g. the global scan has not listed contracts): retry soon.
+                    lastProviderAttempts.set(exchange, now() - REFRESH_INTERVAL_MS + 30_000);
+                    exchangeStates[exchange] = { ...exchangeStates[exchange], status: "connecting", error: null };
+                    return;
+                }
+                if (result.readings.length) sourceReadings[exchange] = result.readings;
+                exchangeStates[exchange] = {
+                    status: !result.readings.length ? "error" : result.errorCount ? "delayed" : "live",
+                    marketCount: result.readings.length, updatedAt: new Date(),
+                    error: gate?.isCoolingDown ? gate.cooldownError().message
+                        : result.error ?? (result.errorCount ? `${result.errorCount} markets did not return complete ${label} data.` : null),
+                };
+                logger.info({ exchange, markets: result.readings.length }, `Exchange ${label} scan completed`);
+            }).catch((error) => {
+                exchangeStates[exchange] = { ...exchangeStates[exchange], status: sourceReadings[exchange].length ? "delayed" : "error",
+                    error: String(error.message ?? error) };
+                logger.error({ exchange, error: exchangeStates[exchange].error }, `Exchange ${label} scan failed`);
+            }).finally(() => {
+                activeProviderTasks.delete(exchange);
+                publishSnapshot();
+            });
+            activeProviderTasks.set(exchange, task);
+        }
+        publishSnapshot();
+        return cachedSnapshot;
+    }
+    function getSummary(timeframe) {
+        const changes = cachedSnapshot.rows
+            .map((row) => ({
+            asset: row.asset,
+            ratioChangePct: row.changes.find((change) => change.timeframe === timeframe)?.ratioChangePct ?? null,
+            exchangeCount: row.exchanges.length,
+        }))
+            .filter((row) => row.ratioChangePct !== null && Number.isFinite(row.ratioChangePct));
+        const strongestIncrease = [...changes].sort((a, b) => b.ratioChangePct - a.ratioChangePct)[0];
+        const strongestDecrease = [...changes].sort((a, b) => a.ratioChangePct - b.ratioChangePct)[0];
+        return {
+            timeframe, generatedAt: cachedSnapshot.generatedAt, isRefreshing: cachedSnapshot.isRefreshing,
+            totalMarkets: cachedSnapshot.totalMarkets, dualListed: cachedSnapshot.coverage.both,
+            binanceOnly: cachedSnapshot.coverage.binanceOnly, bybitOnly: cachedSnapshot.coverage.bybitOnly,
+            strongestIncrease: strongestIncrease ? { asset: strongestIncrease.asset, ratioChangePct: strongestIncrease.ratioChangePct } : null,
+            strongestDecrease: strongestDecrease ? { asset: strongestDecrease.asset, ratioChangePct: strongestDecrease.ratioChangePct } : null,
+        };
+    }
+    return { getSnapshot, getSummary, publishReading, readings: (exchange) => sourceReadings[exchange] ?? [] };
 }
 
+const globalCollector = createLsarCollector({
+    fetchers: { binance: () => fetchBinance(), bybit: () => fetchBybit(), okx: () => fetchOkx(),
+        gate: () => fetchGate(), bitget: () => fetchBitget(), toobit: () => fetchToobit() },
+});
+
+export function getLsarMarketSnapshot() {
+    return globalCollector.getSnapshot();
+}
+export function getLsarMarketSummary(timeframe) {
+    return globalCollector.getSummary(timeframe);
+}
+/** Latest verified global-scan readings (contract, price, OI) for one exchange. */
+export function getLsarSourceReadings(exchange) {
+    return globalCollector.readings(exchange);
+}
 export function getLsarChartReadings(asset, exchanges) {
     getLsarMarketSnapshot();
-    return exchanges.flatMap(exchange => (sourceReadings[exchange] ?? [])
+    return exchanges.flatMap(exchange => globalCollector.readings(exchange)
         .filter(reading => reading.asset === asset)
         .map(reading => ({ asset: reading.asset, exchange, symbol: reading.symbol, points: reading.points,
             longWindowPoints: reading.longWindowPoints ?? [] })));

@@ -5,7 +5,10 @@ const rule = (key, limit, windowMs, match = () => true) => ({ key, limit, window
  * Sources, endpoint scope and undocumented limits: docs/exchange-request-limits.md */
 export const EXCHANGE_POLICIES = {
     bybit: { spacingMs: 160, rules: [rule("all", 30, 5000)] },
-    okx: { spacingMs: 600, rules: [rule("all", 3, 2000)] },
+    // OKX account-ratio endpoints limit 5/2s per IP + instrument; other public
+    // routes 20/2s per IP. Global + Top Trader LSAR need ~6 calls/2s overall to
+    // refresh every contract within the 15-minute freshness window.
+    okx: { spacingMs: 300, rules: [rule("all", 6, 2000)] },
     gate: { spacingMs: 150, rules: [rule("all", 80, 10_000)] },
     bitget: { spacingMs: 150, rules: [
         rule("all", 8, 1000),

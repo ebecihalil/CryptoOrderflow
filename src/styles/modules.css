@@ -38,7 +38,8 @@
 .module-home-main .directory-heading { padding-bottom:13px; }
 .module-home-main .module-list { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-top:14px; }
 .module-home-main .module-entry { min-width:0;align-self:start;border:1px solid var(--lsar-border);background:var(--lsar-surface); }
-.module-home-main .module-entry-super-charts { grid-column:2; }
+/* Six modules fill the 3-column grid evenly; no forced placement needed. */
+.module-home-main .module-entry-super-charts { grid-column:auto; }
 .module-home-main .module-entry-row { min-height:116px;grid-template-columns:24px 38px minmax(0,1fr) 34px;gap:10px;padding:13px; }
 .module-home-main .module-entry-copy { min-width:0; }
 .module-home-main .module-entry-copy h3 { font-size:16px;line-height:1.35; }

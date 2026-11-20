@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 
 test("home lists exactly the requested order-flow modules", () => {
     assert.deepEqual(HOME_MODULES.map(module => module.title), [
-        "Long Short Account Ratio", "Funding Rate", "Open Interest",
+        "Global Long Short Account Ratio", "Top Trader Long Short Account Ratio", "Funding Rate", "Open Interest",
         "Leverage Estimate", "Super Charts (Indicators)",
     ]);
 });
@@ -21,12 +21,13 @@ test("CVD and Liquidations are hidden only from the main page, not deleted", () 
     assert.doesNotMatch(home, /06 MODULES/);
 });
 
-test("Super Charts has targeted desktop placement and responsive resets", () => {
+test("Super Charts keeps its entry class and responsive resets", () => {
     const home = readFileSync(new URL("../src/components/module-pages.tsx", import.meta.url), "utf8");
     const css = readFileSync(new URL("../src/styles/modules.css", import.meta.url), "utf8");
     assert.match(home, /module\.path === '\/super-charts'/);
     assert.match(home, /module-entry-super-charts/);
-    assert.match(css, /\.module-entry-super-charts\s*\{[^}]*grid-column:\s*2\s*;/);
+    // With six home modules the 3-column grid is full; Super Charts flows naturally.
+    assert.doesNotMatch(css, /\.module-entry-super-charts\s*\{[^}]*grid-column:\s*2\s*;/);
     assert.match(css, /@media[\s\S]*\.module-entry-super-charts\s*\{[^}]*grid-column:\s*auto\s*;/);
 });
 
@@ -44,7 +45,7 @@ test("account ratio is a direct module with no position ratio subsection", () =>
 
 test("each selected section has a two-letter mark and a unique local route", () => {
     const pages = MODULES;
-    assert.equal(new Set(pages.map(page => page.path)).size, 7);
+    assert.equal(new Set(pages.map(page => page.path)).size, 8);
     for (const page of pages) {
         assert.match(page.mark, /^[A-Z]{2}$/);
         assert.match(page.path, /^\/[a-z-]+$/);

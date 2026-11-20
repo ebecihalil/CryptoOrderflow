@@ -6,7 +6,8 @@ export type ModuleInfo = {
 };
 
 export const MODULES: ModuleInfo[] = [
-  { title: 'Long Short Account Ratio', mark: 'LS', path: '/long-short-account-ratio', description: 'OI-weighted account positioning across perpetual markets.' },
+  { title: 'Global Long Short Account Ratio', mark: 'LS', path: '/long-short-account-ratio', description: 'OI-weighted positioning of all accounts across perpetual markets.' },
+  { title: 'Top Trader Long Short Account Ratio', mark: 'TT', path: '/top-trader-long-short-account-ratio', description: 'OI-weighted positioning of top traders on Binance, OKX and Gate.io.' },
   { title: 'Funding Rate', mark: 'FR', path: '/funding-rate', description: 'Funding dynamics across perpetual venues.' },
   { title: 'Open Interest', mark: 'OI', path: '/open-interest', description: 'Open interest changes across markets.' },
   { title: 'Leverage Estimate', mark: 'LE', path: '/leverage-estimate', description: 'Aggregated perp leverage from OI, top traders and footprint flow.' },

@@ -15,6 +15,17 @@ import {
   getLsarMarketSnapshot,
   getLsarMarketSummary,
 } from "./server/lsarMarketData.js";
+import { getTopTraderLsarSnapshot, getTopTraderLsarSummary } from "./server/topTraderLsarMarketData.js";
+
+// kind=global (default): all-accounts LSAR. kind=top: top-trader accounts LSAR.
+const lsarKind = (req, res) => {
+  const kind = req.query.kind ?? "global";
+  if (kind !== "global" && kind !== "top") {
+    res.status(400).json({ error: "kind must be global or top." });
+    return null;
+  }
+  return kind;
+};
 
 const app = express();
 void chartWatchlistService.start();
@@ -150,8 +161,11 @@ app.get("/api/market/lsar", (req, res) => {
     maxPrice = parsed;
   }
 
-  const snapshot = getLsarMarketSnapshot();
+  const kind = lsarKind(req, res);
+  if (!kind) return;
+  const snapshot = kind === "top" ? getTopTraderLsarSnapshot() : getLsarMarketSnapshot();
   res.json({
+    kind,
     ...snapshot,
     rows: snapshot.rows.filter((row) => maxPrice === null || row.price <= maxPrice),
   });
@@ -163,7 +177,9 @@ app.get("/api/market/summary", (req, res) => {
     res.status(400).json({ error: "timeframe must be one of 5m, 15m, 30m, 1h, 4h, or 24h." });
     return;
   }
-  res.json(getLsarMarketSummary(timeframe));
+  const kind = lsarKind(req, res);
+  if (!kind) return;
+  res.json({ kind, ...(kind === "top" ? getTopTraderLsarSummary(timeframe) : getLsarMarketSummary(timeframe)) });
 });
 
 app.use("/api", (_req, res) => {

@@ -44,6 +44,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import {
+  Link,
   Route,
   Switch,
   useLocation,
@@ -52,7 +53,6 @@ import {
 
 const queryClient = new QueryClient();
 
-const TABLE_COLUMN_COUNT = 4 + MARKET_EXCHANGES.length;
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
@@ -115,7 +115,7 @@ function MoveHighlight({ asset, value, direction }: { asset: string; value: numb
   );
 }
 
-function SkeletonRows() {
+function SkeletonRows({ exchanges }: { exchanges: MarketExchange[] }) {
   return (
     <>
       {Array.from({ length: 7 }, (_, index) => (
@@ -124,30 +124,87 @@ function SkeletonRows() {
           <td><span className="skeleton" style={{ width: 54 }} /></td>
           <td><span className="skeleton" style={{ width: 72 }} /></td>
           <td><span className="skeleton" style={{ width: 58 }} /></td>
-          {MARKET_EXCHANGES.map((exchange) => <td key={exchange}><span className="skeleton" style={{ width: 68 }} /></td>)}
+          {exchanges.map((exchange) => <td key={exchange}><span className="skeleton" style={{ width: 68 }} /></td>)}
         </tr>
       ))}
     </>
   );
 }
 
+type LsarVariant = {
+  kind: 'global' | 'top';
+  title: string;
+  mark: string;
+  heading: string;
+  subtitle: string;
+  exchanges: MarketExchange[];
+  footnote: ReactNode;
+  footline: string;
+};
+
+const TOP_TRADER_EXCHANGES: MarketExchange[] = ['binance', 'okx', 'gate'];
+
+const GLOBAL_LSAR: LsarVariant = {
+  kind: 'global',
+  title: 'Global Long Short Account Ratio',
+  mark: 'LS',
+  heading: 'Global Long Short Account Ratio (LSAR)',
+  subtitle: 'OI-weighted positioning of all accounts across perpetual markets. Each coin lists its contributing exchanges.',
+  exchanges: MARKET_EXCHANGES,
+  footline: 'CRYPTO ORDERFLOW / GLOBAL LSAR SCREENER',
+  footnote: <span><strong>Read this correctly.</strong> Aggregated LSAR converts each source ratio to long and short account shares first, OI-weights both shares, then reconstructs the ratio; overall long percentage is the OI-weighted long share. Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical current USD OI weights on both sides. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Only verified crypto identities are included; stocks/ETFs and unverified tickers are excluded. Expand a coin to see contract timestamps and the selected timeframe's contributing sources. Binance/Bybit include linear and inverse perpetuals; Gate.io, Bitget and Toobit currently add USDT perpetuals, and OKX adds swaps. Toobit fetches 5-minute history for all displayed candle comparisons. Feeds load progressively; Bitget runs at its one-request-per-second limit, and slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>,
+};
+
+const TOP_TRADER_LSAR: LsarVariant = {
+  kind: 'top',
+  title: 'Top Trader Long Short Account Ratio',
+  mark: 'TT',
+  heading: 'Top Trader Long Short Account Ratio',
+  subtitle: 'OI-weighted positioning of each exchange\'s top traders across perpetual markets. Each coin lists its contributing exchanges.',
+  exchanges: TOP_TRADER_EXCHANGES,
+  footline: 'CRYPTO ORDERFLOW / TOP TRADER LSAR SCREENER',
+  footnote: <span><strong>Read this correctly.</strong> Only exchanges that publish a top-trader account ratio contribute: Binance (USD-M and COIN-M), OKX and Gate.io. Each exchange defines its own top-trader group (Binance: the top 20% of accounts by margin balance); the groups are not identical across exchanges. Contracts, prices and USD OI weights are the same as the Global LSAR, and the aggregation is identical: each ratio becomes long/short account shares, both shares are OI-weighted, then the ratio is reconstructed. Each timeframe compares the latest sample in the current UTC-aligned candle with the previous candle, using matching sources and identical OI weights. OKX uses hourly history for previous 4h/24h candles. Bybit, Bitget and Toobit are not included because no verified top-trader account ratio is available from them. Account ratios count accounts, not position size. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>,
+};
+
+function LsarTabs({ active }: { active: LsarVariant['kind'] }) {
+  return (
+    <nav className="lsar-tabs" aria-label="Long Short Account Ratio views">
+      <Link href="/long-short-account-ratio" className={active === 'global' ? 'active' : ''} aria-current={active === 'global' ? 'page' : undefined}
+        data-testid="tab-lsar-global">Global accounts</Link>
+      <Link href="/top-trader-long-short-account-ratio" className={active === 'top' ? 'active' : ''} aria-current={active === 'top' ? 'page' : undefined}
+        data-testid="tab-lsar-top">Top traders</Link>
+    </nav>
+  );
+}
+
 function Home() {
+  return <LsarScreener variant={GLOBAL_LSAR} />;
+}
+
+function TopTraderHome() {
+  return <LsarScreener variant={TOP_TRADER_LSAR} />;
+}
+
+function LsarScreener({ variant }: { variant: LsarVariant }) {
+  const exchanges = variant.exchanges;
+  const kindQuery = variant.kind === 'top' ? '&kind=top' : '';
+  const tableColumnCount = 4 + exchanges.length;
   const [timeframe, setTimeframe] = useState<LsarTimeframe>('1h');
   const [sortMode, setSortMode] = useState<MarketSortMode>('absolute');
   const [sortTarget, setSortTarget] = useState<MarketSortTarget>('change');
-  const [{ selected: selectedExchanges, multipleOnly }, setExchangeSelection] = useState(() => selectExchanges(MARKET_EXCHANGES));
+  const [{ selected: selectedExchanges, multipleOnly }, setExchangeSelection] = useState(() => selectExchanges(exchanges));
   const [search, setSearch] = useState('');
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
 
   const snapshotQuery = useQuery({
-    queryKey: ['market-snapshot', 'all'],
-    queryFn: ({ signal }) => getJson<LsarMarketSnapshot>('/api/market/lsar?maxPrice=all', signal),
+    queryKey: ['market-snapshot', variant.kind, 'all'],
+    queryFn: ({ signal }) => getJson<LsarMarketSnapshot>(`/api/market/lsar?maxPrice=all${kindQuery}`, signal),
     refetchInterval: (query) => snapshotPollInterval(query.state.data?.sources),
     refetchOnWindowFocus: true,
   });
   const summaryQuery = useQuery({
-    queryKey: ['market-summary', timeframe],
-    queryFn: ({ signal }) => getJson<LsarMarketSummary>(`/api/market/summary?timeframe=${encodeURIComponent(timeframe)}`, signal),
+    queryKey: ['market-summary', variant.kind, timeframe],
+    queryFn: ({ signal }) => getJson<LsarMarketSummary>(`/api/market/summary?timeframe=${encodeURIComponent(timeframe)}${kindQuery}`, signal),
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
@@ -190,7 +247,7 @@ function Home() {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
   };
 
-  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== MARKET_EXCHANGES.length || multipleOnly;
+  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== exchanges.length || multipleOnly;
   const latestTimestamp = snapshot?.generatedAt ?? summary?.generatedAt ?? null;
   const latestRatioTimestamp =
     snapshot?.rows.reduce<string | null>((latest, row) => {
@@ -201,16 +258,17 @@ function Home() {
   const snapshotFailed = Boolean(snapshotQuery.isError);
   return (
     <div className="terminal">
-      <AppHeader title="Long Short Account Ratio" mark="LS" sectionLabel="Long Short Account Ratio" isRefreshing={snapshot?.isRefreshing} />
+      <AppHeader title={variant.title} mark={variant.mark} sectionLabel={variant.title} isRefreshing={snapshot?.isRefreshing} />
 
       <main className="main-wrap">
         <section className="hero-line">
           <div>
             <div className="eyebrow">Crypto Ordeflow Mechanics</div>
-            <h1 className="page-title">Long Short Account Ratio (LSAR)</h1>
-            <p className="page-subtitle">OI-weighted account positioning across perpetual markets. Each coin lists its contributing exchanges.</p>
+            <h1 className="page-title">{variant.heading}</h1>
+            <p className="page-subtitle">{variant.subtitle}</p>
+            <LsarTabs active={variant.kind} />
           </div>
-          <FetchedDataLine sources={snapshot?.sources} />
+          <FetchedDataLine sources={snapshot?.sources} exchanges={exchanges} />
           <button className="refresh-button" onClick={handleRefresh} disabled={isFetching} data-testid="button-refresh">
             <RefreshCw className={isFetching ? 'spin' : ''} />
             {isFetching ? 'Loading snapshot' : 'Refresh'}
@@ -235,7 +293,7 @@ function Home() {
               leadingSearch value={search} options={searchOptions} label="Search assets" placeholder="Search asset"
               onChange={(value) => setSearch(value)} testId="input-search-asset" />
             <span className="filter-label">Exchange</span>
-            <ExchangeFilter selected={selectedExchanges} onChange={(selected) => setExchangeSelection(selectExchanges(selected))}
+            <ExchangeFilter exchanges={exchanges} selected={selectedExchanges} onChange={(selected) => setExchangeSelection(selectExchanges(selected))}
               multipleOnly={multipleOnly} onMultipleOnlyChange={(enabled) => setExchangeSelection(selectMultipleOnly(enabled))} />
             <span className="filter-label">TF</span>
             <select value={timeframe} onChange={(event) => { setTimeframe(event.target.value as LsarTimeframe); setSortTarget('change'); }}
@@ -273,7 +331,7 @@ function Home() {
                 <col className="market-price" />
                 <col className="market-aggregate" />
                 <col className="market-current" />
-                {MARKET_EXCHANGES.map((exchange) => <col className="market-venue" key={exchange} />)}
+                {exchanges.map((exchange) => <col className="market-venue" key={exchange} />)}
               </colgroup>
               <thead>
                 <tr>
@@ -308,7 +366,7 @@ function Home() {
                     </button>
                     <span className="subhead">ratio / long share</span>
                   </th>
-                  {MARKET_EXCHANGES.map((exchange) => {
+                  {exchanges.map((exchange) => {
                     const active = sortTarget === exchange;
                     return <th key={exchange} scope="col" className="exchange-heading"
                       aria-sort={active ? (sortMode === 'increase' ? 'descending' : 'ascending') : 'none'}>
@@ -325,17 +383,18 @@ function Home() {
                 </tr>
               </thead>
               <tbody>
-                {snapshotQuery.isLoading && !snapshot && <SkeletonRows />}
+                {snapshotQuery.isLoading && !snapshot && <SkeletonRows exchanges={exchanges} />}
                 {!snapshotQuery.isLoading && !snapshot && !snapshotQuery.isError && (
-                  <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
+                  <tr><td colSpan={tableColumnCount}><div className="empty-state" data-testid="state-awaiting-snapshot"><Database size={23} /><h2>Connecting to the market feed</h2><p>The screener will populate when a live snapshot is available.</p></div></td></tr>
                 )}
                 {snapshot && rows.length === 0 && (
-                  <tr><td colSpan={TABLE_COLUMN_COUNT}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try changing the exchange filter or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
+                  <tr><td colSpan={tableColumnCount}><div className="empty-state" data-testid="state-no-markets"><h2>{hasActiveFilters ? 'No markets match these filters' : 'No market readings yet'}</h2><p>{hasActiveFilters ? 'Try changing the exchange filter or clearing your search.' : 'No rows were returned by the live snapshot.'}</p></div></td></tr>
                 )}
                 {snapshot && rows.map((row) => {
                   const expanded = expandedAsset === row.asset;
                   return (
                     <FragmentRow
+                      exchanges={exchanges}
                       key={row.asset}
                       row={row}
                       selectedTimeframe={timeframe}
@@ -351,11 +410,11 @@ function Home() {
 
         <div className="footnote" data-testid="text-ratio-disclaimer">
           <Info />
-          <span><strong>Read this correctly.</strong> Aggregated LSAR converts each source ratio to long and short account shares first, OI-weights both shares, then reconstructs the ratio; overall long percentage is the OI-weighted long share. Each timeframe compares the latest available sample in the current UTC-aligned candle with the latest sample in the immediately previous candle, using matching sources and identical current USD OI weights on both sides. The current candle is still forming. Values show ratio-relative percent changes and long-share percentage-point changes. Account ratios do not identify institutions versus retail or measure position size. Only verified crypto identities are included; stocks/ETFs and unverified tickers are excluded. Expand a coin to see contract timestamps and the selected timeframe's contributing sources. Binance/Bybit include linear and inverse perpetuals; Gate.io, Bitget and Toobit currently add USDT perpetuals, and OKX adds swaps. Toobit fetches 5-minute history for all displayed candle comparisons. Feeds load progressively; Bitget runs at its one-request-per-second limit, and slower scans never block other venues. Readings older than 15 minutes are excluded, and a missing candle produces no fabricated change.</span>
+          {variant.footnote}
         </div>
         {snapshot?.sources.some((source) => source.error) && <div className="footnote" role="status"><AlertCircle /><span>Some exchange data is unavailable. Only available readings contribute.</span></div>}
         <div className="footline">
-          <span>CRYPTO ORDERFLOW / LSAR SCREENER</span>
+          <span>{variant.footline}</span>
           <span data-testid="text-generated-at">SNAPSHOT {formatTimestamp(latestTimestamp)} · {snapshot?.totalMarkets ?? summary?.totalMarkets ?? '—'} ASSETS</span>
         </div>
       </main>
@@ -363,7 +422,7 @@ function Home() {
   );
 }
 
-function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: LsarInstrument; selectedTimeframe: LsarTimeframe; expanded: boolean; onToggle: () => void }) {
+function FragmentRow({ row, selectedTimeframe, expanded, onToggle, exchanges }: { row: LsarInstrument; selectedTimeframe: LsarTimeframe; expanded: boolean; onToggle: () => void; exchanges: MarketExchange[] }) {
   return (
     <>
       <tr data-testid={`row-market-${row.asset}`}>
@@ -396,7 +455,7 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
             <span className="share-percent">{row.longSharePct === null ? '—' : `${row.longSharePct.toFixed(1)}% long`}</span>
           </div>
         </td>
-        {MARKET_EXCHANGES.map((exchange) => {
+        {exchanges.map((exchange) => {
           const ratio = exchangeAccountRatio(row.exchangeReadings, exchange);
           if (ratio === null) return <td className="exchange-ratio-cell missing" key={exchange} data-testid={`value-exchange-${row.asset}-${exchange}`}>—</td>;
           const longShare = ratio / (1 + ratio) * 100;
@@ -414,7 +473,7 @@ function FragmentRow({ row, selectedTimeframe, expanded, onToggle }: { row: Lsar
       </tr>
       {expanded && (
         <tr data-testid={`row-details-${row.asset}`}>
-          <td colSpan={TABLE_COLUMN_COUNT} style={{ background: 'var(--lsar-row-hover)', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
+          <td colSpan={4 + exchanges.length} style={{ background: 'var(--lsar-row-hover)', textAlign: 'left', padding: '14px 20px 15px 38px' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 28px', alignItems: 'center' }}>
               <span className="eyebrow">Exchange readings · OI-weighting inputs</span>
               {row.exchangeReadings.map((reading) => (
@@ -450,11 +509,12 @@ function Router() {
         <Route path="/" component={ModuleHome} />
         <Route path="/long-short-account-ratio" component={Home} />
         <Route path="/lsar" component={LsarAlias} />
+        <Route path="/top-trader-long-short-account-ratio" component={TopTraderHome} />
         <Route path="/funding-rate" component={FundingPage} />
         <Route path="/open-interest" component={OpenInterestPage} />
         <Route path="/super-charts" component={SuperChartsPage} />
         <Route path="/leverage-estimate" component={LeverageEstimatePage} />
-        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts' && module.path !== '/leverage-estimate').map((module) => (
+        {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/top-trader-long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts' && module.path !== '/leverage-estimate').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />
           </Route>

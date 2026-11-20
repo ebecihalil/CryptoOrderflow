@@ -1,14 +1,14 @@
-import type { MarketSourceStatus } from '@/types/market';
+import type { MarketExchange, MarketSourceStatus } from '@/types/market';
 import { EXCHANGE_LABELS, MARKET_EXCHANGES } from '@/lib/exchange-options';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { sourceFailureLabel } from '@/lib/source-failure';
 
-export function FetchedDataLine({ sources = [] }: { sources?: MarketSourceStatus[] }) {
+export function FetchedDataLine({ sources = [], exchanges = MARKET_EXCHANGES }: { sources?: MarketSourceStatus[]; exchanges?: MarketExchange[] }) {
   return (
     <div className="fetched-data-line" role="status" aria-live="polite" aria-label="Fetched exchange contract counts"
       data-testid="fetched-data-line">
       <strong>Total Fetched Coin Data:</strong>
-      {MARKET_EXCHANGES.map((exchange) => {
+      {exchanges.map((exchange) => {
         const source = sources.find((item) => item.exchange === exchange);
         const count = source?.marketCount ?? 0;
         const failureLabel = sourceFailureLabel(source?.error);
