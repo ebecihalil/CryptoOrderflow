@@ -21,8 +21,9 @@ test("futures stay direct without a relay and go through the relay when configur
     headers: { "x-relay-key": "secret" },
   });
   assert.equal(routeBinanceSocket("wss://fstream.binance.com/market/ws", relay).url, "wss://relay.example.com/fstream.binance.com/market/ws");
-  // Spot keeps the keyless official mirror even when a relay exists.
-  assert.equal(routeBinanceRequest("https://api.binance.com/api/v3/exchangeInfo", relay).url, "https://data-api.binance.vision/api/v3/exchangeInfo");
+  // With a relay, spot also leaves from the relay's own IP (never the hosting IP).
+  assert.equal(routeBinanceRequest("https://api.binance.com/api/v3/exchangeInfo", relay).url, "https://relay.example.com/api.binance.com/api/v3/exchangeInfo");
+  assert.equal(routeBinanceSocket("wss://stream.binance.com:9443/ws", relay).url, "wss://relay.example.com/stream.binance.com:9443/ws");
   assert.throws(() => binanceAccessConfig({ BINANCE_RELAY_URL: "ftp://x" }));
 });
 

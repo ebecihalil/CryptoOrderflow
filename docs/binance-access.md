@@ -54,6 +54,11 @@ Deployments cannot choose a non-US region. No configuration is needed.
 3. Restart the app; `GET /api/healthz` should show `"futures": "relay"` and an
    empty `geoBlocked` list after the next scan.
 
+When a relay is configured, **all** Binance traffic (futures and spot, REST
+and streams) uses it, so a banned or shared hosting IP is never used for
+Binance. This also fixes HTTP 418 IP bans caused by other tenants of a shared
+hosting IP (Render's outbound IPs are shared per region).
+
 The relay forwards **only** GET requests to Binance public market-data paths
 and public stream hosts, requires the shared secret, stores nothing and holds
 no Binance API keys. It is not an open proxy.

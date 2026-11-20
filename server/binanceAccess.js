@@ -41,15 +41,17 @@ const defaultConfig = binanceAccessConfig();
 /** Returns { url, headers } to actually request for an original Binance REST URL. */
 export function routeBinanceRequest(value, config = defaultConfig) {
   const url = new URL(value);
-  if (url.host === SPOT_REST && config.spotHost === "binance.vision" && url.pathname.startsWith("/api/v3/")) {
-    url.host = SPOT_DATA_REST;
-    return { url: url.toString(), headers: {} };
-  }
+  // With a relay, ALL Binance traffic (spot too) leaves from the relay's own
+  // IP, so a banned/shared hosting IP is never used for Binance at all.
   if (config.relayUrl && RELAY_REST_HOSTS.has(url.host)) {
     return {
       url: `${config.relayUrl}/${url.host}${url.pathname}${url.search}`,
       headers: config.relayKey ? { "x-relay-key": config.relayKey } : {},
     };
+  }
+  if (url.host === SPOT_REST && config.spotHost === "binance.vision" && url.pathname.startsWith("/api/v3/")) {
+    url.host = SPOT_DATA_REST;
+    return { url: url.toString(), headers: {} };
   }
   return { url: url.toString(), headers: {} };
 }
@@ -57,17 +59,17 @@ export function routeBinanceRequest(value, config = defaultConfig) {
 /** Returns { url, headers } for an original Binance WebSocket URL. */
 export function routeBinanceSocket(value, config = defaultConfig) {
   const url = new URL(value);
-  if (url.host === SPOT_STREAM && config.spotHost === "binance.vision") {
-    url.host = SPOT_DATA_STREAM;
-    url.port = "";
-    return { url: url.toString(), headers: {} };
-  }
   if (config.relayUrl && RELAY_STREAM_HOSTS.has(url.host)) {
     const base = config.relayUrl.replace(/^http/, "ws");
     return {
       url: `${base}/${url.host}${url.pathname}${url.search}`,
       headers: config.relayKey ? { "x-relay-key": config.relayKey } : {},
     };
+  }
+  if (url.host === SPOT_STREAM && config.spotHost === "binance.vision") {
+    url.host = SPOT_DATA_STREAM;
+    url.port = "";
+    return { url: url.toString(), headers: {} };
   }
   return { url: url.toString(), headers: {} };
 }
@@ -76,6 +78,7 @@ export function describeBinanceAccess(config = defaultConfig) {
   return {
     spot: config.spotHost === "binance.vision" ? "data-api.binance.vision" : "api.binance.com",
     futures: config.relayUrl ? "relay" : "direct",
+    ...(config.relayUrl ? { spotVia: "relay" } : {}),
   };
 }
 
