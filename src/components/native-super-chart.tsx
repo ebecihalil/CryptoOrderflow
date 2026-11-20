@@ -47,6 +47,8 @@ type Props = {
   /** Perp Leverage Estimation rows (time in seconds; 100 = normal for this coin). */
   leverageRows?: Array<{ time: number; avg: number | null; long: number | null; short: number | null }> | null;
   leverageEnabled?: boolean;
+  /** Message shown in the middle of a pane that has no data for this timeframe (pane stays). */
+  paneNotes?: Record<string, string>;
   /** Long Short Account Ratio panes (global / top trader); time in seconds. */
   lsarPanes?: Array<{ key: string; label: string; color: string; points: Array<{ time: number; ratio: number; longPct: number }> }>;
   priceDivisor: number;
@@ -96,6 +98,7 @@ function priceFormat(candles: Candle[]) {
 const toTime = (time: number) => time as UTCTimestamp;
 const LEVERAGE_COLORS = { avg: '#f59e0b', long: '#22c55e', short: '#ef4444' };
 const NO_LSAR_PANES: NonNullable<Props['lsarPanes']> = [];
+const NO_NOTES: Record<string, string> = {};
 
 function compactCvd(value: number) {
   const magnitude = Math.abs(value);
@@ -104,7 +107,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -119,13 +122,13 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const captureViewRef = useRef<() => void>(() => {});
   const [hover, setHover] = useState<Candle | null>(null);
   // Top offset of every pane, for the TradingView-style legends.
-  const [paneLayout, setPaneLayout] = useState<Array<{ key: string; top: number }>>([]);
+  const [paneLayout, setPaneLayout] = useState<Array<{ key: string; top: number; height: number }>>([]);
   const measurePanes = useCallback(() => {
     const chart = bundleRef.current?.chart;
     if (!chart) return;
     let top = 0;
     const next = chart.panes().map((pane, index) => {
-      const item = { key: paneKeysRef.current[index] ?? `pane-${index}`, top };
+      const item = { key: paneKeysRef.current[index] ?? `pane-${index}`, top, height: pane.getHeight() };
       top += pane.getHeight() + 1; // 1px pane separator
       return item;
     });
@@ -622,7 +625,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     };
     for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'overlay') priceRows.push(extraRow(id, result));
     if (liquidityEnabled) priceRows.push({ key: 'liquidity', label: 'Liquidity Zones', params: `${zones.length} zones`, color: '#9ccfb8' });
-    if (aggressiveBubblesEnabled) priceRows.push({ key: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles', params: `${plottedBubbles.length} levels`, color: CHART_COLORS.up });
+    if (aggressiveBubblesEnabled) priceRows.push({ key: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles', color: CHART_COLORS.up,
+      ...(paneNotes['aggressive-bubbles'] ? { values: [{ text: paneNotes['aggressive-bubbles'] }] } : { params: `${plottedBubbles.length} levels` }) });
     const extrasByPane = new Map(extraData.map(([id, result]) => [`extra-${id}`, extraRow(id, result)]));
     const cvdValue = (payload: CvdPayload | null) => num(payload?.candles.find((item) => item.time === legendTime)?.close ?? null);
     const rowsFor = (key: string): LegendRow[] => {
@@ -637,25 +641,25 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       if (key === 'perpetual-cvd') return [{ key: 'perpetual-cvd', label: 'Aggregated Perpetual CVD', params: (perpetualCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(perpetualCvd) }] }];
       if (key === 'spot-cvd') return [{ key: 'spot-cvd', label: 'Aggregated Spot CVD', params: (spotCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(spotCvd) }] }];
       if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6',
-        values: oiDriver?.candles.length ? undefined : [{ text: 'Collecting data…' }] }];
+        values: oiDriver?.candles.length || paneNotes['oi-driver'] ? undefined : [{ text: 'Collecting data…' }] }];
       const lsar = lsarPanes.find((item) => item.key === key);
       if (lsar) {
         const point = lsar.points.find((item) => item.time === legendTime) ?? lsar.points.at(-1);
         return [{ key, label: lsar.label, params: 'OI-weighted', color: lsar.color,
-          values: point ? [{ text: point.ratio.toFixed(2), color: lsar.color }, { text: `${point.longPct.toFixed(1)}% long` }] : [{ text: 'No data for this coin yet' }] }];
+          values: point ? [{ text: point.ratio.toFixed(2), color: lsar.color }, { text: `${point.longPct.toFixed(1)}% long` }] : paneNotes[key] ? [] : [{ text: 'No data for this coin yet' }] }];
       }
       if (key === 'leverage') {
         const rows = (leverageRows ?? []).filter((item) => item.avg !== null);
         const row = rows.find((item) => item.time === legendTime) ?? rows.at(-1);
         return [{ key: 'leverage', label: 'Perp Leverage Estimation', params: '100 = normal', color: LEVERAGE_COLORS.avg,
           values: row ? [{ text: `Avg ${row.avg!.toFixed(0)}`, color: LEVERAGE_COLORS.avg }, { text: `Long ${row.long?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.long },
-            { text: `Short ${row.short?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.short }] : [{ text: 'Collecting data…' }] }];
+            { text: `Short ${row.short?.toFixed(0) ?? '—'}`, color: LEVERAGE_COLORS.short }] : paneNotes.leverage ? [] : [{ text: 'Collecting data…' }] }];
       }
       return [];
     };
     return paneLayout.map((pane) => ({ ...pane, rows: rowsFor(pane.key) })).filter((pane) => pane.rows.length);
   }, [paneLayout, legendTime, candles, studies, studyData, technicalSettings, extraData, extraSettings, liquidityEnabled, zones.length,
-    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, leverageRows, lsarPanes, symbolLabel, timeframe]);
+    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, leverageRows, lsarPanes, paneNotes, symbolLabel, timeframe]);
 
   return (
     <div className="native-chart-wrap">
@@ -676,6 +680,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         <div className="native-chart-canvas" ref={mountRef} role="img" aria-label="Native exchange-fed candlestick chart with synchronized indicator panes" />
         {/* Clear frames between panes (the chart's own separator stays draggable underneath). */}
         {paneLayout.slice(1).map((pane) => <div key={pane.key} className="pane-divider" style={{ top: pane.top }} aria-hidden="true" />)}
+        {paneLayout.filter((pane) => paneNotes[pane.key]).map((pane) => (
+          <div key={`note-${pane.key}`} className="pane-note" style={{ top: pane.top, height: pane.height }} role="status">
+            <span>{paneNotes[pane.key]}</span></div>
+        ))}
         <ChartPaneLegends panes={legendPanes} settings={layerSettings} actions={layerActions} onRemove={onRemoveLayer} />
       </div>
     </div>

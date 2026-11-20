@@ -89,6 +89,22 @@ const STUDY_SETTING_KEYS: Partial<Record<string, Array<keyof TechnicalSettings>>
   macd: ['macdFast', 'macdSlow', 'macdSignal'],
 };
 
+/**
+ * Show 5-minute data on smaller candles as steps: each candle takes the latest
+ * value published at or before its time (flat until the next 5-minute value).
+ */
+function stepOnto<T extends { time: number }>(points: T[], times: number[]): T[] {
+  if (!points.length) return [];
+  const sorted = [...points].sort((a, b) => a.time - b.time);
+  const out: T[] = [];
+  let index = 0;
+  for (const time of times) {
+    while (index + 1 < sorted.length && sorted[index + 1].time <= time) index++;
+    if (sorted[index].time <= time) out.push({ ...sorted[index], time });
+  }
+  return out;
+}
+
 /** JSON with sorted keys, to compare settings objects. */
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
@@ -118,16 +134,28 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
       typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
   const hasLiquidity = indicators.includes('liquidity');
+  // has* = data is fetched for this timeframe. A selected indicator ALWAYS keeps its
+  // pane on the chart; where there is no data for the timeframe its pane says so.
+  const longFrame = ['1w', '1mo', '3mo'].includes(timeframe);
+  const belowFiveMinutes = secondsMode || timeframe === '1m' || timeframe === '3m';
   const hasFunding = indicators.includes('funding') && !secondsMode;
   const hasPerpetualCvd = indicators.includes('perpetual-cvd') && !secondsMode;
   const hasSpotCvd = indicators.includes('spot-cvd') && !secondsMode;
   const hasAggressiveBubbles = indicators.includes('aggressive-bubbles') && !secondsMode;
-  const hasOiDriver = indicators.includes('oi-driver') && !secondsMode;
-  const leverageFrame = PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
+  const hasOiDriver = indicators.includes('oi-driver') && !secondsMode && !longFrame;
+  // Ratio / leverage data comes every 5 minutes: below 5m it is shown as steps on each candle.
+  const leverageFrame = belowFiveMinutes ? '5m' : PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
-  const lsarFrameOk = LSAR_CHART_FRAMES.includes(timeframe);
-  const hasGlobalLsar = indicators.includes('global-lsar') && lsarFrameOk;
-  const hasTopLsar = indicators.includes('top-lsar') && lsarFrameOk;
+  const lsarFrame = belowFiveMinutes ? '5m' : LSAR_CHART_FRAMES.includes(timeframe) ? timeframe : null;
+  const hasGlobalLsar = indicators.includes('global-lsar') && !!lsarFrame;
+  const hasTopLsar = indicators.includes('top-lsar') && !!lsarFrame;
+  const paneNotes: Record<string, string> = {};
+  const fromOneMinute = 'Available from 1m charts (built from minute data).';
+  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'oi-driver'])
+    if (indicators.includes(id as OrderflowId)) paneNotes[id] = fromOneMinute;
+  if (longFrame && indicators.includes('oi-driver')) paneNotes['oi-driver'] = 'Aggregated Open Interest is available from 1m to 1D charts.';
+  if (longFrame) for (const id of ['global-lsar', 'top-lsar', 'leverage'])
+    if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (exchanges keep about 12 days of this history).';
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -254,16 +282,23 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
   const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
-  const leverage = usePerpLeverage(canonicalAsset, timeframe, exchange, nativeSymbol, hasLeverage);
-  const globalLsar = useLsarChart(canonicalAsset, timeframe, 'global', hasGlobalLsar);
-  const topLsar = useLsarChart(canonicalAsset, timeframe, 'top', hasTopLsar);
-  const lsarPanes = useMemo(() => [
-    ...(hasGlobalLsar ? [{ key: 'global-lsar', label: 'Global L/S Account Ratio', color: '#26a69a',
-      points: globalLsar.data?.asset === canonicalAsset && globalLsar.data.timeframe === timeframe ? globalLsar.data.points : [] }] : []),
-    ...(hasTopLsar ? [{ key: 'top-lsar', label: 'Top Trader L/S Account Ratio', color: '#f59e0b',
-      points: topLsar.data?.asset === canonicalAsset && topLsar.data.timeframe === timeframe ? topLsar.data.points : [] }] : []),
-  ], [hasGlobalLsar, hasTopLsar, globalLsar.data, topLsar.data, canonicalAsset, timeframe]);
+  const leverage = usePerpLeverage(canonicalAsset, leverageFrame ?? '1h', exchange, nativeSymbol, hasLeverage);
+  const globalLsar = useLsarChart(canonicalAsset, lsarFrame ?? '1h', 'global', hasGlobalLsar);
+  const topLsar = useLsarChart(canonicalAsset, lsarFrame ?? '1h', 'top', hasTopLsar);
+  const candleTimes = useMemo(() => candles.map((bar) => bar.time), [candles]);
+  const lsarPanes = useMemo(() => {
+    const pointsFor = (data: typeof globalLsar.data) => {
+      const points = data?.asset === canonicalAsset && data.timeframe === lsarFrame ? data.points : [];
+      return belowFiveMinutes ? stepOnto(points, candleTimes) : points;
+    };
+    return [
+      ...(indicators.includes('global-lsar') ? [{ key: 'global-lsar', label: 'Global L/S Account Ratio', color: '#26a69a', points: pointsFor(globalLsar.data) }] : []),
+      ...(indicators.includes('top-lsar') ? [{ key: 'top-lsar', label: 'Top Trader L/S Account Ratio', color: '#f59e0b', points: pointsFor(topLsar.data) }] : []),
+    ];
+  }, [indicators, globalLsar.data, topLsar.data, canonicalAsset, lsarFrame, belowFiveMinutes, candleTimes]);
   const leveragePayload = hasLeverage && leverage.data?.asset === canonicalAsset && leverage.data.timeframe === leverageFrame ? leverage.data : null;
+  const leverageRows = useMemo(() => !leveragePayload ? null
+    : belowFiveMinutes ? stepOnto(leveragePayload.rows, candleTimes) : leveragePayload.rows, [leveragePayload, belowFiveMinutes, candleTimes]);
 
   const commitBubbleMinimum = () => {
     if (bubbleMinDraft === null) return;
@@ -530,12 +565,10 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         {(nativeFeed.error || nativePayloadCurrent && nativeFeed.payload?.error) && <span className="is-warning">{nativeFeed.error ?? nativeFeed.payload?.error}</span>}
         <span className="native-native-symbol">Native {contract.symbol}{contract.priceDivisor !== 1 ? ` · ×${contract.priceDivisor} contract` : ''}</span>
       </div>
-      {indicators.some((id) => id === 'global-lsar' || id === 'top-lsar') && !lsarFrameOk && <p className="native-seconds-note" role="status">
-        Long Short Account Ratio is available on 5m, 15m, 30m, 1h, 4h and 1D charts (exchanges publish it every 5 minutes).</p>}
+
       {hasTopLsar && topLsar.isSuccess && !topLsar.data.points.length && <p className="native-seconds-note" role="status">
         No top-trader ratio for {canonicalAsset} yet: Binance, OKX and Gate.io publish it only for some coins, and the server may still be collecting it.</p>}
-      {indicators.includes('leverage') && !leverageFrame && <p className="native-seconds-note" role="status">
-        Perp Leverage Estimation is available on 5m, 15m, 30m, 1h, 4h and 1D charts.</p>}
+
       {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Perp Leverage Estimation: {leverage.error.message}</p>}
       {secondsMode && <p className="native-seconds-note" role="status">
         Seconds candles are built from this contract’s live executed trades since recording started (kept 2 hours) and refresh every 2 seconds; seconds without trades have no candle.
@@ -569,16 +602,16 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         : candles.length ? <NativeSuperChart key={`${contract.exchange}:${contract.symbol}:${timeframe}`}
           viewKey={chartViewKey(asset, contract.exchange, contract.symbol, timeframe)}
           candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
-          liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} fundingEnabled={hasFunding} showVolume={showVolume} timeframe={timeframe}
+          liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} fundingEnabled={indicators.includes('funding')} showVolume={showVolume} timeframe={timeframe}
            resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings} extraSettings={extraSettings}
            layerSettings={layerSettings} layerActions={layerActions} liquidityEnabled={hasLiquidity}
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
-            perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
-             aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
-             oiDriver={oiDriver.payload} oiDriverEnabled={hasOiDriver} priceDivisor={contract.priceDivisor || 1}
-             leverageRows={leveragePayload?.rows ?? null} leverageEnabled={hasLeverage} lsarPanes={lsarPanes} />
+            perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
+             aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
+             oiDriver={hasOiDriver ? oiDriver.payload : null} oiDriverEnabled={indicators.includes('oi-driver')} priceDivisor={contract.priceDivisor || 1}
+             leverageRows={leverageRows} leverageEnabled={indicators.includes('leverage')} lsarPanes={lsarPanes} paneNotes={paneNotes} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}

@@ -238,3 +238,11 @@ Aster (candles, prices, contracts). Hyperliquid, KuCoin and HTX skip candles
 with no trades; such minutes are shown as flat, zero-volume bars. Kraken,
 Lighter, Paradex, Deribit, CoinEx, BitMEX and Toobit are used for data
 (funding, open interest, trades) but are not chartable yet.
+
+## Indicators always keep their pane
+
+A selected indicator never disappears. Long Short Account Ratio and Perp
+Leverage Estimation are published every 5 minutes: on 1m, 3m and seconds
+charts they are shown as steps (each candle takes the latest 5-minute value).
+Where an indicator has no data for the timeframe (e.g. Aggregated OI on 1W,
+CVD on seconds charts), its pane stays with a message in the middle.
