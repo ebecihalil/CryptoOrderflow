@@ -93,7 +93,7 @@ export function AuthForm({ mode, next, lede }: { mode: 'signup' | 'signin'; next
       </button>
       <p className="auth-switch">{t(isSignup ? 'Already have an account?' : 'New here?')} <Link href={other}>{t(isSignup ? 'Sign in' : 'Create a free account')}</Link></p>
       <p className="auth-note">There is no email verification or password reset yet, so keep your password safe.</p>
-      <p className="auth-legal"><Link href="/terms">Terms</Link> · <Link href="/privacy">Privacy</Link></p>
+      <p className="auth-legal">By continuing you agree to the <Link href="/terms">Terms of Use</Link> and <Link href="/disclaimer">Disclaimer</Link> · <Link href="/privacy">Privacy</Link></p>
     </form>
   );
 }
