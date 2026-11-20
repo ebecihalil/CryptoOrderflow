@@ -11,6 +11,7 @@ import type { MarketExchange } from '@/types/market';
 import type { FundingRow, FundingSource, FundingTimeframe, FundingVenue } from '@/types/funding';
 import '@/styles/funding.css';
 import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { SectionWatchlist } from '@/components/section-watchlist';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 
@@ -294,6 +295,8 @@ export function FundingPage() {
           </button>
         </div>
 
+        <div className="section-watchlist-layout">
+        <div className="section-watchlist-main">
         <section className="funding-controls" aria-label="Funding rate controls">
           <div className="funding-timeframes" role="group" aria-label="Funding history timeframe">
             {TIMEFRAMES.map((item) => <button key={item.value} type="button" className={timeframe === item.value ? 'active' : ''}
@@ -428,6 +431,19 @@ export function FundingPage() {
           </div>
         </nav>}
         <footer className="funding-footline"><span>CRYPTO ORDER FLOW / FUNDING RATE</span><span>{snapshot ? `${exchanges.length} ELIGIBLE VENUES · ${timeframe.toUpperCase()}` : 'AWAITING MARKET SNAPSHOT'}</span></footer>
+        </div>
+        <SectionWatchlist memory={memory} section="Funding Rate"
+          currentCoin={snapshot?.rows.some((row) => normalizeCoin(row.asset) === normalizeCoin(search)) ? search : null}
+          onSelect={(coin) => { setSearch(coin); setPage(0); }}
+          metric={(coin) => {
+            const row = snapshot?.rows.find((item) => normalizeCoin(item.asset) === coin);
+            if (!row || row.aggregatePct === null || row.aggregatePct === undefined) return null;
+            // Funding colours match the table: positive (longs pay) red, negative green.
+            return { value: formatPct(row.aggregatePct),
+              detail: timeframe === 'current' ? `OI-weighted 8h · ${row.sourceCount} sources` : `${periodLabel(timeframe)} settled sum`,
+              tone: row.aggregatePct > 0 ? 'negative' : row.aggregatePct < 0 ? 'positive' : 'neutral' };
+          }} />
+        </div>
       </main>
     </div>
   );

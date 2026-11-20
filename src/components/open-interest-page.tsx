@@ -11,6 +11,7 @@ import type { MarketExchange } from '@/types/market';
 import type { OiRow, OiTimeframe } from '@/types/open-interest';
 import '@/styles/open-interest.css';
 import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { SectionWatchlist } from '@/components/section-watchlist';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 
@@ -283,6 +284,8 @@ export function OpenInterestPage() {
           <button type="button" onClick={() => { void dailyQuery.refetch(); }}>Retry daily rankings</button>
         </div>}
 
+        <div className="section-watchlist-layout">
+        <div className="section-watchlist-main">
         <section className="oi-controls" aria-label="Open interest controls">
           <div className="oi-timeframes" role="group" aria-label="Open interest change timeframe">
             {TIMEFRAMES.map((value) => <button key={value} type="button" className={timeframe === value ? 'active' : ''}
@@ -374,6 +377,18 @@ export function OpenInterestPage() {
             {snapshot?.cmeReportDates.length ? <p className="oi-method-dates">CME report dates: {snapshot.cmeReportDates.join(', ')}</p> : null}
           </div>
         </section>
+        </div>
+        <SectionWatchlist memory={memory} section="Open Interest"
+          currentCoin={snapshot?.rows.some((row) => normalizeCoin(row.asset) === normalizeCoin(search)) ? search : null}
+          onSelect={(coin) => { setSearch(coin); setPage(0); }}
+          metric={(coin) => {
+            const row = snapshot?.rows.find((item) => normalizeCoin(item.asset) === coin);
+            if (!row) return null;
+            const change = row.changePct;
+            return { value: formatPct(change), detail: `OI ${formatUsd(row.aggregateOiUsd)} · ${timeframe}`,
+              tone: change === null ? 'neutral' : change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral' };
+          }} />
+        </div>
       </main>
     </div>
   );

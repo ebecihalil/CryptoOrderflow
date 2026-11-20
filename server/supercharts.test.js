@@ -1,12 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
-import { CHART_STUDIES, SUPER_CHART_TIMEFRAMES } from "../src/lib/supercharts.ts";
+import { CHART_STUDIES, CHART_STUDY_GROUPS, SUPER_CHART_TIMEFRAMES } from "../src/lib/supercharts.ts";
 
 const read = path => readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8");
 
-test("native chart exposes five locally calculated studies and six shared timeframes", () => {
-  assert.deepEqual(CHART_STUDIES.map(item => item.id), ["rsi", "macd", "ema", "sma", "bb"]);
+test("native chart exposes locally calculated studies (original five + popular set) and six shared timeframes", () => {
+  const ids = CHART_STUDIES.map(item => item.id);
+  for (const id of ["rsi", "macd", "ema", "sma", "bb", "ichimoku", "keltner", "donchian", "vwap", "supertrend", "psar",
+    "stoch", "stochrsi", "adx", "atr", "cci", "willr", "mfi", "obv", "cmf", "roc", "wma", "hma"]) assert.ok(ids.includes(id), id);
+  assert.equal(new Set(ids).size, ids.length, "unique ids");
+  assert.ok(CHART_STUDIES.every(item => CHART_STUDY_GROUPS.includes(item.group)), "every study has a menu group");
   assert.deepEqual(SUPER_CHART_TIMEFRAMES.map(item => item.value), ["5m", "15m", "30m", "1h", "4h", "24h"]);
   assert.ok(CHART_STUDIES.every(item => !Object.hasOwn(item, "widgetId")));
 });

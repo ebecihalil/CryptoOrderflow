@@ -8,6 +8,7 @@ import { LeverageEstimateChart } from '@/components/leverage-estimate-chart';
 import { useLeverageEstimate, type LeverageRow, type LeverageTimeframe } from '@/hooks/use-leverage-estimate';
 import '@/styles/leverage-estimate.css';
 import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { SectionWatchlist } from '@/components/section-watchlist';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
 
 const TIMEFRAMES: Array<{ value: LeverageTimeframe; label: string }> = [
@@ -127,6 +128,8 @@ export function LeverageEstimatePage() {
         {query.error && <div className="lev-error" role="alert">{query.error.message}</div>}
         {data?.warnings.map((warning) => <div key={warning} className="lev-warning" role="status">{warning}</div>)}
 
+        <div className="section-watchlist-layout">
+        <div className="section-watchlist-main">
         <section className="lev-cards" aria-label="Latest leverage readings">
           <article className="lev-card lev-card-score">
             <h2>Leverage score</h2>
@@ -221,6 +224,17 @@ export function LeverageEstimatePage() {
           <p>Each input is ranked against its own recent history (percentile). The score is their weighted average, and the side bias combines build, size skew and top-trader position share.</p>
           <p className="lev-disclaimer">Exchanges do not publish aggregate margin, so no public data can measure true average leverage (notional ÷ margin). This is a relative estimate, not a measured leverage multiple. Missing venues are excluded, never counted as zero.</p>
         </section>
+        </div>
+        <SectionWatchlist memory={memory} section="Leverage Estimate" currentCoin={data?.rows.length ? asset : null}
+          onSelect={pickCoin}
+          metric={(coin) => {
+            // Leverage history is loaded per coin; show the reading for the coin on screen.
+            if (coin !== asset || !latest) return { value: 'Open', detail: 'Click to load its leverage estimate', tone: 'neutral' };
+            return { value: ok(latest.leverageScore) ? `${latest.leverageScore!.toFixed(0)}/100` : '—',
+              detail: `${latest.regime} · ${latest.side.replace('-', ' ')}`,
+              tone: latest.regime === 'extreme' || latest.regime === 'elevated' ? 'negative' : 'positive' };
+          }} />
+        </div>
       </main>
     </div>
   );

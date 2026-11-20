@@ -16,11 +16,13 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 export const AUTH_KEY = ['auth-me'] as const;
 export const WATCHLIST_QUERY_KEY = ['me-watchlist'] as const;
 
+export const fetchMe = () => send<{ user: AuthUser | null }>('GET', '/api/auth/me');
+
 export function useAuth() {
   const client = useQueryClient();
   const me = useQuery({
     queryKey: AUTH_KEY,
-    queryFn: () => send<{ user: AuthUser | null }>('GET', '/api/auth/me'),
+    queryFn: fetchMe,
     staleTime: 5 * 60_000,
     retry: 1,
   });

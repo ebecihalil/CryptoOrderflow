@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
-import { ArrowUpRight, Clock3 } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpRight, ChevronDown, Clock3 } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
 import { HomeButton } from '@/components/home-button';
 import { HOME_MODULES, type ModuleInfo } from '@/lib/modules';
@@ -8,6 +9,40 @@ function ProductHeader({ module }: { module?: ModuleInfo }) {
   return (
     <AppHeader title={module?.title ?? 'Crypto Order Flow'} mark={module?.mark ?? 'CO'}
       sectionLabel={module?.title ?? 'Overview'} subtitle={module ? 'Perpetual Markets' : 'Market Toolkit'} />
+  );
+}
+
+/** A home card that expands to show its options (e.g. Global / Top Trader LSAR). */
+function ModuleGroupEntry({ module, index }: { module: ModuleInfo; index: number }) {
+  const [open, setOpen] = useState(false);
+  const panelId = `module-options-${module.mark}`;
+  return (
+    <article className={`module-entry module-entry-group${open ? ' is-open' : ''}`} data-testid={`module-group-${module.mark}`}>
+      <div className="module-entry-row">
+        <span className="module-index">{String(index + 1).padStart(2, '0')}</span>
+        <span className="module-mark">{module.mark}</span>
+        <div className="module-entry-copy">
+          <h3><button type="button" className="module-title-button" onClick={() => setOpen(!open)}
+            aria-expanded={open} aria-controls={panelId}>{module.title}</button></h3>
+          <p>{module.description}</p>
+        </div>
+        <button type="button" className="module-expand" onClick={() => setOpen(!open)} aria-expanded={open}
+          aria-controls={panelId} aria-label={`${open ? 'Hide' : 'Show'} ${module.title} options`} data-testid={`button-expand-${module.mark}`}>
+          <ChevronDown size={16} aria-hidden="true" />
+        </button>
+      </div>
+      {open && (
+        <div className="ratio-options" id={panelId}>
+          {module.children?.map((child) => (
+            <Link key={child.path} href={child.path} className="ratio-option" data-testid={`link-option-${child.mark}`}>
+              <span className="ratio-option-mark">{child.mark}</span>
+              <span><strong>{child.title.replace(' Long Short Account Ratio', '')}</strong><small>{child.description}</small></span>
+              <ArrowUpRight size={15} aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -26,7 +61,9 @@ export function ModuleHome() {
             <span className="directory-count">{String(HOME_MODULES.length).padStart(2, '0')} MODULES</span>
           </div>
           <div className="module-list">
-            {HOME_MODULES.map((module, index) => (
+            {HOME_MODULES.map((module, index) => module.children ? (
+              <ModuleGroupEntry key={module.path} module={module} index={index} />
+            ) : (
               <article key={module.path} className={`module-entry${module.path === '/super-charts' ? ' module-entry-super-charts' : ''}`}>
                 <div className="module-entry-row">
                   <span className="module-index">{String(index + 1).padStart(2, '0')}</span>

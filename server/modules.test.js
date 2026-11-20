@@ -5,9 +5,15 @@ import { readFileSync } from "node:fs";
 
 test("home lists exactly the requested order-flow modules", () => {
     assert.deepEqual(HOME_MODULES.map(module => module.title), [
-        "Global Long Short Account Ratio", "Top Trader Long Short Account Ratio", "Funding Rate", "Open Interest",
+        "Long Short Account Ratio", "Funding Rate", "Open Interest",
         "Leverage Estimate", "Super Charts (Indicators)",
     ]);
+});
+
+test("Long Short Account Ratio is one home card that opens to Global and Top Trader", () => {
+    const group = HOME_MODULES.find(module => module.title === "Long Short Account Ratio");
+    assert.deepEqual(group.children.map(child => child.path), ["/long-short-account-ratio", "/top-trader-long-short-account-ratio"]);
+    assert.ok(!HOME_MODULES.some(module => module.path === "/top-trader-long-short-account-ratio"));
 });
 
 test("CVD and Liquidations are hidden only from the main page, not deleted", () => {
@@ -26,16 +32,17 @@ test("Super Charts keeps its entry class and responsive resets", () => {
     const css = readFileSync(new URL("../src/styles/modules.css", import.meta.url), "utf8");
     assert.match(home, /module\.path === '\/super-charts'/);
     assert.match(home, /module-entry-super-charts/);
-    // With six home modules the 3-column grid is full; Super Charts flows naturally.
+    // Super Charts flows naturally in the grid; no forced column placement.
     assert.doesNotMatch(css, /\.module-entry-super-charts\s*\{[^}]*grid-column:\s*2\s*;/);
     assert.match(css, /@media[\s\S]*\.module-entry-super-charts\s*\{[^}]*grid-column:\s*auto\s*;/);
 });
 
-test("account ratio is a direct module with no position ratio subsection", () => {
+test("account ratio has no position ratio subsection", () => {
     assert.equal(MODULES[0].path, "/long-short-account-ratio");
     assert.ok(MODULES.every(module => !module.path.includes("position-ratio")));
     const home = readFileSync(new URL("../src/components/module-pages.tsx", import.meta.url), "utf8");
-    assert.doesNotMatch(home, /ratioOpen|RATIO_SECTIONS|ratio-options|module-expand/);
+    // The LSAR card expands to Global / Top Trader account ratios only.
+    assert.doesNotMatch(home, /ratioOpen|RATIO_SECTIONS|position-ratio/);
     assert.match(home, /href=\{module\.path\}/);
     const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
     assert.doesNotMatch(app, /long-short-position-ratio|RATIO_SECTIONS|sectionLabel="Long Short Ratio"/);

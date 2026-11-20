@@ -5,11 +5,11 @@ import { ChartWatchlist } from '@/components/chart-watchlist';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
-import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
+import { CHART_STUDIES, CHART_STUDY_GROUPS, type ChartStudyId } from '@/lib/supercharts';
 import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
-import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { CoinShortcuts } from '@/components/coin-shortcuts';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 
@@ -114,7 +114,7 @@ export function SuperChartsPage() {
         <section className="super-chart-marketbar" aria-label="Chart market selection">
           <div className="super-chart-market-copy">
             <span className="super-chart-market-kicker">ACTIVE CONTRACT</span>
-            <strong className="super-chart-active-asset">{market?.asset ?? 'Select a contract'}{market && <WatchStar memory={memory} coin={market.asset} />}</strong>
+            <strong className="super-chart-active-asset">{market?.asset ?? 'Select a contract'}</strong>
             <small>{market ? `${market.exchange.toUpperCase()} native · ${market.symbol}` : 'Choose from the live catalogue'}</small>
           </div>
           <label className="super-chart-contract-field">
@@ -124,7 +124,8 @@ export function SuperChartsPage() {
               className="super-chart-contract-combo" inputClassName="super-chart-contract-input"
               autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
           </label>
-          <CoinShortcuts memory={memory} active={market?.asset} onPick={selectCoin} />
+          {/* Recent coins only: Super Charts keeps its own (server) watchlist below. */}
+          <CoinShortcuts memory={memory} active={market?.asset} onPick={selectCoin} showWatchlist={false} />
           {(catalogue.error || !catalogue.loading && contracts.length === 0) && (
             <div className="super-chart-catalogue-alert" role="status">
               <span>{catalogue.error ?? 'No live contracts are currently listed.'}</span>
@@ -148,14 +149,19 @@ export function SuperChartsPage() {
               onClick={() => setMenu((current) => current === 'technical' ? null : 'technical')}>
               Technical Indicators <span className="super-chart-selection-count">{studies.length}</span><ChevronDown size={14} aria-hidden="true" />
             </button>
-            {menu === 'technical' && <div className="super-chart-menu" role="group" aria-label="Technical indicators">
-              {CHART_STUDIES.map((study) => (
-                <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
-                  aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)}>
-                  <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
-                </button>
+            {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
+              {CHART_STUDY_GROUPS.map((group) => (
+                <div key={group} role="group" aria-label={group}>
+                  <div className="super-chart-menu-group">{group}</div>
+                  {CHART_STUDIES.filter((study) => study.group === group).map((study) => (
+                    <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
+                      aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
+                      <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
+                    </button>
+                  ))}
+                </div>
               ))}
-              <p>Native studies · shared price time axis</p>
+              <p>Native studies · standard default settings · shared price time axis</p>
             </div>}
           </div>
           <div className="super-chart-dropdown">

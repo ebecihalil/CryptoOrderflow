@@ -23,6 +23,7 @@ import { SuperChartsPage } from '@/pages/super-charts-page';
 import { MODULES } from '@/lib/modules';
 import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
 import { AuthPage, AuthPromptHost } from '@/components/auth-ui';
+import { SectionWatchlist } from '@/components/section-watchlist';
 import { useCoinMemory, type CoinMemory } from '@/hooks/use-coin-memory';
 import { normalizeCoin } from '@/lib/coin-memory';
 import './styles/modules.css';
@@ -302,6 +303,8 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
           </div>
         )}
 
+        <div className="section-watchlist-layout">
+        <div className="section-watchlist-main">
         <section className="control-panel" aria-label="Screener filters">
           <div className="control-left">
             <MarketAutocomplete className="searchbox market-autocomplete" inputClassName="lsar-search-input"
@@ -435,6 +438,19 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
         <div className="footline">
           <span>{variant.footline}</span>
           <span data-testid="text-generated-at">SNAPSHOT {formatTimestamp(latestTimestamp)} · {snapshot?.totalMarkets ?? summary?.totalMarkets ?? '—'} ASSETS</span>
+        </div>
+        </div>
+        <SectionWatchlist memory={memory} section={variant.kind === 'top' ? 'Top Trader LSAR' : 'Global LSAR'}
+          currentCoin={snapshot?.rows.some((row) => normalizeCoin(row.asset) === normalizeCoin(search)) ? search : null}
+          onSelect={(coin) => setSearch(coin)}
+          metric={(coin) => {
+            const row = snapshot?.rows.find((item) => normalizeCoin(item.asset) === coin);
+            if (!row || row.currentRatio === null) return null;
+            const change = rowChange(row, timeframe)?.ratioChangePct ?? null;
+            return { value: row.currentRatio.toFixed(3),
+              detail: `${row.longSharePct?.toFixed(1) ?? '—'}% long · ${timeframe} ${formatPct(change)}`,
+              tone: change === null ? 'neutral' : change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral' };
+          }} />
         </div>
       </main>
     </div>
