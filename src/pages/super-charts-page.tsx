@@ -5,7 +5,7 @@ import { ChartWatchlist } from '@/components/chart-watchlist';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
-import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
+import { CHART_STUDIES, CHART_STUDY_GROUPS, type ChartStudyId } from '@/lib/supercharts';
 import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
@@ -149,14 +149,19 @@ export function SuperChartsPage() {
               onClick={() => setMenu((current) => current === 'technical' ? null : 'technical')}>
               Technical Indicators <span className="super-chart-selection-count">{studies.length}</span><ChevronDown size={14} aria-hidden="true" />
             </button>
-            {menu === 'technical' && <div className="super-chart-menu" role="group" aria-label="Technical indicators">
-              {CHART_STUDIES.map((study) => (
-                <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
-                  aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)}>
-                  <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
-                </button>
+            {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
+              {CHART_STUDY_GROUPS.map((group) => (
+                <div key={group} role="group" aria-label={group}>
+                  <div className="super-chart-menu-group">{group}</div>
+                  {CHART_STUDIES.filter((study) => study.group === group).map((study) => (
+                    <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
+                      aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
+                      <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
+                    </button>
+                  ))}
+                </div>
               ))}
-              <p>Native studies · shared price time axis</p>
+              <p>Native studies · standard default settings · shared price time axis</p>
             </div>}
           </div>
           <div className="super-chart-dropdown">

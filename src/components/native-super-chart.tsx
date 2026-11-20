@@ -7,6 +7,8 @@ import type { Candle, LiquidityZone, LiquiditySettings } from '@/lib/liquidity-z
 import { LiquidityZonePrimitive } from '@/components/liquidity-zone-primitive';
 import { calculateTechnicalIndicators, type TechnicalSettings } from '@/lib/technical-indicators';
 import type { ChartStudyId } from '@/lib/supercharts';
+import { computeExtraIndicator, extraIndicator, type ExtraResult } from '@/lib/extra-indicators';
+import { BandFillPrimitive } from '@/components/band-fill-primitive';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
 import type { CvdPayload } from '@/hooks/use-cvd-indicator';
 import type { AggressiveBubble } from '@/hooks/use-aggressive-bubbles';
@@ -37,9 +39,11 @@ type Props = {
   oiDriver: OiDriverPayload | null;
   oiDriverEnabled: boolean;
   priceDivisor: number;
+  /** Saved parameters for the popular-indicator registry, by indicator id. */
+  extraSettings?: Record<string, Record<string, number>>;
 };
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
-type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null };
+type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null; fills: BandFillPrimitive[] };
 type SavedView = {
   from: number; to: number; anchorTime: number; anchorLogical: number;
   panes: Record<string, { weight: number; autoScale: boolean; range: { from: number; to: number } | null }>;
@@ -72,7 +76,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, priceDivisor }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, priceDivisor, extraSettings = {} }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -94,6 +98,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   candleDataRef.current = candles;
   const volumeByTime = useMemo(() => new Map(volumeCandles.map((bar) => [bar.time, bar.volume])), [volumeCandles]);
   const studyData = useMemo(() => calculateTechnicalIndicators(candles, technicalSettings), [candles, technicalSettings]);
+  // Popular indicators (Ichimoku, Keltner, Stochastic, ...) from the registry.
+  const extraData = useMemo(() => studies.flatMap((id) => {
+    const result = extraIndicator(id) ? computeExtraIndicator(id, candles, extraSettings[id]) : null;
+    return result ? [[id, result] as [ChartStudyId, ExtraResult]] : [];
+  }), [studies, candles, extraSettings]);
   const fundingRows = useMemo(() => {
     if (!funding || !candles.length) return [];
     const start = candles[0].time;
@@ -113,8 +122,12 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     if (studies.includes('rsi') && studyData.rsi.length === 0) messages.push(`RSI needs ${technicalSettings.rsiPeriod + 1} closes (available ${count})`);
     const macdRequired = technicalSettings.macdSlow + technicalSettings.macdSignal - 1;
     if (studies.includes('macd') && studyData.macd.histogram.length === 0) messages.push(`MACD needs ${macdRequired} closes (available ${count})`);
+    for (const [id, result] of extraData) {
+      if (!result.series.some((series) => series.data.some((point) => point.value !== null)))
+        messages.push(`${extraIndicator(id)?.label ?? id} needs more history (available ${count})`);
+    }
     return messages;
-  }, [candles.length, studies, studyData, technicalSettings]);
+  }, [candles.length, studies, studyData, technicalSettings, extraData]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -135,7 +148,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       upColor: palette.positive, downColor: '#c76b61', borderVisible: false,
       wickUpColor: palette.positive, wickDownColor: '#c76b61', priceLineVisible: false,
     }, 0);
-    bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null, bubblePrimitive: null };
+    bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null, bubblePrimitive: null, fills: [] };
     const captureView = () => {
       if (restoringRef.current || !hasChartDataRef.current) return;
       const range = chart.timeScale().getVisibleLogicalRange();
@@ -245,6 +258,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       [key, chart.panes()[index]?.getStretchFactor()] as const));
     if (bundle.primitive) candleSeries.detachPrimitive(bundle.primitive);
     if (bundle.bubblePrimitive) candleSeries.detachPrimitive(bundle.bubblePrimitive);
+    for (const fill of bundle.fills) candleSeries.detachPrimitive(fill);
+    bundle.fills = [];
     if (!aggressiveBubblesEnabled) setBubbleHover(null);
     // Recreate only the chart's series; the chart instance and shared viewport remain stable.
     for (const series of seriesRef.current) chart.removeSeries(series);
@@ -279,6 +294,40 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
     }
 
+    // ---- Popular indicators: shared renderer for overlays and panes ----
+    const drawExtra = (result: ExtraResult, pane: number) => {
+      let first: ISeriesApi<any> | null = null;
+      for (const item of result.series) {
+        const data = item.data.map((point) => point.value === null || !Number.isFinite(point.value)
+          ? { time: toTime(point.time) } : { time: toTime(point.time), value: point.value });
+        const common = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: item.type !== 'dots',
+          ...(result.range ? { autoscaleInfoProvider: () => ({ priceRange: { minValue: result.range![0], maxValue: result.range![1] } }) } : {}) };
+        const series = item.type === 'histogram'
+          ? pushSeries(chart.addSeries(HistogramSeries, { ...common }, pane))
+          : pushSeries(chart.addSeries(LineSeries, { ...common, color: item.color, lineWidth: (item.width ?? 1) as 1 | 2 | 3 | 4,
+            lineStyle: item.dashed ? 2 : 0, ...(item.type === 'dots' ? { lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 2 } : {}) }, pane));
+        series.setData(item.type === 'histogram'
+          ? data.map((point) => 'value' in point ? { ...point, color: (point.value as number) >= 0 ? '#4e9c688c' : '#c76b618c' } : point)
+          : data);
+        first ??= series;
+      }
+      for (const level of result.levels ?? []) {
+        first?.createPriceLine({ price: level.value, color: '#89928a88', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: level.label ?? String(level.value) });
+      }
+      if (pane === 0) {
+        for (const fill of result.fills ?? []) {
+          const upper = result.series.find((item) => item.key === fill.upper);
+          const lower = new Map(result.series.find((item) => item.key === fill.lower)?.data.map((point) => [point.time, point.value]) ?? []);
+          if (!upper) continue;
+          const primitive = new BandFillPrimitive({ series: candleSeries, timeScale: chart.timeScale(), up: fill.up, down: fill.down,
+            points: upper.data.map((point) => ({ time: point.time, upper: point.value, lower: lower.get(point.time) ?? null })) });
+          candleSeries.attachPrimitive(primitive);
+          bundle.fills.push(primitive);
+        }
+      }
+    };
+    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'overlay') drawExtra(result, 0);
+
     paneCountRef.current = 0;
     const nextPane = () => (volumePane === null ? 1 : 2) + paneCountRef.current++;
     if (studies.includes('rsi') && studyData.rsi.length) {
@@ -304,6 +353,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       const signal = pushSeries(chart.addSeries(LineSeries, { color: '#729db4', lineWidth: 1, priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
       signal.setData(studyData.macd.signal.filter((point) => point.value !== null).map((point) => ({ time: toTime(point.time), value: point.value! })));
     }
+    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'pane') drawExtra(result, nextPane());
     if (funding) {
       const pane = nextPane();
       const threshold = funding.threshold;
@@ -373,6 +423,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       ...(showVolume ? [{ key: 'volume', height: 88 }] : []),
       ...(studies.includes('rsi') && studyData.rsi.length ? [{ key: 'rsi', height: 110 }] : []),
       ...(studies.includes('macd') && studyData.macd.histogram.length ? [{ key: 'macd', height: 130 }] : []),
+      ...extraData.filter(([id]) => extraIndicator(id)?.placement === 'pane')
+        .map(([id]) => ({ key: `extra-${id}`, height: extraIndicator(id)?.paneHeight ?? 110 })),
       ...(funding ? [{ key: 'funding', height: 112 }] : []),
       ...(perpetualCvdEnabled ? [{ key: 'perpetual-cvd', height: 142 }] : []),
       ...(spotCvdEnabled ? [{ key: 'spot-cvd', height: 142 }] : []),
@@ -451,7 +503,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         animationFrameRef.current = null;
       }
     };
-  }, [candles, volumeCandles, studies, studyData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled]);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled]);
 
   return (
     <div className="native-chart-wrap">
@@ -472,7 +524,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       <div className="native-chart-legend"><span><i className="legend-candle" /> Candles / selected venue OHLC</span>
         {showVolume && <span><i className="legend-volume" /> Volume</span>}{studies.includes('ema') && <span><i className="legend-ema" /> EMA</span>}
         {studies.includes('sma') && <span><i className="legend-sma" /> SMA</span>}{studies.includes('bb') && <span><i className="legend-bb" /> Bollinger</span>}
-        {studies.includes('rsi') && <span>RSI · 30 / 70</span>}{studies.includes('macd') && <span>MACD</span>}{funding && <span>Funding · normalized 8h</span>}
+        {studies.includes('rsi') && <span>RSI · 30 / 70</span>}{studies.includes('macd') && <span>MACD</span>}
+        {extraData.map(([id]) => <span key={id}>{extraIndicator(id)?.label}</span>)}{funding && <span>Funding · normalized 8h</span>}
          {perpetualCvdEnabled && <span>Aggregated Perpetual CVD · signed trade flow</span>}{spotCvdEnabled && <span>Aggregated Spot CVD · signed trade flow</span>}
          {aggressiveBubblesEnabled && <><span><i className="legend-bubble-buy" /> Aggressive buys</span><span><i className="legend-bubble-sell" /> Aggressive sells</span><span>Outlined · Spot / filled · Perpetual</span></>}
       </div>

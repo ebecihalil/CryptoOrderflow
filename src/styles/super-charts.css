@@ -113,3 +113,9 @@
 }
 .super-chart-active-asset { display:inline-flex;align-items:center;gap:4px; }
 .super-chart-marketbar .coin-shortcuts { flex-basis:100%;margin:2px 0 0; }
+.native-extra-params { display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;width:100%;padding-top:8px;border-top:1px solid var(--lsar-border); }
+.native-extra-params > b { flex-basis:100%;color:var(--lsar-strong);font:600 11px var(--app-font-mono); }
+.native-extra-params input { width:84px; }
+.native-extra-reset { height:32px;padding:0 10px;border:1px solid var(--lsar-control-border);background:transparent;color:var(--lsar-muted);font:10px var(--app-font-mono);cursor:pointer; }
+.super-chart-menu.is-studies { max-height:min(70vh,520px);overflow:auto;min-width:250px; }
+.super-chart-menu-group { margin:6px 8px 2px;color:var(--lsar-muted);font:8px var(--app-font-mono);letter-spacing:.08em;text-transform:uppercase; }

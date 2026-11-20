@@ -48,3 +48,24 @@ TradingView subscription, a company agreement or TradingView market data.
 It is not a full clone of Coinglass's drawing tools or indicator catalogue.
 
 See `chart-workspace.md`, `liquidity-zones.md` and `funding-indicator.md`.
+
+## Popular indicators (registry)
+
+`src/lib/extra-indicators.js` adds 18 widely used studies, computed locally
+from the selected exchange candles (warm-up bars omitted, never zero-filled),
+with standard defaults:
+
+| Group | Indicators (defaults) |
+| --- | --- |
+| Moving averages | WMA (20), Hull MA (9), VWAP (UTC-day anchored) |
+| Bands & channels | Keltner (EMA 20, ATR 10, ×2), Donchian (20) |
+| Trend | Ichimoku (9/26/52, displacement 26; cloud projected ahead), Supertrend (ATR 10, ×3), Parabolic SAR (0.02/0.02/0.2) |
+| Oscillators | Stochastic (14/1/3), Stochastic RSI (14/14/3/3), CCI (20), Williams %R (14), ROC (9) |
+| Trend strength & volatility | ADX/DMI (14), ATR (14, Wilder) |
+| Volume | MFI (14), OBV, Chaikin Money Flow (20) |
+
+Overlays draw on the price pane (Ichimoku/Keltner/Donchian fills via
+`band-fill-primitive.ts`); oscillators get their own pane with reference
+levels. Parameters are editable under Study parameters and saved per coin.
+Volume-based studies use the selected exchange's candle volume. Values can
+differ slightly from other platforms when history depth or seeding differs.

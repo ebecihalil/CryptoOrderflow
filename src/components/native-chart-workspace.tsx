@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { RefreshCw, RotateCw } from 'lucide-react';
 import { NativeSuperChart } from '@/components/native-super-chart';
+import { extraIndicator, extraParams } from '@/lib/extra-indicators';
 import { ExchangeLogo } from '@/components/exchange-logo';
 import { useLiquidityCandles, type LiquidityExchange, type LiquidityTimeframe, type LiquidityVolumeMode } from '@/hooks/use-liquidity-candles';
 import {
@@ -81,6 +82,9 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
     value => value === 'single' || value === 'aggregated');
   const [showVolume, setShowVolume] = useCoinChartSetting(asset, 'showVolume', true);
   const [technicalSettings, setTechnicalSettings] = useCoinChartSetting<TechnicalSettings>(asset, 'technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
+  // Parameters for the popular-indicator registry (Ichimoku, Keltner, ...), saved per coin.
+  const [extraSettings, setExtraSettings] = useCoinChartSetting<Record<string, Record<string, number>>>(asset, 'extraIndicatorSettings', {},
+    value => !!value && typeof value === 'object' && !Array.isArray(value));
   const [liquiditySettings, setLiquiditySettings] = useCoinChartSetting(asset, 'liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
   const [zoneColors, setZoneColors] = useCoinChartSetting(asset, 'zoneColors', DEFAULT_ZONE_COLORS);
   const [oiDriverSettings, setOiDriverSettings] = useCoinChartSetting<OiDriverSettings>(asset, 'oiDriverSettings',
@@ -274,6 +278,27 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
         onChange={(value) => setTechnicalSettings((current) => ({ ...current, macdSignal: value }))} />
     </>}
     {studies.includes('macd') && <small>Fast period must remain below slow. Periods: 2–500.</small>}
+    {studies.map((id) => extraIndicator(id)).filter((def) => def && def.params.length).map((def) => (
+      <div className="native-extra-params" key={def!.id}>
+        <b>{def!.label}</b>
+        {def!.params.map((param) => {
+          const value = extraParams(def!.id, extraSettings[def!.id])[param.key];
+          return <label className="super-chart-control" key={param.key}><span>{param.label}</span>
+            <input type="number" min={param.min} max={param.max} step={param.step} defaultValue={value}
+              key={`${def!.id}:${param.key}:${value}`} aria-label={`${def!.label} ${param.label}`}
+              onBlur={(event) => {
+                const next = Number(event.target.value);
+                const ok = Number.isFinite(next) && next >= param.min && next <= param.max && (param.step < 1 || Number.isInteger(next));
+                if (!ok) { event.target.value = String(value); return; }
+                setExtraSettings((current) => ({ ...current, [def!.id]: { ...extraParams(def!.id, current[def!.id]), [param.key]: next } }));
+              }}
+              onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); }} />
+          </label>;
+        })}
+        <button type="button" className="native-extra-reset" onClick={() => setExtraSettings((current) => {
+          const { [def!.id]: _removed, ...rest } = current; return rest; })}>Defaults</button>
+      </div>
+    ))}
   </section>;
 
   const chartAndDetails = (funding: FundingPlotData | null) => (
@@ -329,7 +354,7 @@ function WorkspaceWithContract({ contract, studies, indicators }: Props & { cont
           viewKey={chartViewKey(asset, contract.exchange, contract.symbol, timeframe)}
           candles={candles} volumeCandles={selectedVolumeCandles} studies={studies} zones={hasLiquidity ? liquidity.zones : []}
           liquiditySettings={liquiditySettings} zoneColors={zoneColors} funding={funding} showVolume={showVolume} timeframe={timeframe}
-           resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings}
+           resetKey={`${contract?.label ?? ''}:${timeframe}`} technicalSettings={technicalSettings} extraSettings={extraSettings}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
              aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
