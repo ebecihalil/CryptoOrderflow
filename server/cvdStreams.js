@@ -211,9 +211,12 @@ export function createCvdStreamFactory({
           if (exchange === "binance" && response.statusCode === 451) {
             geoBlocks.mark(originalUrl); response.resume(); socket.terminate(); return;
           }
-          void gate?.inspect({ status: response.statusCode, headers: new Headers(
-            Object.fromEntries(Object.entries(response.headers).filter(([,v]) => typeof v === "string"))) })
-            .catch(() => {});
+          // Some gates inspect synchronously (no promise): never chain on the return
+          // value, and never let a rejected handshake take the whole server down.
+          try {
+            void Promise.resolve(gate?.inspect?.({ status: response.statusCode, headers: new Headers(
+              Object.fromEntries(Object.entries(response.headers).filter(([,v]) => typeof v === "string"))) })).catch(() => {});
+          } catch { /* rate-limit bookkeeping only */ }
           response.resume(); socket.terminate();
         });
         socket.on("error", () => {});
