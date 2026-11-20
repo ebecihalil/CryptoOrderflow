@@ -7,6 +7,7 @@ import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
 import { CVD_EXCHANGES, createCvdMarketResolver, cvdExchangesFor } from "./cvdMarkets.js";
 import { createCvdStreamFactory, LIQUIDATION_EXCHANGES } from "./cvdStreams.js";
+import { createPriceConsistency } from "./priceConsistency.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
 import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
 import { secondCandleRecorder } from "./secondCandles.js";
@@ -33,6 +34,8 @@ export function createCvdIndicatorService({
 } = {}) {
   const groups = new Map();
   const pinned = new Set();
+  // Trades far from the other exchanges' price (wrong token / stale venue) are left out of CVD and bubbles.
+  const consistency = createPriceConsistency();
   let saveQueue = Promise.resolve();
   const file = group => path.join(storageDir, `${group.market}-${group.asset}.json.gz`);
   function markGap(group, at = now()) {
@@ -43,6 +46,7 @@ export function createCvdIndicatorService({
     const id = `${trade.exchange}:${trade.symbol}:${trade.id}`;
     if (group.ids.has(id)) return;
     group.ids.set(id, trade.time);
+    if (!consistency.accept(group.asset, group.market, trade)) return;
     if (group.market === "perpetual") { try { onPerpetualTrade(trade); } catch { /* never affects CVD */ } }
     const source = group.sources.find(s => s.exchange === trade.exchange);
     source.status = "live"; source.tradeCount++; source.lastTradeAt = new Date(trade.time).toISOString();

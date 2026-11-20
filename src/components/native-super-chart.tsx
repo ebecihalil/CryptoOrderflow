@@ -134,10 +134,19 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const measureRef = useRef(measurePanes);
   measureRef.current = measurePanes;
   const [bubbleHover, setBubbleHover] = useState<PlottedAggressiveBubble | null>(null);
-  const plottedBubbles = useMemo(() => (aggressiveBubbles?.points ?? [])
-    .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.value) && point.value >= 0)
-    .map((point) => ({ ...point, nativePrice: point.price * (Number.isFinite(priceDivisor) && priceDivisor > 0 ? priceDivisor : 1) })),
-  [aggressiveBubbles, priceDivisor]);
+  // A bubble is drawn only where it traded: inside its own candle's high-low range
+  // (0.1% tolerance for small price differences between exchanges).
+  const plottedBubbles = useMemo(() => {
+    const byTime = new Map(candles.map((bar) => [bar.time, bar]));
+    const divisor = Number.isFinite(priceDivisor) && priceDivisor > 0 ? priceDivisor : 1;
+    return (aggressiveBubbles?.points ?? [])
+      .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.value) && point.value >= 0)
+      .map((point) => ({ ...point, nativePrice: point.price * divisor }))
+      .filter((point) => {
+        const bar = byTime.get(point.time);
+        return !!bar && point.nativePrice >= bar.low * 0.999 && point.nativePrice <= bar.high * 1.001;
+      });
+  }, [aggressiveBubbles, priceDivisor, candles]);
   candleDataRef.current = candles;
   const volumeByTime = useMemo(() => new Map(volumeCandles.map((bar) => [bar.time, bar.volume])), [volumeCandles]);
   const studyData = useMemo(() => calculateTechnicalIndicators(candles, technicalSettings), [candles, technicalSettings]);

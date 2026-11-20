@@ -78,3 +78,13 @@ Spot and Perpetual recording. See [Watchlist recording](chart-watchlist.md).
   back); **Default** returns to Auto. API: `minValue=auto`, `minValue=multiplier&multiplier=0.25`
   or `minValue=50000`; the response includes `effectiveMinValue`,
   `averageCandleVolume` and `volumeMultiplier`. Up to 1500 bubbles are shown.
+
+## Placement
+
+Bubbles are recorded at the exact price of their trades. Two guards keep them on
+the right candles: (1) the server leaves out trades whose price is more than 3%
+from the other exchanges' recent price (a different token listed under the same
+ticker, or a stale venue) — this also keeps such trades out of CVD
+(`server/priceConsistency.js`); (2) the chart draws a bubble only when its price
+is inside its candle's high–low range (0.1% tolerance for small differences
+between exchanges).
