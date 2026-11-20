@@ -333,3 +333,32 @@ test("a rejected websocket handshake with a synchronous gate does not crash the 
   assert.deepEqual(inspected, [429]);
   handle.stop();
 });
+
+test("liquidations and liquidation-feed coverage survive a restart (7-day history for the leverage model)", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cvd-liq-"));
+  let clock = T, onTrade, onState, onLiq;
+  const options = { now: () => clock, storageDir: dir, timers: false,
+    resolver: { resolve: async e => e === "binance" ? { exchange: e, market: "perpetual", symbol: "BTCUSDT", contractSize: 1 } : null },
+    streams: { start: async (_i, trade, state, liq) => { onTrade = trade; onState = state; onLiq = liq; return { stop() {} }; } } };
+  const a = createCvdIndicatorService(options);
+  a.get({ asset: "BTC", market: "perpetual" }); await a._groups.get("perpetual:BTC").ready;
+  onState("live");
+  clock += 1000;
+  onTrade({ id: "1", exchange: "binance", symbol: "BTCUSDT", time: clock, side: "buy", value: 50 });
+  onLiq({ exchange: "binance", symbol: "BTCUSDT", side: "long", time: clock, usd: 25_000, price: 100 });
+  clock += 60_000;
+  const before = a.liquidationSnapshot("BTC");
+  assert.equal(before.events.length, 1);
+  assert.ok(before.spans.binance?.length === 1);
+  await a.close();
+  clock += 600_000;
+  const b = createCvdIndicatorService(options);
+  b.get({ asset: "BTC", market: "perpetual" }); await b._groups.get("perpetual:BTC").ready;
+  const after = b.liquidationSnapshot("BTC");
+  assert.equal(after.events.length, 1);
+  assert.equal(after.events[0].usd, 25_000);
+  // The span the feed covered before the restart is kept; the downtime is not covered.
+  const [span] = after.spans.binance;
+  assert.ok(span[0] <= T + 1000 && span[1] >= T + 61_000 && span[1] < clock);
+  await b.close(); await rm(dir, { recursive: true });
+});

@@ -160,9 +160,9 @@ app.get("/api/indicators/open-interest-driver", (req, res) => {
     ? error.message : "Aggregated OI indicator inputs are currently unavailable." }); }
 });
 
-// Perp Leverage Estimation pane: built from recorded OI, perp/spot trades and liquidations.
+// Perp Leverage Estimation pane (×): OI cohorts calibrated to recorded liquidations; funding, perp/spot volume and taker flow as prior.
 const perpLeverageService = createPerpLeverageService({ cvd: cvdIndicatorService, oiInputs: getOiChartInputs,
-  candles: candleService, oiExchanges: OI_DRIVER_EXCHANGES });
+  candles: candleService, oiExchanges: OI_DRIVER_EXCHANGES, funding: fundingIndicatorService });
 app.get("/api/indicators/perp-leverage", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try { res.json(await perpLeverageService.get(req.query)); }

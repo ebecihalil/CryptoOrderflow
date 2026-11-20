@@ -1,7 +1,7 @@
-export type ExtraPoint = { time: number; value: number | null };
+export type ExtraPoint = { time: number; value: number | null; color?: string };
 export type ExtraSeries = {
   key: string; label: string; color: string; type: 'line' | 'histogram' | 'dots';
-  width?: number; dashed?: boolean; data: ExtraPoint[];
+  width?: number; dashed?: boolean; step?: boolean; data: ExtraPoint[];
 };
 export type ExtraResult = {
   series: ExtraSeries[];
@@ -10,9 +10,7 @@ export type ExtraResult = {
   range?: [number, number];
 };
 export type ExtraParam = { key: string; label: string; default: number; min: number; max: number; step: number };
-export type ExtraIndicatorId =
-  | 'wma' | 'hma' | 'vwap' | 'keltner' | 'donchian' | 'ichimoku' | 'supertrend' | 'psar'
-  | 'stoch' | 'stochrsi' | 'cci' | 'willr' | 'roc' | 'adx' | 'atr' | 'mfi' | 'obv' | 'cmf';
+export type ExtraIndicatorId = string;
 export type ExtraIndicator = {
   id: ExtraIndicatorId; label: string; group: string; placement: 'overlay' | 'pane';
   params: ExtraParam[]; paneHeight?: number;

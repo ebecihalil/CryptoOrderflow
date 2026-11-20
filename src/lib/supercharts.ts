@@ -13,7 +13,7 @@ export const CHART_STUDIES: ChartStudy[] = [
   { id: 'macd', label: 'MACD', group: 'Oscillators' },
   ...EXTRA_INDICATORS.map((def) => ({ id: def.id, label: def.label, group: def.group })),
 ];
-export const CHART_STUDY_GROUPS = ['Moving averages', 'Bands & channels', 'Trend', 'Oscillators', 'Trend strength & volatility', 'Volume'];
+export const CHART_STUDY_GROUPS = ['Moving averages', 'Bands & channels', 'Trend', 'Support & resistance', 'Oscillators', 'Trend strength & volatility', 'Volume'];
 
 export const SUPER_CHART_TIMEFRAMES = [
   { value: '5m', label: '5m' },

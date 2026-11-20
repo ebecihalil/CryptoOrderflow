@@ -210,19 +210,37 @@ so every bubble sits on the candle in which its trades happened.
 
 ## Perp Leverage Estimation
 
-Replaces the old Leverage Estimate pane (the Leverage Estimate page is
-unchanged). Built only from data this server records: per-exchange open
-interest, per-exchange perpetual and spot taker trades (buy/sell = footprint,
-CVD, volume) and liquidations (Binance, Bybit, OKX, Deribit). An exchange counts
-in a candle only when it has open interest (this and the previous candle), perp
-trades and spot trades in that candle. Lines, 100 = normal for the coin (own
-200-candle median): orange = average (open interest ÷ 20-candle average spot
-volume, combined 70/30 with perp ÷ spot volume); green / red = long / short
-side: new open interest is split by aggressive buyers (longs) vs sellers
-(shorts); falling open interest is taken first from liquidations, then from the
-side that was closing. Equal long and short = both on the orange line.
-`GET /api/indicators/perp-leverage?asset=&timeframe=&exchange=&symbol=` (`server/perpLeverage.js`).
-History starts when the server started recording the coin.
+Estimated average leverage of open perpetual positions, in real units (×):
+orange = average, green = longs, red = shorts (reference lines at 10× and 25×).
+No exchange publishes this, so it is inferred from liquidations
+(`server/perpLeverage.js`):
+
+1. **Positions.** Each candle where open interest grows opens a long and a short
+   cohort (every contract has one of each) at the candle's typical price;
+   falling OI closes cohorts proportionally. Each cohort remembers the worst move
+   price has made against it (candle lows for longs, highs for shorts).
+2. **Leverage spread.** Each side's leverage is log-normal around a median M
+   (σ = 0.75) and capped at 100×. A position at L× is liquidated once the
+   adverse move reaches 1/L − 0.5% maintenance margin, so every M predicts the
+   liquidations of every candle.
+3. **Calibration.** Per candle, M is the value (1.2×–100× grid) whose predicted
+   long (short) liquidations best match the REAL recorded ones over the last 96
+   candles (log-scaled error, 5 bps-of-OI noise floor), pulled toward a prior.
+4. **Prior** (matters when there is little liquidation evidence): median 12×,
+   tilted by funding (0.01%/8h neutral; positive = more leveraged longs), perp ÷
+   spot volume vs its 200-candle median, and the taker side (perp CVD) that built
+   the last 24 candles of open interest.
+5. **Output** per side = notional ÷ margin of the capped log-normal book
+   (1 / E[1/L]); average = harmonic mean of both sides (equal notional).
+
+Strict completeness: Binance, Bybit, OKX and Deribit (the venues with
+liquidation feeds) count in a candle only with open interest at the candle and
+the one before, perp trades in the candle and the liquidation feed connected for
+the whole candle. Liquidations and feed-connected spans are kept 7 days and
+saved with the recording. Liquidation feeds are sampled (Binance sends at most
+one per second), so true leverage can be somewhat higher than the estimate.
+`GET /api/indicators/perp-leverage?asset=&timeframe=&exchange=&symbol=` (30 s cache).
+History starts when the liquidation feeds started recording the coin.
 
 ## Multi-chart layouts
 

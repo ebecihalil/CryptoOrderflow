@@ -112,3 +112,34 @@ test("saved parameters are validated and fall back to TradingView defaults", () 
   assert.deepEqual(extraParams("stoch"), { kLength: 14, kSmoothing: 1, dSmoothing: 3 });
   assert.deepEqual(extraParams("ichimoku", { conversion: 9.5 }), { conversion: 9, base: 26, spanB: 52, displacement: 26 });
 });
+
+test("more indicators: core formulas match their definitions", async () => {
+  const m = await import("../src/lib/extra-indicators.js");
+  // StdDev is the population deviation (TradingView ta.stdev).
+  assert.equal(m.stdevArr([1, 2, 3, 4], 4)[3], Math.sqrt(1.25));
+  // Linear regression end point on a perfect line equals the last value.
+  assert.ok(Math.abs(m.linregArr([2, 4, 6, 8, 10], 5)[4] - 10) < 1e-9);
+  // DEMA/TEMA of a constant series is that constant.
+  assert.ok(Math.abs(m.demaArr(new Array(40).fill(7), 5).at(-1) - 7) < 1e-9);
+  assert.ok(Math.abs(m.temaArr(new Array(60).fill(7), 5).at(-1) - 7) < 1e-9);
+  // Pivots: next day uses the previous day's H/L/C.
+  const day = 86400 * 20000;
+  const c = [{ time: day, open: 10, high: 12, low: 8, close: 10 }, { time: day + 3600, open: 10, high: 11, low: 9, close: 11 },
+    { time: day + 86400, open: 11, high: 11, low: 11, close: 11 }];
+  const pv = m.pivotPoints(c);
+  assert.equal(pv.p[1], null);
+  assert.equal(pv.p[2], (12 + 8 + 11) / 3);
+  assert.equal(pv.r1[2], 2 * pv.p[2] - 8);
+  // Aroon Up is 100 on a new high, Down is 100 on a new low.
+  const rising = Array.from({ length: 20 }, (_, i) => ({ time: i, open: i, high: i + 1, low: i, close: i + 0.5 }));
+  const ar = m.aroon(rising, 14);
+  assert.equal(ar.up.at(-1), 100);
+  assert.equal(ar.down.at(-1), 0);
+  // Net volume sign follows the close.
+  assert.deepEqual(m.netVolume([{ close: 1, volume: 5 }, { close: 2, volume: 5 }, { close: 1, volume: 3 }]), [null, 5, -3]);
+  // Every indicator has help text, and the menu lists over 70 indicators.
+  const { readFileSync } = await import("node:fs");
+  const help = readFileSync(new URL("../src/lib/indicator-help.ts", import.meta.url), "utf8");
+  for (const def of m.EXTRA_INDICATORS) assert.match(help, new RegExp(`\\n  ${def.id}: \\{`), `help for ${def.id}`);
+  assert.ok(m.EXTRA_INDICATORS.length >= 70);
+});
