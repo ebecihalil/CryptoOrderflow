@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { useAuth } from '@/hooks/use-auth';
+import { SIGNED_OUT_EVENT, useAuth } from '@/hooks/use-auth';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Lock, LogIn, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { assignSlot, groupByPriority, moveSlot, normalizeSlots } from '@/lib/market-priority';
 import { CoinLogo } from '@/components/coin-logo';
@@ -140,6 +140,12 @@ export function MarketList({ contracts, current, onSelect }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, accountPrefs.isSuccess, accountPrefs.data]);
   useEffect(() => () => window.clearTimeout(saveTimer.current), []);
+  // Sign-out resets the list to the defaults; the account's settings return on sign-in.
+  useEffect(() => {
+    const reset = () => { window.clearTimeout(saveTimer.current); synced.current = false; setPrefs(DEFAULTS); setExpanded(new Set()); setQuery(''); };
+    window.addEventListener(SIGNED_OUT_EVENT, reset);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, reset);
+  }, []);
   const update = (patch: Partial<Prefs>) => setPrefs((previous) => {
     const next = { ...previous, ...patch };
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage blocked */ }

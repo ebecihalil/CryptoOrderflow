@@ -19,7 +19,7 @@ import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
 import { DEFAULT_TECHNICAL_SETTINGS, type TechnicalSettings } from '@/lib/technical-indicators';
-import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
+import { useChartSetting } from '@/hooks/use-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
@@ -89,21 +89,21 @@ const STUDY_SETTING_KEYS: Partial<Record<string, Array<keyof TechnicalSettings>>
 
 function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, expanded = false, onToggleExpanded }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
-  const [timeframe, setTimeframe] = useCoinChartSetting<LiquidityTimeframe>(asset, 'timeframe', '1h',
+  const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>('timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
   // 1s–30s candles are built from live trades of the selected contract only.
   const secondsMode = isSecondTimeframe(timeframe);
-  const [storedVolumeBasis, setVolumeBasis] = useCoinChartSetting<LiquidityVolumeMode>(asset, 'volumeBasis', 'aggregated',
+  const [storedVolumeBasis, setVolumeBasis] = useChartSetting<LiquidityVolumeMode>('volumeBasis', 'aggregated',
     value => value === 'single' || value === 'aggregated');
   const volumeBasis: LiquidityVolumeMode = secondsMode ? 'single' : storedVolumeBasis;
-  const [showVolume, setShowVolume] = useCoinChartSetting(asset, 'showVolume', true);
-  const [technicalSettings, setTechnicalSettings] = useCoinChartSetting<TechnicalSettings>(asset, 'technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
+  const [showVolume, setShowVolume] = useChartSetting('showVolume', true);
+  const [technicalSettings, setTechnicalSettings] = useChartSetting<TechnicalSettings>('technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
   // Parameters for the popular-indicator registry (Ichimoku, Keltner, ...), saved per coin.
-  const [extraSettings, setExtraSettings] = useCoinChartSetting<Record<string, Record<string, number>>>(asset, 'extraIndicatorSettings', {},
+  const [extraSettings, setExtraSettings] = useChartSetting<Record<string, Record<string, number>>>('extraIndicatorSettings', {},
     value => !!value && typeof value === 'object' && !Array.isArray(value));
-  const [liquiditySettings, setLiquiditySettings] = useCoinChartSetting(asset, 'liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
-  const [zoneColors, setZoneColors] = useCoinChartSetting(asset, 'zoneColors', DEFAULT_ZONE_COLORS);
-  const [oiDriverSettings, setOiDriverSettings] = useCoinChartSetting<OiDriverSettings>(asset, 'oiDriverSettings',
+  const [liquiditySettings, setLiquiditySettings] = useChartSetting('liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
+  const [zoneColors, setZoneColors] = useChartSetting('zoneColors', DEFAULT_ZONE_COLORS);
+  const [oiDriverSettings, setOiDriverSettings] = useChartSetting<OiDriverSettings>('oiDriverSettings',
     DEFAULT_OI_DRIVER_SETTINGS,
     value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
       typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
@@ -143,22 +143,22 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   const liquidityCandles = volumeBasis === 'single' ? candles : contiguousTail(aggregateVolumes, timeframe);
   const liquidity = useMemo(() => calculateLiquidityZones(liquidityCandles, liquiditySettings), [liquidityCandles, liquiditySettings]);
   const current = candles.at(-1);
-  const [fundingWindow, setFundingWindow] = useCoinChartSetting<FundingIndicatorWindow>(asset, 'fundingWindow', '7d',
+  const [fundingWindow, setFundingWindow] = useChartSetting<FundingIndicatorWindow>('fundingWindow', '7d',
     value => ['1d', '7d', '30d'].includes(String(value)));
-  const [fundingMethod, setFundingMethod] = useCoinChartSetting<FundingIndicatorMethod>(asset, 'fundingMethod', 'mean',
+  const [fundingMethod, setFundingMethod] = useChartSetting<FundingIndicatorMethod>('fundingMethod', 'mean',
     value => ['mean', 'median', 'weighted'].includes(String(value)));
-  const [fundingMode, setFundingMode] = useCoinChartSetting<'settled' | 'recordedLive'>(asset, 'fundingMode', 'settled',
+  const [fundingMode, setFundingMode] = useChartSetting<'settled' | 'recordedLive'>('fundingMode', 'settled',
     value => value === 'settled' || value === 'recordedLive');
-  const [fundingThreshold, setFundingThreshold] = useCoinChartSetting(asset, 'fundingThreshold', 0.08);
-  const [perpetualAnchor, setPerpetualAnchor] = useCoinChartSetting<CvdAnchor>(asset, 'perpetualAnchor', '1w',
+  const [fundingThreshold, setFundingThreshold] = useChartSetting('fundingThreshold', 0.08);
+  const [perpetualAnchor, setPerpetualAnchor] = useChartSetting<CvdAnchor>('perpetualAnchor', '1w',
     value => CVD_ANCHORS.some(anchor => anchor.value === value));
-  const [spotAnchor, setSpotAnchor] = useCoinChartSetting<CvdAnchor>(asset, 'spotAnchor', '1w',
+  const [spotAnchor, setSpotAnchor] = useChartSetting<CvdAnchor>('spotAnchor', '1w',
     value => CVD_ANCHORS.some(anchor => anchor.value === value));
-  const [bubbleMarket, setBubbleMarket] = useCoinChartSetting<AggressiveBubblesMarket>(asset, 'bubbleMarket', 'both',
+  const [bubbleMarket, setBubbleMarket] = useChartSetting<AggressiveBubblesMarket>('bubbleMarket', 'both',
     value => ['spot', 'perpetual', 'both'].includes(String(value)));
   // Default 'auto': 3x the average bubble for this coin/timeframe/market. A typed
   // value stays until the indicator is removed, then it is back to auto.
-  const [bubbleMinValue, setBubbleMinValue] = useCoinChartSetting<BubbleMinimum>(asset, 'bubbleMinimum', 'auto',
+  const [bubbleMinValue, setBubbleMinValue] = useChartSetting<BubbleMinimum>('bubbleMinimum', 'auto',
     value => value === 'auto' || Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
   const [bubbleMinDraft, setBubbleMinDraft] = useState<string | null>(null);
   const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);

@@ -158,3 +158,14 @@ Estimate page. Available on 5m, 15m, 30m, 1h, 4h and 1D.
 | Perpetual / Spot CVD, Aggressive Volume Bubbles | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
 | Aggregated volume, Liquidity Zones | up to 7 (Binance, OKX, Gate.io, Bybit, Bitget, MEXC, BingX); a venue whose gaps would cut over 20% of the matched history is left out for that coin |
 | Leverage Estimate | 4 (Binance, OKX, Gate.io, Bybit: the venues publishing top-trader ratios) |
+
+## Your setup follows your account
+
+Indicators are not tied to a coin: the selected technical and orderflow
+indicators, their settings, the timeframe, volume options and favourite
+timeframes stay the same when you switch coins, until you remove them
+(`src/lib/chart-settings-store.js`). Signed in, this setup and the market list
+are saved to the account (`/api/me/prefs/super-charts`, `/api/me/prefs/market-list`)
+and load on any device. Signing out returns this browser to the defaults
+(RSI + Liquidity Zones, 1h; recent coins and chart zoom cleared; language and
+theme kept). Signing in again brings everything back.

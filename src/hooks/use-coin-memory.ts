@@ -4,7 +4,7 @@ import {
   RECENT_LIMIT, WATCHLIST_KEY, WATCHLIST_LIMIT, normalizeCoin, pushRecent, readList, recentKey, writeList,
   type CoinSection,
 } from '@/lib/coin-memory';
-import { AUTH_KEY, WATCHLIST_QUERY_KEY, fetchMe, requestSignIn, useAuth, watchlistApi } from '@/hooks/use-auth';
+import { AUTH_KEY, SIGNED_OUT_EVENT, WATCHLIST_QUERY_KEY, fetchMe, requestSignIn, useAuth, watchlistApi } from '@/hooks/use-auth';
 
 const CHANGE_EVENT = 'cof-coin-memory';
 let migrating = false;
@@ -20,6 +20,12 @@ export function useCoinMemory(section: CoinSection) {
   const client = useQueryClient();
   const { user, loading: authLoading } = useAuth();
   const [recent, setRecent] = useState<string[]>(() => readList(key, RECENT_LIMIT));
+  // Sign-out clears this browser's recent coins (back to the defaults).
+  useEffect(() => {
+    const reset = () => setRecent([]);
+    window.addEventListener(SIGNED_OUT_EVENT, reset);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, reset);
+  }, []);
 
   const watchQuery = useQuery({
     queryKey: WATCHLIST_QUERY_KEY,

@@ -6,7 +6,8 @@ import { MarketAutocomplete, type AutocompleteOption } from '@/components/market
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
 import { CHART_STUDIES, CHART_STUDY_GROUPS, type ChartStudyId } from '@/lib/supercharts';
-import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
+import { useChartSetting } from '@/hooks/use-chart-setting';
+import { useChartSettingsSync } from '@/hooks/use-chart-settings-sync';
 import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
 import { CoinShortcuts } from '@/components/coin-shortcuts';
@@ -28,10 +29,11 @@ const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'b
 
 export function SuperChartsPage() {
   const [menu, setMenu] = useState<MenuId>(null);
+  useChartSettingsSync();
   const [market, setMarket] = useState<MarketContract | null>(null);
-  const [studies, setStudies] = useCoinChartSetting<ChartStudyId[]>(market?.asset ?? '', 'studies', ['rsi'],
+  const [studies, setStudies] = useChartSetting<ChartStudyId[]>('studies', ['rsi'],
     value => Array.isArray(value) && value.every(id => CHART_STUDIES.some(study => study.id === id)));
-  const [indicators, setIndicators] = useCoinChartSetting<OrderflowId[]>(market?.asset ?? '', 'indicators', ['liquidity'],
+  const [indicators, setIndicators] = useChartSetting<OrderflowId[]>('indicators', ['liquidity'],
     value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
   const [marketDraft, setMarketDraft] = useState('');
   // Full-screen chart: chart + top menus + watchlist fill the screen (browser

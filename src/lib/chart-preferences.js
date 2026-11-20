@@ -37,6 +37,18 @@ export function readChartPreference(key, fallback, validate = (value) => validSh
   return fallback;
 }
 
+/** Sign-out: forget this browser's chart memory (zoom, last contract). */
+export function clearChartPreferences() {
+  memory.clear();
+  try {
+    const store = storage();
+    for (let i = (store?.length ?? 0) - 1; i >= 0; i--) {
+      const key = store.key(i);
+      if (key?.startsWith(PREFIX)) store.removeItem(key);
+    }
+  } catch { /* storage blocked */ }
+}
+
 export function writeChartPreference(key, value) {
   if (!key) return;
   memory.set(key, value);
@@ -45,7 +57,7 @@ export function writeChartPreference(key, value) {
   }
 }
 
-function validShape(value, fallback) {
+export function validShape(value, fallback) {
   if (typeof fallback === 'number') return typeof value === 'number' && Number.isFinite(value);
   if (typeof fallback === 'string' || typeof fallback === 'boolean') return typeof value === typeof fallback;
   if (Array.isArray(fallback)) return Array.isArray(value) && value.every(item => typeof item === 'string');

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Star } from 'lucide-react';
 import { ALL_TIMEFRAMES, TIMEFRAME_LABELS } from '../../server/timeframes.js';
 import { useI18n } from '@/lib/i18n';
+import { useChartSetting } from '@/hooks/use-chart-setting';
 import '@/styles/timeframe-picker.css';
 
-const KEY = 'cof:v1:tf-favorites';
 export const DEFAULT_FAVORITE_TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '24h'];
 const GROUPS: Array<[string, string[]]> = [
   ['Seconds', ['1s', '5s', '15s', '30s']],
@@ -13,20 +13,15 @@ const GROUPS: Array<[string, string[]]> = [
   ['Days & longer', ['24h', '1w', '1mo', '3mo']],
 ];
 
-function readFavorites(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (Array.isArray(value)) return value.filter((tf) => ALL_TIMEFRAMES.includes(tf));
-  } catch { /* storage blocked */ }
-  return DEFAULT_FAVORITE_TIMEFRAMES;
-}
+const validFavorites = (value: unknown) => Array.isArray(value) && value.every((tf) => typeof tf === 'string' && ALL_TIMEFRAMES.includes(tf));
 
 /**
  * TradingView-style timeframe control: starred favourites as quick buttons,
  * plus a dropdown with every timeframe (☆ to add/remove favourites).
  */
 export function TimeframePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [favorites, setFavorites] = useState<string[]>(readFavorites);
+  // Saved with the other Super Charts settings (account when signed in).
+  const [favorites, setFavorites] = useChartSetting<string[]>('tfFavorites', DEFAULT_FAVORITE_TIMEFRAMES, validFavorites);
   const [open, setOpen] = useState(false);
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
@@ -37,11 +32,8 @@ export function TimeframePicker({ value, onChange }: { value: string; onChange: 
     document.addEventListener('pointerdown', close); document.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
   }, [open]);
-  const toggleFavorite = (tf: string) => setFavorites((current) => {
-    const next = current.includes(tf) ? current.filter((item) => item !== tf) : [...current, tf];
-    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage blocked */ }
-    return next;
-  });
+  const toggleFavorite = (tf: string) => setFavorites((current) =>
+    current.includes(tf) ? current.filter((item) => item !== tf) : [...current, tf]);
   const quick = ALL_TIMEFRAMES.filter((tf) => favorites.includes(tf));
 
   return (

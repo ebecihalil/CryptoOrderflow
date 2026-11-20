@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { clearChartSettings } from '@/lib/chart-settings-store.js';
+import { clearChartPreferences } from '@/lib/chart-preferences.js';
 
 export type AuthUser = { email: string };
 
@@ -43,6 +45,8 @@ export function useAuth() {
     onSuccess: () => {
       client.setQueryData(AUTH_KEY, { user: null });
       client.setQueryData(WATCHLIST_QUERY_KEY, { coins: [] });
+      client.removeQueries({ queryKey: ['me-prefs'] });
+      resetLocalAccountData();
     },
   });
   return { user: me.data?.user ?? null, loading: me.isPending, signUp, signIn, signOut };
@@ -53,6 +57,25 @@ export const watchlistApi = {
   add: (coins: string[]) => send<{ coins: string[] }>('POST', '/api/me/watchlist', coins.length === 1 ? { coin: coins[0] } : { coins }),
   remove: (coin: string) => send<{ coins: string[] }>('DELETE', `/api/me/watchlist/${encodeURIComponent(coin)}`),
 };
+
+/**
+ * Sign-out: this browser goes back to the defaults (Super Charts indicators,
+ * settings, timeframe, market list, recent coins, chart zoom). Language and
+ * theme stay. Signing in again brings the account's setup back.
+ */
+export const SIGNED_OUT_EVENT = 'cof-signed-out';
+export function resetLocalAccountData() {
+  clearChartSettings();
+  clearChartPreferences();
+  try {
+    const keep = new Set(['cof:v1:language']);
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('cof:v1:') && !keep.has(key)) localStorage.removeItem(key);
+    }
+  } catch { /* storage blocked */ }
+  try { window.dispatchEvent(new Event(SIGNED_OUT_EVENT)); } catch { /* ignore */ }
+}
 
 // ---- "Sign up to use your watchlist" prompt, opened from anywhere ----
 const PROMPT_EVENT = 'cof-auth-prompt';

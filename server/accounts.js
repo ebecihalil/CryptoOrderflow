@@ -23,7 +23,7 @@ const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 export const SESSION_TTL_MS = 30 * 86_400_000;
 export const WATCHLIST_MAX = 50;
 /** Per-account saved settings (e.g. the Super Charts market list). */
-export const PREF_KEYS = ["market-list"];
+export const PREF_KEYS = ["market-list", "super-charts"];
 export const PREF_MAX_BYTES = 16_000;
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$/;
 const COIN = /^[A-Z0-9]{1,30}$/;
