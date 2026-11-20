@@ -8,7 +8,15 @@ export function createRequestGates({
 } = {}) {
     const settings = exchange => ({ state: store.read(exchange), save: state => store.save(exchange, state) });
     return {
-        binance: new BinanceRequestGate({ historyLimit: 800, spacingMs: 100, ...settings("binance") }),
+        // Binance published limits: 2,400 weight/min and 1,000 requests/5 min
+        // per /futures/data endpoint, per IP. Hosting IPs may be shared with
+        // other tenants, so this app uses at most ~17% / 45% of them, pauses
+        // when the IP's reported weight reaches 25%, and probes with one
+        // request after every restart or pause. See docs/exchange-request-limits.md.
+        binance: new BinanceRequestGate({
+            generalLimit: 400, historyLimit: 450, fundingLimit: 200, usedWeightPause: 600,
+            spacingMs: 150, probe: true, ...settings("binance"),
+        }),
         ...Object.fromEntries(Object.keys(EXCHANGE_POLICIES)
             .map(exchange => [exchange, new ExchangeRequestGate(exchange, settings(exchange))])),
     };

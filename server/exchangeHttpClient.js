@@ -51,7 +51,7 @@ export function createExchangeHttpClient({ gates, fetchImpl = fetch, sleep = wai
                     signal: AbortSignal.timeout(timeoutMs),
                     headers: { "User-Agent": "Crypto-Orderflow/1.0", ...options.headers, ...target.headers },
                 });
-                if (exchange === "binance" && await isBinanceGeoBlock(response)) throw geoBlocks.mark(url);
+                if (exchange === "binance" && await isBinanceGeoBlock(response)) { gate.releaseProbe?.(); throw geoBlocks.mark(url); }
                 await gate.inspect(response);
                 if (!response.ok) {
                     const error = new Error(`Exchange returned HTTP ${response.status}`);

@@ -171,7 +171,10 @@ test("all six request gates are registered, with shared Binance products and no 
     const memory = new Map();
     const gates = createRequestGates({ store: { read: key => memory.get(key), save: (key, state) => memory.set(key, state) } });
     assert.deepEqual(Object.keys(gates).sort(), ["binance", ...Object.keys(EXCHANGE_POLICIES)].sort());
-    assert.equal(gates.binance.historyLimit, 800);
+    // Shared-IP-safe Binance budgets (see docs/exchange-request-limits.md).
+    assert.equal(gates.binance.historyLimit, 450);
+    assert.equal(gates.binance.generalLimit, 400);
+    assert.equal(gates.binance.probe, true);
     const client = createExchangeHttpClient({ gates, fetchImpl: () => { throw Error("Should not fetch"); } });
     await assert.rejects(client("https://unknown.example/market"), /No request limiter/);
 });
