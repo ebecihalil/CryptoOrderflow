@@ -558,6 +558,9 @@ function Router() {
         <Route path="/signin"><AuthPage mode="signin" /></Route>
         <Route path="/privacy"><LegalPage kind="privacy" /></Route>
         <Route path="/terms"><LegalPage kind="terms" /></Route>
+        <Route path="/about"><LegalPage kind="about" /></Route>
+        <Route path="/disclaimer"><LegalPage kind="disclaimer" /></Route>
+        <Route path="/cookies"><LegalPage kind="cookies" /></Route>
         {MODULES.filter((module) => module.path !== '/long-short-account-ratio' && module.path !== '/top-trader-long-short-account-ratio' && module.path !== '/funding-rate' && module.path !== '/open-interest' && module.path !== '/super-charts' && module.path !== '/leverage-estimate').map((module) => (
           <Route key={module.path} path={module.path}>
             <ModuleComingSoon module={module} />

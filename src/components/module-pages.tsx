@@ -6,6 +6,7 @@ import { HomeButton } from '@/components/home-button';
 import { HOME_MODULES, type ModuleInfo } from '@/lib/modules';
 import { useI18n } from '@/lib/i18n';
 import { DataSources } from '@/components/data-sources';
+import { SiteFooter } from '@/components/site-footer';
 
 function ProductHeader({ module }: { module?: ModuleInfo }) {
   return (
@@ -86,6 +87,7 @@ export function ModuleHome() {
         </section>
         <DataSources />
       </main>
+      <SiteFooter />
     </div>
   );
 }
