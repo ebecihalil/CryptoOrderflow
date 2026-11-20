@@ -67,3 +67,21 @@ redeploy. Use a persistent disk and point `ACCOUNTS_DB` at it.
 JSON object per key and account, up to 16 KB, in the `user_prefs` table. Sign-out
 clears this browser's local copies, so the next person on the same computer
 starts from the defaults.
+
+## Sign in with Google
+
+Off until configured. On the server set (e.g. in the systemd service
+`Environment=` lines or `/etc/crypto.env`):
+
+```
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+PUBLIC_URL=https://your-domain
+```
+
+In Google Cloud Console → APIs & Services → Credentials → OAuth client ID (Web
+application), add the authorised redirect URI `https://your-domain/api/auth/google/callback`.
+The site asks only for `openid email`. A verified Google email signs in to the
+account with that email, or creates one (with no password). Flow:
+`/api/auth/google/start` → Google → `/api/auth/google/callback` (state cookie,
+code exchange, token checked for this client and a verified email).

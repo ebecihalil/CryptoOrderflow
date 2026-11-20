@@ -30,17 +30,18 @@ test("one bulk request per exchange per refresh window, shared across viewers", 
   const calls = [];
   const service = createMarketTickerService({
     now: () => clock, gates: {},
-    request: async url => { calls.push(url); return url.includes("binance") ? [{ symbol: "BTCUSDT", lastPrice: "1", priceChangePercent: "1" }] : url.includes("gateio") ? [] : { code: 0, data: [], result: { list: [] } }; },
+    request: async url => { calls.push(url); return url.includes("binance") ? [{ symbol: "BTCUSDT", lastPrice: "1", priceChangePercent: "1" }] : url.includes("gateio") || url.includes("asterdex") ? []
+      : url.includes("hyperliquid") ? [{ universe: [] }, []] : { code: 0, data: [], result: { list: [] } }; },
   });
   service.get(); service.get(); service.get();
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(calls.length, 7);
+  assert.equal(calls.length, 11);
   const payload = service.get();
   assert.equal(payload.exchanges.binance.status, "ok");
   assert.deepEqual(payload.exchanges.binance.rows, [["BTCUSDT", 1, 1, null]]);
   clock += 31_000; service.get(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.filter(url => url.includes("binance")).length, 1, "Binance refreshes every 60s");
-  assert.equal(calls.length, 13);
+  assert.equal(calls.length, 21);
 });
 
 test("market list price decimals follow the price size", async () => {

@@ -30,7 +30,7 @@ const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'global-lsar', label: 'Global Long Short Account Ratio' },
   { id: 'top-lsar', label: 'Top Trader Long Short Account Ratio' },
 ];
-const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
+const ALLOWED_EXCHANGES = new Set(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx', 'aster', 'hyperliquid', 'kucoin', 'htx']);
 
 /** Super Charts needs a (free) account: signed-out visitors get the sign-in screen. */
 export function SuperChartsPage() {

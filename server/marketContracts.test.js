@@ -10,14 +10,19 @@ export const metadataFixtures = {
   mexc: { success: true, data: [{ symbol: "BTC_USDT", baseCoin: "BTC", quoteCoin: "USDT", state: 0, contractSize: 0.0001 }] },
   bitget: { code: "00000", data: [{ symbol: "BTCUSDT", baseCoin: "BTC", quoteCoin: "USDT", symbolStatus: "normal", symbolType: "perpetual" }] },
   bingx: { code: 0, data: [{ symbol: "BTC-USDT", status: 1 }] },
+  aster: { symbols: [{ symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT", status: "TRADING", contractType: "PERPETUAL" }] },
+  hyperliquid: { universe: [{ name: "BTC" }] },
+  kucoin: { data: [{ symbol: "XBTUSDTM", baseCurrency: "XBT", quoteCurrency: "USDT", status: "Open", isInverse: false, multiplier: 0.001 }] },
+  htx: { data: [{ contract_code: "BTC-USDT", symbol: "BTC", contract_size: 0.001, contract_status: 1, business_type: "swap" }] },
 };
 
 for (const exchange of Object.keys(CHART_VENUES)) {
   test(`${exchange} catalogue preserves native contract and TradingView identity`, () => {
     const [contract] = parseMarketContracts(exchange, metadataFixtures[exchange]);
     assert.equal(contract.asset, "BTC");
-    assert.equal(contract.ticker, "BTCUSDT");
-    assert.equal(contract.label, `BTCUSDT — ${CHART_VENUES[exchange][1]}`);
+    const quote = exchange === "hyperliquid" ? "USDC" : "USDT"; // Hyperliquid perps settle in USDC
+    assert.equal(contract.ticker, `BTC${quote}`);
+    assert.equal(contract.label, `BTC${quote} — ${CHART_VENUES[exchange][1]}`);
     assert.equal(contract.tvExchange, CHART_VENUES[exchange][0]);
   });
 }
@@ -42,7 +47,9 @@ test("coalesced metadata loads are progressive and cached hourly; typing does no
     calls++;
     await new Promise(resolve => setTimeout(resolve, 1));
     const exchange = url.includes("bybit") ? "bybit" : url.includes("binance") ? "binance" : url.includes("okx") ? "okx"
-      : url.includes("gateio") ? "gate" : url.includes("mexc") ? "mexc" : url.includes("bitget") ? "bitget" : "bingx";
+      : url.includes("gateio") ? "gate" : url.includes("mexc") ? "mexc" : url.includes("bitget") ? "bitget"
+      : url.includes("asterdex") ? "aster" : url.includes("hyperliquid") ? "hyperliquid" : url.includes("kucoin") ? "kucoin"
+      : url.includes("hbdm") ? "htx" : "bingx";
     return metadataFixtures[exchange];
   }, gates: {} });
   const initial = service.get();
@@ -50,14 +57,14 @@ test("coalesced metadata loads are progressive and cached hourly; typing does no
   service.get(); service.get();
   await service.lookup("bybit", "BTCUSDT");
   await new Promise(resolve => setTimeout(resolve, 8));
-  assert.equal(service.get().contracts.length, 7);
-  assert.equal(calls, 7);
+  assert.equal(service.get().contracts.length, 11);
+  assert.equal(calls, 11);
   for (let i = 0; i < 30; i++) service.get();
-  assert.equal(calls, 7);
+  assert.equal(calls, 11);
   clock += 3600001;
   service.get();
   await new Promise(resolve => setTimeout(resolve, 8));
-  assert.equal(calls, 14);
+  assert.equal(calls, 22);
 });
 
 test("failed metadata retries are held five minutes; unknown contracts never invented", async () => {

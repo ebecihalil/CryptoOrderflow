@@ -34,11 +34,12 @@ type Prefs = {
 };
 
 /** Exchanges whose contracts, prices and charts the list supports today. */
-export const MARKET_LIST_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx'];
-/** Every exchange the site uses (home page), for the slot dropdowns; the rest are not chartable yet. */
+export const MARKET_LIST_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx', 'aster', 'hyperliquid', 'kucoin', 'htx'];
+/** Every exchange the site uses (home page), for the slot dropdowns; ones not chartable yet show (soon). */
 const ALL_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'kucoin', 'bingx', 'htx', 'kraken',
   'hyperliquid', 'aster', 'lighter', 'paradex', 'deribit', 'coinex', 'bitmex', 'toobit'];
-const DEFAULT_SLOTS: Array<string | null> = [...MARKET_LIST_EXCHANGES, null, null, null];
+// Defaults: the eight biggest chartable venues, last two slots empty (add Hyperliquid, Aster, HTX… if wanted).
+const DEFAULT_SLOTS: Array<string | null> = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx', 'kucoin', null, null];
 const EXCHANGE_NAMES: Record<string, string> = {
   binance: 'Binance', bybit: 'Bybit', okx: 'OKX', gate: 'Gate.io', bitget: 'Bitget', mexc: 'MEXC', bingx: 'BingX',
   kucoin: 'KuCoin', htx: 'HTX', kraken: 'Kraken', hyperliquid: 'Hyperliquid', aster: 'Aster', lighter: 'Lighter',

@@ -5,6 +5,7 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 export const CHART_VENUES = {
   binance: ["BINANCE", "Binance"], bybit: ["BYBIT", "Bybit"], okx: ["OKX", "OKX"],
   gate: ["GATEIO", "Gate.io"], mexc: ["MEXC", "MEXC"], bitget: ["BITGET", "Bitget"], bingx: ["BINGX", "BingX"],
+  aster: ["ASTER", "Aster"], hyperliquid: ["HYPERLIQUID", "Hyperliquid"], kucoin: ["KUCOIN", "KuCoin"], htx: ["HTX", "HTX"],
 };
 const urls = {
   binance: "https://fapi.binance.com/fapi/v1/exchangeInfo",
@@ -14,12 +15,22 @@ const urls = {
   mexc: "https://contract.mexc.com/api/v1/contract/detail",
   bitget: "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES",
   bingx: "https://open-api.bingx.com/openApi/swap/v2/quote/contracts",
+  aster: "https://fapi.asterdex.com/fapi/v1/exchangeInfo",
+  hyperliquid: "https://api.hyperliquid.xyz/info",
+  kucoin: "https://api-futures.kucoin.com/api/v1/contracts/active",
+  htx: "https://api.hbdm.com/linear-swap-api/v1/swap_contract_info",
 };
+/** Hyperliquid's API is POST-only. */
+const fetchCatalogue = (request, exchange, url) => exchange === "hyperliquid"
+  ? request(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "meta" }) })
+  : request(url);
+const BASE_ALIASES = { XBT: "BTC" };
 export function parseMarketContracts(exchange, body) {
-  const rows = exchange === "binance" ? body.symbols : exchange === "bybit" ? body.result?.list
-    : exchange === "gate" ? body : body.data;
+  const rows = exchange === "binance" || exchange === "aster" ? body.symbols : exchange === "bybit" ? body.result?.list
+    : exchange === "gate" ? body : exchange === "hyperliquid" ? body.universe : body.data;
   if (!Array.isArray(rows)) throw new Error("Contract catalogue unavailable.");
   if (["okx", "bitget", "bingx"].includes(exchange) && Number(body.code) !== 0) throw new Error("Contract catalogue rejected.");
+  const quoteOf = { hyperliquid: "USDC" };
   const contracts = [];
   for (const row of rows) {
     let symbol, base, allowed = false, contractSize = 1;
@@ -46,12 +57,24 @@ export function parseMarketContracts(exchange, body) {
       case "bingx":
         symbol = row.symbol; base = symbol?.split("-")[0];
         allowed = symbol?.endsWith("-USDT") && row.status === 1; break;
+      case "aster": // Binance-compatible futures API
+        symbol = row.symbol; base = row.baseAsset;
+        allowed = row.status === "TRADING" && row.contractType === "PERPETUAL" && row.quoteAsset === "USDT"; break;
+      case "hyperliquid": // USDC-settled perpetuals; the coin name is the symbol
+        symbol = row.name; base = row.name; allowed = !row.isDelisted && /^[A-Z0-9]{2,20}$/.test(row.name ?? ""); break;
+      case "kucoin":
+        symbol = row.symbol; base = BASE_ALIASES[row.baseCurrency] ?? row.baseCurrency; contractSize = Number(row.multiplier);
+        allowed = row.status === "Open" && !row.isInverse && row.quoteCurrency === "USDT" && /USDTM$/.test(symbol ?? ""); break;
+      case "htx":
+        symbol = row.contract_code; base = row.symbol; contractSize = Number(row.contract_size);
+        allowed = row.contract_status === 1 && /^[A-Z0-9]+-USDT$/.test(symbol ?? "") && (row.business_type ?? "swap") === "swap"; break;
     }
     if (!allowed || typeof base !== "string" || typeof symbol !== "string" ||
       !/^[A-Z0-9_-]{2,45}$/.test(symbol) || !isCryptoAsset(base, symbol)) continue;
     const identity = canonicalAsset(base);
-    contracts.push({ exchange, tvExchange: CHART_VENUES[exchange][0], label: `${base}USDT — ${CHART_VENUES[exchange][1]}`,
-      symbol, ticker: `${base}USDT`, asset: identity.asset, exchangeAsset: base,
+    const quote = quoteOf[exchange] ?? "USDT";
+    contracts.push({ exchange, tvExchange: CHART_VENUES[exchange][0], label: `${base}${quote} — ${CHART_VENUES[exchange][1]}`,
+      symbol, ticker: `${base}${quote}`, asset: identity.asset, exchangeAsset: base,
       priceDivisor: identity.priceDivisor, contractSize });
   }
   return [...new Map(contracts.map(contract => [contract.symbol, contract])).values()];
@@ -71,7 +94,7 @@ export function createMarketContractService({ request = requestJson, gates = req
         let contracts = [], cursor = "";
         const visited = new Set();
         do {
-          const body = await request(urls[exchange] + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
+          const body = await fetchCatalogue(request, exchange, urls[exchange] + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
           contracts.push(...parseMarketContracts(exchange, body));
           cursor = exchange === "bybit" ? body.result?.nextPageCursor ?? "" : "";
           if (cursor && visited.has(cursor)) throw new Error("Repeated contract page.");

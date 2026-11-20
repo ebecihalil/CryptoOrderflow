@@ -1,7 +1,7 @@
 import { requestJson, requestGates } from "./exchangeRequests.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
 import { CHART_VENUES, createMarketContractService, marketContractService } from "./marketContracts.js";
-import { fetchVenueCandles } from "./venueCandles.js";
+import { fetchVenueCandles, VENUE_NATIVE_FRAMES } from "./venueCandles.js";
 import { canonicalAsset } from "./assetIdentity.js";
 import { aggregateCandles, isContiguous, isTimeframe, nextBucket } from "./timeframes.js";
 
@@ -17,6 +17,16 @@ const intervals = {
  * native timeframe (see timeframes.js). Returns the base timeframe or null.
  */
 export function derivedFrom(exchange, timeframe) {
+  const native = VENUE_NATIVE_FRAMES[exchange];
+  if (native) {
+    // New venues: build anything they don't publish from their own smaller candles.
+    if (native.includes(timeframe)) return null;
+    if (timeframe === "3m") return "1m";
+    if (timeframe === "1w") return "24h";
+    if (timeframe === "1mo") return "24h";
+    if (timeframe === "3mo") return native.includes("1mo") ? "1mo" : "24h";
+    return null;
+  }
   if (timeframe === "3mo") return exchange === "okx" ? null : "1mo";
   if (["gate", "mexc"].includes(exchange) && timeframe === "3m") return "1m";
   // Weekly/monthly alignment is only trusted where documented as Monday/calendar UTC.
