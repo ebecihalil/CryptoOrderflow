@@ -47,6 +47,15 @@ function SuperChartsWorkspace() {
     value => Array.isArray(value) && value.every(id => CHART_STUDIES.some(study => study.id === id)));
   const [indicators, setIndicators] = useChartSetting<OrderflowId[]>('indicators', ['liquidity'],
     value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
+  // Charts 2–4 of a layout keep their own indicator lists (chart 1 uses the two
+  // settings above). A window without its own list starts from chart 1's.
+  type CellLayers = { studies: ChartStudyId[]; indicators: OrderflowId[] };
+  const [cellLayers, setCellLayers] = useChartSetting<Record<string, CellLayers>>('cellLayers', {},
+    value => !!value && typeof value === 'object' && !Array.isArray(value) && Object.values(value as Record<string, CellLayers>).every(entry =>
+      Array.isArray(entry?.studies) && entry.studies.every(id => CHART_STUDIES.some(study => study.id === id)) &&
+      Array.isArray(entry?.indicators) && entry.indicators.every(id => ORDERFLOW_ITEMS.some(item => item.id === id))));
+  const cellStudies = (index: number) => index === 0 ? studies : cellLayers[index]?.studies ?? studies;
+  const cellIndicators = (index: number) => index === 0 ? indicators : cellLayers[index]?.indicators ?? indicators;
   const [marketDraft, setMarketDraft] = useState('');
   // Super Charts always opens as the big chart: one toolbar, the chart and the
   // market list fill the browser window (the computer's taskbar stays visible).
@@ -151,10 +160,16 @@ function SuperChartsWorkspace() {
       asset: contract.asset, exchange: contract.exchange, symbol: contract.symbol,
     });
   };
-  const toggleStudy = (id: ChartStudyId) => setStudies((current) =>
-    current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  const toggleIndicator = (id: OrderflowId) => setIndicators((current) =>
-    current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggled = <T,>(list: T[], id: T) => list.includes(id) ? list.filter((item) => item !== id) : [...list, id];
+  // Adding/removing an indicator only changes the chart window it was done in.
+  const toggleStudy = (id: ChartStudyId, index = activeCell) => {
+    if (index === 0) { setStudies((current) => toggled(current, id)); return; }
+    setCellLayers((current) => ({ ...current, [index]: { studies: toggled(current[index]?.studies ?? studies, id), indicators: current[index]?.indicators ?? indicators } }));
+  };
+  const toggleIndicator = (id: OrderflowId, index = activeCell) => {
+    if (index === 0) { setIndicators((current) => toggled(current, id)); return; }
+    setCellLayers((current) => ({ ...current, [index]: { studies: current[index]?.studies ?? studies, indicators: toggled(current[index]?.indicators ?? indicators, id) } }));
+  };
 
   return (
     <div className="terminal module-app super-charts-app">
@@ -185,7 +200,7 @@ function SuperChartsWorkspace() {
               <div key={area} className={`sc-cell${index === activeCell ? ' is-active' : ''}`} style={{ gridArea: area }}
                 onPointerDownCapture={() => { if (index !== activeCell) { setActiveCell(index); const contract = cellContract(index); if (contract) setMarketDraft(contract.label); } }}
                 data-testid={`chart-cell-${index}`}>
-              <NativeChartWorkspace contract={cellContract(index)} studies={studies} indicators={indicators}
+              <NativeChartWorkspace contract={cellContract(index)} studies={cellStudies(index)} indicators={cellIndicators(index)}
                 cellId={layoutSync.interval ? 0 : index} syncId={index}
                 sync={layout.count > 1 ? { crosshair: layoutSync.crosshair, time: layoutSync.time, range: layoutSync.range } : undefined}
                 toolbarStart={index !== activeCell ? undefined : <div className="sc-symbol">
@@ -202,16 +217,16 @@ function SuperChartsWorkspace() {
               <div className="super-chart-dropdown">
                 <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'technical'}
                   onClick={() => setMenu((current) => current === 'technical' ? null : 'technical')}>
-                  Technical Indicators <span className="super-chart-selection-count">{studies.length}</span><ChevronDown size={14} aria-hidden="true" />
+                  Technical Indicators <span className="super-chart-selection-count">{cellStudies(index).length}</span><ChevronDown size={14} aria-hidden="true" />
                 </button>
                 {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
                   {CHART_STUDY_GROUPS.map((group) => (
                     <div key={group} role="group" aria-label={group}>
                       <div className="super-chart-menu-group">{group}</div>
                       {CHART_STUDIES.filter((study) => study.group === group).map((study) => (
-                        <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
-                          aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
-                          <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
+                        <button type="button" key={study.id} className={cellStudies(index).includes(study.id) ? 'is-selected' : ''}
+                          aria-pressed={cellStudies(index).includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
+                          <span className="super-chart-menu-check">{cellStudies(index).includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
                         </button>
                       ))}
                     </div>
@@ -222,13 +237,13 @@ function SuperChartsWorkspace() {
               <div className="super-chart-dropdown">
                 <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'orderflow'}
                   onClick={() => setMenu((current) => current === 'orderflow' ? null : 'orderflow')}>
-                  Orderflow Indicators <span className="super-chart-selection-count">{indicators.length}</span><ChevronDown size={14} aria-hidden="true" />
+                  Orderflow Indicators <span className="super-chart-selection-count">{cellIndicators(index).length}</span><ChevronDown size={14} aria-hidden="true" />
                 </button>
                 {menu === 'orderflow' && <div className="super-chart-menu" role="group" aria-label="Orderflow indicators">
                   {ORDERFLOW_ITEMS.map((item) => (
-                    <button type="button" key={item.id} className={indicators.includes(item.id) ? 'is-selected' : ''}
-                      aria-pressed={indicators.includes(item.id)} onClick={() => toggleIndicator(item.id)}>
-                      <span className="super-chart-menu-check">{indicators.includes(item.id) && <Check size={12} aria-hidden="true" />}</span>{item.label}
+                    <button type="button" key={item.id} className={cellIndicators(index).includes(item.id) ? 'is-selected' : ''}
+                      aria-pressed={cellIndicators(index).includes(item.id)} onClick={() => toggleIndicator(item.id)}>
+                      <span className="super-chart-menu-check">{cellIndicators(index).includes(item.id) && <Check size={12} aria-hidden="true" />}</span>{item.label}
                     </button>
                   ))}
                   <p>Venue-derived signals, aligned to the same chart</p>
@@ -237,8 +252,8 @@ function SuperChartsWorkspace() {
             </div>
                 }
                 onRemoveLayer={(key) => {
-                  if (CHART_STUDIES.some((study) => study.id === key)) toggleStudy(key as ChartStudyId);
-                  else if (ORDERFLOW_ITEMS.some((item) => item.id === key)) toggleIndicator(key as OrderflowId);
+                  if (CHART_STUDIES.some((study) => study.id === key)) toggleStudy(key as ChartStudyId, index);
+                  else if (ORDERFLOW_ITEMS.some((item) => item.id === key)) toggleIndicator(key as OrderflowId, index);
                 }} />
               </div>
             ))}

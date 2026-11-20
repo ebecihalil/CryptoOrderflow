@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useLocation, useSearch } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Star, X } from 'lucide-react';
-import { AppHeader } from '@/components/app-header';
-import { onSignInRequest, safeNext, useAuth } from '@/hooks/use-auth';
+import { onSignInRequest, useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/lib/i18n';
 import '@/styles/auth.css';
 
@@ -98,18 +97,3 @@ export function AuthForm({ mode, next, lede }: { mode: 'signup' | 'signin'; next
   );
 }
 
-export function AuthPage({ mode }: { mode: 'signup' | 'signin' }) {
-  const { user } = useAuth();
-  const [, navigate] = useLocation();
-  const search = useSearch();
-  const next = safeNext(new URLSearchParams(search).get('next'));
-  useEffect(() => { if (user) navigate(next, { replace: true }); }, [user, next, navigate]);
-  return (
-    <div className="terminal module-app">
-      <AppHeader title="Crypto Order Flow" mark="CO" sectionLabel={mode === 'signup' ? 'Sign up' : 'Sign in'} subtitle="Market Toolkit" />
-      <main className="auth-main">
-        <AuthForm mode={mode} next={next} />
-      </main>
-    </div>
-  );
-}
