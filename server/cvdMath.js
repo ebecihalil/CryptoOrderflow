@@ -31,6 +31,10 @@ export function addCvdTrade(minute, trade) {
   minute[trade.side === "buy" ? "buyValue" : "sellValue"] += trade.value;
   minute.trades++;
   if (!minute.sources.includes(trade.exchange)) minute.sources.push(trade.exchange);
+  // Per-exchange [buy USD, sell USD], so indicators can require complete data per exchange.
+  minute.byExchange ??= {};
+  const row = minute.byExchange[trade.exchange] ??= [0, 0];
+  row[trade.side === "buy" ? 0 : 1] += trade.value;
   return minute;
 }
 export function buildCvdCandles(minutes, timeframe, anchor, nowSeconds) {

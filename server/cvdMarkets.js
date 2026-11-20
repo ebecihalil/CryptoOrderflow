@@ -6,7 +6,7 @@ import { isCryptoAsset } from "./cryptoAssets.js";
 export const CVD_EXCHANGES = ["binance", "bybit", "okx", "gate", "mexc", "bitget", "bingx", "kucoin", "kraken", "htx",
   "aster", "hyperliquid", "bitmex", "deribit", "coinex"];
 /** Venues used for perpetual trades only (no spot feed used from them). */
-export const PERP_ONLY_EXCHANGES = ["aster", "hyperliquid", "bitmex", "deribit", "coinex"];
+export const PERP_ONLY_EXCHANGES = ["aster", "hyperliquid", "bitmex", "deribit"];
 export const cvdExchangesFor = market => market === "spot"
   ? CVD_EXCHANGES.filter(exchange => !PERP_ONLY_EXCHANGES.includes(exchange)) : CVD_EXCHANGES;
 export const SPOT_URLS = {
@@ -20,6 +20,7 @@ export const SPOT_URLS = {
   kucoin: "https://api.kucoin.com/api/v2/symbols",
   kraken: "https://api.kraken.com/0/public/AssetPairs",
   htx: "https://api.huobi.pro/v1/common/symbols",
+  coinex: "https://api.coinex.com/v2/spot/market",
 };
 const PERP_URLS = {
   aster: "https://fapi.asterdex.com/fapi/v1/exchangeInfo",
@@ -106,6 +107,8 @@ export function parseCvdMarkets(exchange, market, body) {
         case "kraken":
           symbol = r.wsname?.replace(/^XBT\//, "BTC/"); base = r.wsname?.split("/")[0]; quote = r.wsname?.split("/")[1];
           allowed = r.status === "online"; break;
+        case "coinex":
+          symbol = r.market; base = r.base_ccy; quote = r.quote_ccy; allowed = r.status === undefined || r.status === "online"; break;
         case "htx":
           symbol = r.symbol; base = r["base-currency"]?.toUpperCase(); quote = r["quote-currency"]?.toUpperCase();
           allowed = r.state === "online"; break;

@@ -88,11 +88,11 @@ test("bubbles reuse the CVD collectors/deduplication; market/filter changes do n
   callbacks.get("perpetual")(trade({ side: "sell" }));
   clock += 3000;
   const b = service.getBubbles({ asset: "BTC", market: "both", timeframe: "5m", minValue: 0 });
-  assert.equal(b.points.length, 2); assert.equal(b.sources.length, 25); assert.equal(opened, 2);
+  assert.equal(b.points.length, 2); assert.equal(b.sources.length, 26); assert.equal(opened, 2);
   assert.equal(b.points.find(p => p.market === "spot").value, 100);
   assert.equal(b.points.find(p => p.market === "perpetual").side, "sell");
   const spot = service.getBubbles({ asset: "BTC", market: "spot", timeframe: "1h", minValue: 200 });
-  assert.equal(spot.points.length, 0); assert.equal(spot.sources.length, 10); assert.equal(opened, 2);
+  assert.equal(spot.points.length, 0); assert.equal(spot.sources.length, 11); assert.equal(opened, 2);
   assert.equal(service.get({ asset: "BTC", market: "spot", timeframe: "5m" }).candles[0].close, 100);
   await service.close();
 });

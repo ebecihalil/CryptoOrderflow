@@ -19,7 +19,7 @@ const URLS = {
   hyperliquid: [null, "wss://api.hyperliquid.xyz/ws"],
   bitmex: [null, "wss://ws.bitmex.com/realtime"],
   deribit: [null, "wss://www.deribit.com/ws/api/v2"],
-  coinex: [null, "wss://socket.coinex.com/v2/futures"],
+  coinex: ["wss://socket.coinex.com/v2/spot", "wss://socket.coinex.com/v2/futures"],
 };
 export function cvdSubscription(exchange, market, symbol, id, time) {
   switch (exchange) {
@@ -48,11 +48,41 @@ export function liquidationSubscription(exchange, symbol, id, time) {
   switch (exchange) {
     case "binance": return { method: "SUBSCRIBE", params: [`${symbol.toLowerCase()}@forceOrder`], id };
     case "bybit": return { op: "subscribe", args: [`allLiquidation.${symbol}`] };
-    default: return null;
+    // OKX publishes every swap liquidation on one channel; rows are filtered by instId.
+    case "okx": return { op: "subscribe", args: [{ channel: "liquidation-orders", instType: "SWAP" }] };
+    default: return null; // Deribit marks liquidations inside its trade feed (no extra subscription).
   }
 }
 
+/** Liquidation venues: Binance, Bybit, OKX (dedicated feeds) and Deribit (flag on trades). */
+export const LIQUIDATION_EXCHANGES = ["binance", "bybit", "okx", "deribit"];
+
 export function parseLiquidation(exchange, message, instrument) {
+  if (exchange === "okx") {
+    if (message?.arg?.channel !== "liquidation-orders" || !Array.isArray(message.data)) return [];
+    return message.data.filter(row => row.instId === instrument.symbol).flatMap(row => (row.details ?? []).flatMap(detail => {
+      const price = Number(detail.bkPx), contracts = Number(detail.sz), time = Number(detail.ts);
+      const usd = price * contracts * (instrument.contractSize ?? 1);
+      // A forced SELL closes a long; a forced BUY closes a short.
+      const side = detail.side === "sell" ? "long" : detail.side === "buy" ? "short" : null;
+      return side && usd > 0 && Number.isFinite(usd) && time > 0 ? [{ exchange, symbol: instrument.symbol, side, time, usd }] : [];
+    }));
+  }
+  if (exchange === "deribit") {
+    if (message?.method !== "subscription" || !String(message.params?.channel ?? "").startsWith(`trades.${instrument.symbol}.`)) return [];
+    return (message.params.data ?? []).flatMap(trade => {
+      const flag = String(trade.liquidation ?? "");
+      if (!flag) return [];
+      const price = Number(trade.price), amount = Number(trade.amount), time = Number(trade.timestamp);
+      const usd = instrument.inverse ? amount : amount * price;
+      if (!(usd > 0 && Number.isFinite(usd) && time > 0)) return [];
+      const events = [];
+      // T = taker liquidated (taker sell closes a long); M = maker liquidated (opposite side).
+      if (flag.includes("T")) events.push(trade.direction === "sell" ? "long" : "short");
+      if (flag.includes("M")) events.push(trade.direction === "sell" ? "short" : "long");
+      return events.map(side => ({ exchange, symbol: instrument.symbol, side, time, usd: usd / events.length }));
+    });
+  }
   const records = exchange === "binance"
     ? (message?.e === "forceOrder" && message.o ? [message.o] : [])
     : exchange === "bybit" && message?.topic?.startsWith("allLiquidation.")

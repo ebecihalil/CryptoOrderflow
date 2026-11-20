@@ -6,7 +6,7 @@ import path from "node:path";
 import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
 import { CVD_EXCHANGES, createCvdMarketResolver, cvdExchangesFor } from "./cvdMarkets.js";
-import { createCvdStreamFactory } from "./cvdStreams.js";
+import { createCvdStreamFactory, LIQUIDATION_EXCHANGES } from "./cvdStreams.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
 import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
 import { secondCandleRecorder } from "./secondCandles.js";
@@ -88,7 +88,8 @@ export function createCvdIndicatorService({
     try {
       const payload = { version: 1, asset: group.asset, market: group.market, startedAt: group.startedAt,
         lastProcessedTime: group.lastProcessedTime, gaps: [...group.gaps],
-        minutes: [...group.minutes.values()].map(r => ({ ...r, sources: [...r.sources] })),
+        minutes: [...group.minutes.values()].map(r => ({ ...r, sources: [...r.sources],
+          ...(r.byExchange ? { byExchange: Object.fromEntries(Object.entries(r.byExchange).map(([k, v]) => [k, [...v]])) } : {}) })),
         bubbles: group.bubbles.serialize() };
       await mkdir(storageDir, { recursive: true });
       const temporary = `${file(group)}.tmp`;
@@ -112,6 +113,8 @@ export function createCvdIndicatorService({
           !["delta", "high", "low", "buyValue", "sellValue", "trades"].every(k => Number.isFinite(r[k])) ||
           r.trades < 1 || r.buyValue < 0 || r.sellValue < 0 || !Array.isArray(r.sources) ||
           r.sources.some(s => !CVD_EXCHANGES.includes(s))) continue;
+        if (r.byExchange && (typeof r.byExchange !== "object" || Object.entries(r.byExchange).some(([k, v]) =>
+          !CVD_EXCHANGES.includes(k) || !Array.isArray(v) || v.length !== 2 || !v.every(x => Number.isFinite(x) && x >= 0)))) delete r.byExchange;
         group.minutes.set(r.time, r);
       }
       group.startedAt = body.startedAt;
@@ -133,7 +136,7 @@ export function createCvdIndicatorService({
         if (!group.active) return;
         if (source.status !== state && group.minutes.size) markGap(group);
         source.status = state;
-        if (["binance", "bybit"].includes(source.exchange)) {
+        if (LIQUIDATION_EXCHANGES.includes(source.exchange)) {
           source.liquidationConnectedSince = ["idle", "live"].includes(state)
             ? source.liquidationConnectedSince ?? now() : null;
         }
@@ -325,7 +328,7 @@ export function createCvdIndicatorService({
   }
   function liquidationSnapshot(asset) {
     const group = groups.get(`perpetual:${canonicalAsset(asset).asset}`);
-    const supported = new Set(["binance", "bybit"]);
+    const supported = new Set(LIQUIDATION_EXCHANGES);
     return {
       events: (group?.liquidations ?? []).filter(item => item.time >= now() - 30 * 3600_000).map(item => ({ ...item })),
       coverage: CVD_EXCHANGES.filter(exchange => supported.has(exchange)).flatMap(exchange => {
