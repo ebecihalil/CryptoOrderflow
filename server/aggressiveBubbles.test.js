@@ -88,7 +88,7 @@ test("bubbles reuse the CVD collectors/deduplication; market/filter changes do n
   callbacks.get("perpetual")(trade({ side: "sell" }));
   clock += 3000;
   const b = service.getBubbles({ asset: "BTC", market: "both", timeframe: "5m", minValue: 0 });
-  assert.equal(b.points.length, 2); assert.equal(b.sources.length, 20); assert.equal(opened, 2);
+  assert.equal(b.points.length, 2); assert.equal(b.sources.length, 25); assert.equal(opened, 2);
   assert.equal(b.points.find(p => p.market === "spot").value, 100);
   assert.equal(b.points.find(p => p.market === "perpetual").side, "sell");
   const spot = service.getBubbles({ asset: "BTC", market: "spot", timeframe: "1h", minValue: 200 });
@@ -112,4 +112,17 @@ test("auto bubble minimum leaves about 2-3 bubbles per candle; multiplier uses a
   assert.ok(auto.multiplier > 0 && auto.multiplier < 1, "auto is a fraction of the candle volume");
   assert.equal(bubbleThreshold(points, { mode: "multiplier", multiplier: 0.05 }).value, 11_000); // 0.05 x 210,000 = 10,500 -> 11,000
   assert.equal(bubbleThreshold([]).value, 100);
+});
+
+test("1m charts: a bubble lands on the minute its trades happened, not the 5-minute block start", () => {
+  const minute = 1_700_000_040; // seconds; minute 4 of a 5-minute block
+  const blockStart = Math.floor(minute / 300) * 300;
+  const trade = { side: "buy", price: 101, value: 50_000, time: minute * 1000 + 5_000, exchange: "binance" };
+  const fine = createAggressiveBubbleLedger({ market: "perpetual", now: () => minute * 1000 + 10_000, bucketSeconds: 60 });
+  fine.add(trade);
+  assert.equal(fine.snapshot("1m", 0).points[0].time, Math.floor(trade.time / 60_000) * 60);
+  const coarse = createAggressiveBubbleLedger({ market: "perpetual", now: () => minute * 1000 + 10_000, bucketSeconds: 300 });
+  coarse.add(trade);
+  assert.equal(coarse.snapshot("1m", 0).points[0].time, blockStart, "why 1m/3m charts must not use 5-minute cells");
+  assert.equal(coarse.snapshot("5m", 0).points[0].time, blockStart, "5m and above are exact with 5-minute cells");
 });

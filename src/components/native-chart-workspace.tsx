@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Maximize2, Minimize2, RefreshCw, RotateCw } from 'lucide-react';
+import { RefreshCw, RotateCw } from 'lucide-react';
 import { NativeSuperChart } from '@/components/native-super-chart';
 import { ALL_TIMEFRAMES, isSecondTimeframe, nextBucket } from '../../server/timeframes.js';
 import { TimeframePicker } from '@/components/timeframe-picker';
@@ -28,8 +28,8 @@ type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'agg
 /** Leverage Estimate exists on these chart timeframes (24h = 1D). */
 const LEVERAGE_FRAMES: Partial<Record<string, LeverageTimeframe>> = { '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '24h': '1d' };
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
-  /** Full-screen chart mode (owned by the page so the watchlist and menus follow). */
-  expanded?: boolean; onToggleExpanded?: () => void };
+  /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
+  toolbarStart?: ReactNode; toolbarMenus?: ReactNode };
 type ThemeColors = { resistance: string; support: string; inside: string; transparency: number };
 
 const EXCHANGES = new Set<LiquidityExchange>(['binance', 'gate', 'okx', 'bybit', 'mexc', 'bitget', 'bingx']);
@@ -73,7 +73,7 @@ export function NativeChartWorkspace(props: Props) {
   }
   return <WorkspaceWithContract key={`${props.contract.exchange}:${props.contract.symbol}`}
     contract={props.contract} studies={props.studies} indicators={props.indicators} onRemoveLayer={props.onRemoveLayer}
-    expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />;
+    toolbarStart={props.toolbarStart} toolbarMenus={props.toolbarMenus} />;
 }
 
 const DEFAULT_OI_DRIVER_SETTINGS: OiDriverSettings = { showTotals: true, stateColors: true, showLsar: true, flatBodyPct: 15, activityLength: 20, activityFactor: 3,
@@ -96,7 +96,7 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, expanded = false, onToggleExpanded }: Props & { contract: MarketContract }) {
+function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
   const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>('timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
@@ -496,20 +496,31 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     };
     return (
     <>
-      <div className="native-chart-toolbar">
+      {/* One toolbar: symbol, price, timeframe, indicator menus, volume, refresh, fit. */}
+      <div className="native-chart-toolbar sc-toolbar">
+        {toolbarStart}
+        <span className="sc-toolbar-quote" title={`${contract.exchange.toUpperCase()} · ${contract.symbol}`}>
+          <b>{contract.asset}</b><i>PERP</i><small>{contract.exchange.toUpperCase()}</small>
+          <strong>{current?.close.toLocaleString(undefined, { maximumSignificantDigits: 9 }) ?? '—'}</strong>
+        </span>
+        <span className="sc-sep" aria-hidden="true" />
         {frameButtons}
-        <label className="super-chart-control"><span>Volume basis</span><select value={volumeBasis}
+        <span className="sc-sep" aria-hidden="true" />
+        {toolbarMenus}
+        <span className="sc-sep" aria-hidden="true" />
+        <select className="sc-compact-select" value={volumeBasis} title="Volume basis"
           onChange={(event) => setVolumeBasis(event.target.value as LiquidityVolumeMode)} aria-label="Chart volume basis">
-          <option value="single">Selected venue</option><option value="aggregated">Aggregated · up to 7 venues</option>
-        </select></label>
-        <label className="native-volume-toggle"><input type="checkbox" checked={showVolume}
-          onChange={(event) => setShowVolume(event.target.checked)} /> Volume pane</label>
-        <button type="button" className="native-tool-button" onClick={() => {
+          <option value="single">Volume: selected venue</option><option value="aggregated">Volume: up to 7 venues</option>
+        </select>
+        <label className="native-volume-toggle sc-compact-toggle" title="Show the volume pane"><input type="checkbox" checked={showVolume}
+          onChange={(event) => setShowVolume(event.target.checked)} /> Vol</label>
+        <button type="button" className="native-tool-button sc-icon-button" title="Refresh data" aria-label="Refresh data" onClick={() => {
           nativeFeed.refresh();
           if (aggregateRequested) aggregateFeed.refresh();
         }} disabled={nativeFeed.loading || aggregateRequested && aggregateFeed.loading}>
-          <RefreshCw size={13} aria-hidden="true" /> Refresh data
+          <RefreshCw size={13} aria-hidden="true" />
         </button>
+        <button type="button" className="native-fit-button sc-fit" onClick={() => window.dispatchEvent(new Event('native-chart-fit'))}>Fit</button>
       </div>
       <div className="native-feed-meta" role="status">
         <span className={nativePayloadCurrent && !nativeFeed.payload?.stale ? 'is-live' : ''}><i aria-hidden="true" />{nativePayloadCurrent
@@ -597,19 +608,6 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   };
 
   return <section className="native-workspace" aria-label="Native perpetual chart workspace">
-    <div className="native-symbol-strip">
-      <div><span className="native-symbol-name">{contract?.asset ?? '—'}<i>PERP</i></span><span>{contract?.exchange.toUpperCase() ?? 'EXCHANGE'} · {contract?.symbol ?? 'Select a contract'}</span></div>
-      <div className="native-price-summary"><strong>{current?.close.toLocaleString(undefined, { maximumSignificantDigits: 9 }) ?? '—'}</strong>
-        <span>native close · {contract?.exchangeAsset ?? 'quote'}</span></div>
-      <div className="native-symbol-actions">
-        <button type="button" className="native-fit-button" onClick={() => window.dispatchEvent(new Event('native-chart-fit'))}>Fit view</button>
-        {onToggleExpanded && <button type="button" className="native-fit-button native-expand-button" onClick={onToggleExpanded}
-          aria-pressed={expanded} title={expanded ? 'Back to the normal page (Esc)' : 'Chart fills the browser window'} data-testid="button-chart-fullscreen">
-          {expanded ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
-          <span>{expanded ? 'Normal view' : 'Big chart'}</span>
-        </button>}
-      </div>
-    </div>
     <FundingEnabledWorkspace enabled={hasFunding} contract={contract} timeframe={timeframe} method={fundingMethod} setMethod={setFundingMethod}
       window={fundingWindow} setWindow={setFundingWindow} mode={fundingMode} setMode={setFundingMode}
       threshold={fundingThreshold} setThreshold={setFundingThreshold} render={chartAndDetails} />

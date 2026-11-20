@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, RotateCw, X } from 'lucide-react';
+import { Check, ChevronDown, RotateCw } from 'lucide-react';
+import { Link } from 'wouter';
 import { AppHeader } from '@/components/app-header';
 import { MarketList } from '@/components/market-list';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
@@ -12,9 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { SuperChartsGate } from '@/components/super-charts-gate';
 import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
-import { CoinShortcuts } from '@/components/coin-shortcuts';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
-import { normalizeCoin } from '@/lib/coin-memory';
 
 type MenuId = 'technical' | 'orderflow' | null;
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
@@ -47,17 +46,12 @@ function SuperChartsWorkspace() {
   const [indicators, setIndicators] = useChartSetting<OrderflowId[]>('indicators', ['liquidity'],
     value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
   const [marketDraft, setMarketDraft] = useState('');
-  // Big chart: chart + top menus + market list fill the browser window (not the
-  // computer's full screen, so the taskbar stays visible). Esc or the button returns.
-  const [expanded, setExpanded] = useState(false);
-  const toggleExpanded = () => setExpanded((open) => !open);
+  // Super Charts always opens as the big chart: one toolbar, the chart and the
+  // market list fill the browser window (the computer's taskbar stays visible).
+  const expanded = true;
   useEffect(() => {
     if (!expanded) return;
     document.body.classList.add('chart-fullscreen-open');
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !(event.target as HTMLElement)?.closest?.('[role=menu], .super-chart-menu, .pane-legend-panel')) setExpanded(false);
-    };
-    document.addEventListener('keydown', onKey);
     // Chart fills the space left under the menus (they can wrap; the chart remounts on TF change).
     const fit = () => {
       const canvas = document.querySelector<HTMLElement>('.is-chart-expanded .native-chart-canvas');
@@ -73,7 +67,6 @@ function SuperChartsWorkspace() {
       window.removeEventListener('resize', fit);
       document.querySelectorAll<HTMLElement>('.native-chart-canvas').forEach((canvas) => { canvas.style.height = ''; });
       document.body.classList.remove('chart-fullscreen-open');
-      document.removeEventListener('keydown', onKey);
     };
   }, [expanded]);
   const memory = useCoinMemory('super-charts');
@@ -131,14 +124,6 @@ function SuperChartsWorkspace() {
       asset: contract.asset, exchange: contract.exchange, symbol: contract.symbol,
     });
   };
-  // A coin chip opens that coin on the current exchange when listed, else Binance, else any venue.
-  const selectCoin = (coin: string) => {
-    const key = normalizeCoin(coin);
-    const matches = contracts.filter((contract) => normalizeCoin(contract.asset) === key);
-    const chosen = matches.find((contract) => contract.exchange === market?.exchange)
-      ?? matches.find((contract) => contract.exchange.toLowerCase() === 'binance') ?? matches[0];
-    if (chosen) selectWatchlistContract(chosen);
-  };
   const toggleStudy = (id: ChartStudyId) => setStudies((current) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const toggleIndicator = (id: OrderflowId) => setIndicators((current) =>
@@ -148,27 +133,8 @@ function SuperChartsWorkspace() {
     <div className="terminal module-app super-charts-app">
       <AppHeader title="Super Charts" mark="SC" sectionLabel="Super Charts (Indicators)" subtitle="Perpetual Markets" />
       <main className={`super-charts-main${expanded ? ' is-chart-expanded' : ''}`}>
-        <div className="super-charts-heading">
-          <div className="module-kicker"><span className="module-kicker-rule" /> MARKET TOOLKIT / CHARTING</div>
-          <h1 className="module-page-title">Super Charts</h1>
-          <p>One exchange-fed view for price, crowd carry and confirmed liquidity structure.</p>
-        </div>
-
-        <section className="super-chart-marketbar" aria-label="Chart market selection">
-          <div className="super-chart-market-copy">
-            <span className="super-chart-market-kicker">ACTIVE CONTRACT</span>
-            <strong className="super-chart-active-asset">{market?.asset ?? 'Select a contract'}</strong>
-            <small>{market ? `${market.exchange.toUpperCase()} native · ${market.symbol}` : 'Choose from the live catalogue'}</small>
-          </div>
-          <label className="super-chart-contract-field">
-            <span>Perpetual contract</span>
-            <MarketAutocomplete value={marketDraft} onChange={selectMarket} options={options}
-              label="Search perpetual contracts" placeholder={catalogue.loading ? 'Loading contract catalogue…' : 'Search contract or asset'}
-              className="super-chart-contract-combo" inputClassName="super-chart-contract-input"
-              autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
-          </label>
-          {/* Recent coins only: Super Charts keeps its own (server) watchlist below. */}
-          <CoinShortcuts memory={memory} active={market?.asset} onPick={selectCoin} showWatchlist={false} />
+        {/* Catalogue problems only; everything else lives in the chart toolbar. */}
+        <div className="super-chart-catalogue-status">
           {(catalogue.error || !catalogue.loading && contracts.length === 0) && (
             <div className="super-chart-catalogue-alert" role="status">
               <span>{catalogue.error ?? 'No live contracts are currently listed.'}</span>
@@ -184,65 +150,62 @@ function SuperChartsWorkspace() {
               <button type="button" onClick={catalogue.refresh}><RotateCw size={13} aria-hidden="true" /> Retry catalogue</button>
             </div>
           )}
-        </section>
-
-        <div className="super-chart-menu-bar" ref={menuRef}>
-          <div className="super-chart-dropdown">
-            <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'technical'}
-              onClick={() => setMenu((current) => current === 'technical' ? null : 'technical')}>
-              Technical Indicators <span className="super-chart-selection-count">{studies.length}</span><ChevronDown size={14} aria-hidden="true" />
-            </button>
-            {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
-              {CHART_STUDY_GROUPS.map((group) => (
-                <div key={group} role="group" aria-label={group}>
-                  <div className="super-chart-menu-group">{group}</div>
-                  {CHART_STUDIES.filter((study) => study.group === group).map((study) => (
-                    <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
-                      aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
-                      <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
-                    </button>
-                  ))}
-                </div>
-              ))}
-              <p>Native studies · standard default settings · shared price time axis</p>
-            </div>}
-          </div>
-          <div className="super-chart-dropdown">
-            <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'orderflow'}
-              onClick={() => setMenu((current) => current === 'orderflow' ? null : 'orderflow')}>
-              Orderflow Indicators <span className="super-chart-selection-count">{indicators.length}</span><ChevronDown size={14} aria-hidden="true" />
-            </button>
-            {menu === 'orderflow' && <div className="super-chart-menu" role="group" aria-label="Orderflow indicators">
-              {ORDERFLOW_ITEMS.map((item) => (
-                <button type="button" key={item.id} className={indicators.includes(item.id) ? 'is-selected' : ''}
-                  aria-pressed={indicators.includes(item.id)} onClick={() => toggleIndicator(item.id)}>
-                  <span className="super-chart-menu-check">{indicators.includes(item.id) && <Check size={12} aria-hidden="true" />}</span>{item.label}
-                </button>
-              ))}
-              <p>Venue-derived signals, aligned to the same chart</p>
-            </div>}
-          </div>
-        </div>
-
-        <div className="super-chart-selected-studies" aria-label="Selected studies">
-          {studies.map((id) => {
-            const study = CHART_STUDIES.find((item) => item.id === id)!;
-            return <span key={id}>{study.label}<button type="button" aria-label={`Remove ${study.label}`} onClick={() => toggleStudy(id)}><X size={12} /></button></span>;
-          })}
-          {indicators.map((id) => <span key={id} className="is-orderflow">{ORDERFLOW_ITEMS.find((item) => item.id === id)?.label}
-            <button type="button" aria-label={`Remove ${ORDERFLOW_ITEMS.find((item) => item.id === id)?.label}`} onClick={() => toggleIndicator(id)}><X size={12} /></button></span>)}
-          {!studies.length && !indicators.length && <span className="super-chart-no-studies">No studies selected</span>}
         </div>
         <div className="super-chart-workspace-layout has-market-list">
           <div className="super-chart-workspace-main">
             <NativeChartWorkspace contract={market} studies={studies} indicators={indicators}
-              expanded={expanded} onToggleExpanded={toggleExpanded}
+              toolbarStart={<div className="sc-symbol">
+                <Link href="/" className="sc-home" aria-label="Crypto Order Flow home" title="Home">CO</Link>
+                <MarketAutocomplete value={marketDraft} onChange={selectMarket} options={options}
+                  label="Search perpetual contracts" placeholder={catalogue.loading ? 'Loading…' : 'Symbol search'}
+                  className="super-chart-contract-combo sc-symbol-search" inputClassName="super-chart-contract-input"
+                  autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
+              </div>}
+              toolbarMenus={
+          <div className="super-chart-menu-bar" ref={menuRef}>
+            <div className="super-chart-dropdown">
+              <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'technical'}
+                onClick={() => setMenu((current) => current === 'technical' ? null : 'technical')}>
+                Technical Indicators <span className="super-chart-selection-count">{studies.length}</span><ChevronDown size={14} aria-hidden="true" />
+              </button>
+              {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
+                {CHART_STUDY_GROUPS.map((group) => (
+                  <div key={group} role="group" aria-label={group}>
+                    <div className="super-chart-menu-group">{group}</div>
+                    {CHART_STUDIES.filter((study) => study.group === group).map((study) => (
+                      <button type="button" key={study.id} className={studies.includes(study.id) ? 'is-selected' : ''}
+                        aria-pressed={studies.includes(study.id)} onClick={() => toggleStudy(study.id)} data-testid={`study-${study.id}`}>
+                        <span className="super-chart-menu-check">{studies.includes(study.id) && <Check size={12} aria-hidden="true" />}</span>{study.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+                <p>Native studies · standard default settings · shared price time axis</p>
+              </div>}
+            </div>
+            <div className="super-chart-dropdown">
+              <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'orderflow'}
+                onClick={() => setMenu((current) => current === 'orderflow' ? null : 'orderflow')}>
+                Orderflow Indicators <span className="super-chart-selection-count">{indicators.length}</span><ChevronDown size={14} aria-hidden="true" />
+              </button>
+              {menu === 'orderflow' && <div className="super-chart-menu" role="group" aria-label="Orderflow indicators">
+                {ORDERFLOW_ITEMS.map((item) => (
+                  <button type="button" key={item.id} className={indicators.includes(item.id) ? 'is-selected' : ''}
+                    aria-pressed={indicators.includes(item.id)} onClick={() => toggleIndicator(item.id)}>
+                    <span className="super-chart-menu-check">{indicators.includes(item.id) && <Check size={12} aria-hidden="true" />}</span>{item.label}
+                  </button>
+                ))}
+                <p>Venue-derived signals, aligned to the same chart</p>
+              </div>}
+            </div>
+          </div>
+              }
               onRemoveLayer={(key) => {
                 if (CHART_STUDIES.some((study) => study.id === key)) toggleStudy(key as ChartStudyId);
                 else if (ORDERFLOW_ITEMS.some((item) => item.id === key)) toggleIndicator(key as OrderflowId);
               }} />
           </div>
-          {/* Exchange-style list of every contract (replaces the old coin watchlist panel). */}
+          {/* Exchange-style list of every contract. */}
           <MarketList contracts={contracts} current={market} onSelect={selectWatchlistContract} />
         </div>
       </main>

@@ -1,6 +1,6 @@
 import WebSocket from "ws";
 import { requestJson, requestGates } from "./exchangeRequests.js";
-import { SPOT_URLS } from "./cvdMarkets.js";
+import { CVD_GATE_URLS, SPOT_URLS } from "./cvdMarkets.js";
 import { decodeTradeMessage, parseCvdTrades } from "./cvdTradeCodec.js";
 import { routeBinanceSocket, binanceGeoBlocks } from "./binanceAccess.js";
 
@@ -14,6 +14,12 @@ const URLS = {
   bingx: ["wss://open-api-ws.bingx.com/market", "wss://open-api-swap.bingx.com/swap-market"],
   kraken: ["wss://ws.kraken.com/v2", "wss://futures.kraken.com/ws/v1"],
   htx: ["wss://api.huobi.pro/ws", "wss://api.hbdm.com/linear-swap-ws"],
+  // Perpetual-only venues (no spot URL).
+  aster: [null, "wss://fstream.asterdex.com/ws"],
+  hyperliquid: [null, "wss://api.hyperliquid.xyz/ws"],
+  bitmex: [null, "wss://ws.bitmex.com/realtime"],
+  deribit: [null, "wss://www.deribit.com/ws/api/v2"],
+  coinex: [null, "wss://socket.coinex.com/v2/futures"],
 };
 export function cvdSubscription(exchange, market, symbol, id, time) {
   switch (exchange) {
@@ -29,6 +35,11 @@ export function cvdSubscription(exchange, market, symbol, id, time) {
     case "kraken": return market === "spot" ? { method: "subscribe", params: { channel: "trade", symbol: [symbol], snapshot: false } }
       : { event: "subscribe", feed: "trade", product_ids: [symbol] };
     case "htx": return { sub: `market.${symbol}.trade.detail`, id: String(id) };
+    case "aster": return { method: "SUBSCRIBE", params: [`${symbol.toLowerCase()}@aggTrade`], id };
+    case "hyperliquid": return { method: "subscribe", subscription: { type: "trades", coin: symbol } };
+    case "bitmex": return { op: "subscribe", args: [`trade:${symbol}`] };
+    case "deribit": return { jsonrpc: "2.0", id, method: "public/subscribe", params: { channels: [`trades.${symbol}.100ms`] } };
+    case "coinex": return { method: "deals.subscribe", params: { market_list: [symbol] }, id };
     default: throw new Error("Unknown trade feed.");
   }
 }
@@ -90,7 +101,7 @@ export function createCvdStreamFactory({
         await wait(Math.max(0, admitted - now()));
         if (stopped || thisGeneration !== generation) return;
         // Count connection admission conservatively against the existing shared budget.
-        await gate?.enter(SPOT_URLS[exchange]);
+        await gate?.enter(SPOT_URLS[exchange] ?? CVD_GATE_URLS[exchange]);
         let url = URLS[exchange]?.[market === "spot" ? 0 : 1];
         let heartbeatMs = 20_000;
         if (exchange === "kucoin") {
@@ -131,6 +142,10 @@ export function createCvdStreamFactory({
             else if (exchange === "okx" || exchange === "bitget") send("ping");
             else if (exchange === "mexc") send({ method: market === "spot" ? "PING" : "ping" });
             else if (exchange === "kucoin") send({ id: String(now()), type: "ping" });
+            else if (exchange === "hyperliquid") send({ method: "ping" });
+            else if (exchange === "bitmex") send("ping");
+            else if (exchange === "deribit") send({ jsonrpc: "2.0", id: now(), method: "public/test", params: {} });
+            else if (exchange === "coinex") send({ method: "server.ping", params: {}, id: now() });
             else socket.ping();
           }, heartbeatMs);
           pulse.unref?.();

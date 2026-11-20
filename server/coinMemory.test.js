@@ -46,7 +46,7 @@ test("every coin section shows recent coins and the personal watchlist (Super Ch
     assert.doesNotMatch(source, /showWatchlist=\{false\}/, file);
   }
   const charts = readFileSync(new URL("../src/pages/super-charts-page.tsx", import.meta.url), "utf8");
-  assert.match(charts, /<CoinShortcuts [^>]*showWatchlist=\{false\}/, "Super Charts keeps only its own watchlist");
+  assert.doesNotMatch(charts, /<CoinShortcuts /, "Super Charts uses its market list instead");
   assert.doesNotMatch(charts, /<WatchStar /);
   assert.match(charts, /<MarketList /);
   assert.doesNotMatch(charts, /<ChartWatchlist /);

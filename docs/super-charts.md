@@ -103,9 +103,12 @@ live in these panels. Chart colours use a brighter pastel palette
 
 ## Full screen and indicator settings
 
-"Big chart" (next to Fit view) fills the browser window with the chart (your taskbar stays visible): the
-indicator menus stay on top, the timeframe row above the chart, and the coin
-watchlist on the right. Esc or "Normal view" returns to the normal page.
+Super Charts always opens as a big chart filling the browser window (the
+computer's taskbar stays visible). One toolbar holds everything: CO (home),
+symbol search, the coin and price, timeframes (favourites + More), Technical
+Indicators, Orderflow Indicators, volume basis, Vol (volume pane), refresh and
+Fit. Indicators are removed with × on their chart label; the market list is on
+the right.
 
 Indicator settings stay while the indicator is on the chart (also across
 reloads). Removing an indicator resets its settings, so adding it back starts
@@ -155,7 +158,8 @@ Estimate page. Available on 5m, 15m, 30m, 1h, 4h and 1D.
 | --- | --- |
 | Aggregated Funding | 17 (all except CME and Toobit) |
 | Aggregated Open Interest | 17 perpetual venues (same data as the Open Interest page) |
-| Perpetual / Spot CVD, Aggressive Volume Bubbles | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
+| Perpetual CVD, Aggressive Volume Bubbles (perp) | 15 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX, Aster, Hyperliquid, BitMEX, Deribit, CoinEx) |
+| Spot CVD, Aggressive Volume Bubbles (spot) | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
 | Aggregated volume, Liquidity Zones | up to 7 (Binance, OKX, Gate.io, Bybit, Bitget, MEXC, BingX); a venue whose gaps would cut over 20% of the matched history is left out for that coin |
 | Leverage Estimate | 4 (Binance, OKX, Gate.io, Bybit: the venues publishing top-trader ratios) |
 | Global Long Short Account Ratio | 6 (Binance, Bybit, OKX, Gate.io, Bitget, Toobit: every venue publishing an all-accounts ratio) |
@@ -197,3 +201,9 @@ that indicator (used again when it is removed and added back, and saved to your
 account); Default restores the original settings and forgets the saved ones.
 
 In the market list, the circle left of "Symbol" filters by row colour.
+
+## Bubble placement
+
+Bubbles are recorded in 5-minute cells for 7 days (exact for 5m and larger
+charts) and in 1-minute cells for the last 12 hours, used by 1m and 3m charts,
+so every bubble sits on the candle in which its trades happened.

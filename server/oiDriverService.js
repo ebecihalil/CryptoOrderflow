@@ -76,7 +76,7 @@ export function createOiDriverService({
     const duration = OI_DRIVER_WINDOWS[parsed.timeframe];
     const oiData = oiInputs(parsed.asset, OI_DRIVER_EXCHANGES);
     // The supplied Pine source uses a fixed 1-day CVD anchor.
-    // Reuse the shared 10-venue collector and its sampled liquidation stream.
+    // Reuse the shared multi-venue collector and its sampled liquidation stream.
     const flow = cvd.get({ asset: parsed.asset, market: "perpetual", timeframe: parsed.timeframe, anchor: "1d" });
     const liquidation = cvd.liquidationSnapshot(parsed.asset);
     const accountRatios = lsar(parsed.asset, OI_DRIVER_EXCHANGES);

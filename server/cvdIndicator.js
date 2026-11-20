@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
-import { CVD_EXCHANGES, createCvdMarketResolver } from "./cvdMarkets.js";
+import { CVD_EXCHANGES, createCvdMarketResolver, cvdExchangesFor } from "./cvdMarkets.js";
 import { createCvdStreamFactory } from "./cvdStreams.js";
 import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
 import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
@@ -19,7 +19,8 @@ const timeOrder = (a, b) => {
   if (/^\d+$/.test(a.id) && /^\d+$/.test(b.id)) return BigInt(a.id) < BigInt(b.id) ? -1 : BigInt(a.id) > BigInt(b.id) ? 1 : 0;
   return a.id.localeCompare(b.id);
 };
-const initialSources = () => CVD_EXCHANGES.map(exchange => ({
+// Spot groups use the spot-capable venues; perpetual groups use every venue.
+const initialSources = market => cvdExchangesFor(market).map(exchange => ({
   exchange, status: "loading", symbol: null, tradeCount: 0, lastTradeAt: null,
 }));
 const compress = promisify(gzip);
@@ -69,6 +70,7 @@ export function createCvdIndicatorService({
       if (group.gaps.has(time)) row.gap = true;
       addCvdTrade(row, trade);
       group.bubbles.add(trade);
+      group.fineBubbles?.add(trade);
       group.lastProcessedTime = trade.time;
     }
     group.queue = pending;
@@ -187,16 +189,20 @@ export function createCvdIndicatorService({
     }
     if (!group) {
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
-        sources: initialSources(), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
+        sources: initialSources(market), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
         handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [] };
-      // Smallest supported frame is 5m: compact base cells without losing any
-      // displayed price/side/value detail on any supported chart timeframe.
+      // 5-minute cells for up to 7 days (5m and every larger chart timeframe are whole
+      // multiples of 5 minutes, so each bubble lands on the candle it traded in).
       group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 7 * 86400,
         maxCells: 150_000, bucketSeconds: 300 });
+      // 1-minute cells for the last 12 hours, for 1m and 3m charts: with 5-minute
+      // cells a trade from minute 4 would be drawn on minute 0's candle (off its range).
+      group.fineBubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 12 * 3600,
+        maxCells: 60_000, bucketSeconds: 60 });
       groups.set(key, group);
       group.ready = initialize(group);
     } else if (!group.active) {
-      group.active = true; group.subscribedSince = now(); group.sources = initialSources();
+      group.active = true; group.subscribedSince = now(); group.sources = initialSources(group.market);
       markGap(group); void Promise.all(group.sources.map(source => startSource(group, source)));
     }
     group.lastUsed = now();
@@ -237,6 +243,8 @@ export function createCvdIndicatorService({
   }, 1000) : null;
   tick?.unref?.();
   const BUBBLE_DISPLAY_LIMIT = 1500;
+  /** Chart timeframes that need 1-minute bubble cells. */
+  const FINE_BUBBLE_FRAMES = ["1m", "3m"];
   function getBubbles(query) {
     const parsed = validateAggressiveBubblesQuery(query);
     parsed.asset = canonicalAsset(parsed.asset).asset;
@@ -247,7 +255,8 @@ export function createCvdIndicatorService({
     const snapshots = markets.map(market => {
       const cvd = get({ asset: parsed.asset, market, timeframe: parsed.timeframe, anchor: "1w" });
       const group = groups.get(`${market}:${parsed.asset}`);
-      return { cvd, market, ledger: group.bubbles.snapshot(parsed.timeframe, dynamic ? 0 : parsed.minValue) };
+      return { cvd, market, ledger: (FINE_BUBBLE_FRAMES.includes(parsed.timeframe) ? group.fineBubbles : group.bubbles)
+        .snapshot(parsed.timeframe, dynamic ? 0 : parsed.minValue) };
     });
     // Auto / multiplier: the minimum follows this coin, timeframe and market's own trading volume.
     const threshold = bubbleThreshold(snapshots.flatMap(s => s.ledger.points),
@@ -307,8 +316,9 @@ export function createCvdIndicatorService({
     const first = infos.map(i => i.first).filter(t => t !== null);
     const last = infos.map(i => i.last).filter(t => t !== null);
     const incomplete = cohorts.some(g => g.late || g.dropped) || infos.some(i => i.truncated);
-    return { liveSources, totalSources: CVD_EXCHANGES.length * 2,
-      status: liveSources ? liveSources === CVD_EXCHANGES.length * 2 && !incomplete ? "recording" : "partial" : loading ? "starting" : "unavailable",
+    const totalSources = cvdExchangesFor("spot").length + cvdExchangesFor("perpetual").length;
+    return { liveSources, totalSources,
+      status: liveSources ? liveSources === totalSources && !incomplete ? "recording" : "partial" : loading ? "starting" : "unavailable",
       historyStart: first.length ? new Date(Math.min(...first)).toISOString() : null,
       historyEnd: last.length ? new Date(Math.max(...last)).toISOString() : null,
       storageFailed: cohorts.some(g => g.storageFailed === true) };
