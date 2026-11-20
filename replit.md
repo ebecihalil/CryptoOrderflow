@@ -6,6 +6,8 @@ The LSAR screen's visible header is **Long Short Account Ratio** with the **LS**
 
 The LSAR section has two tabs: **Global Long Short Account Ratio** (`/long-short-account-ratio`, all accounts, six exchanges) and **Top Trader Long Short Account Ratio** (`/top-trader-long-short-account-ratio`, TT mark; Binance, OKX, Gate.io). See `docs/lsar-aggregation.md`.
 
+Every coin section (Global/Top Trader LSAR, Funding, Open Interest, Leverage, Super Charts) shows the visitor's **recent coins** (per section, last 8) and a **personal watchlist** (star toggle, shared across sections, "Watchlist only" filter on tables). Both are stored only in that visitor's browser (`src/lib/coin-memory.ts`); there are no accounts. Super Charts' existing server watchlist (shared background recording) is separate.
+
 The home page is the **Crypto Order Flow** module directory. Long Short Account Ratio, Funding Rate and Open Interest are live screeners. Super Charts (Indicators) uses one native exchange-fed chart with technical overlays, Liquidity Zones and synchronized funding panes, not a hosted TradingView widget. Position Ratio is removed; Liquidations and CVD remain placeholders but are hidden from the home page. Keep the existing visual concept, shared header, light/dark themes, and two-letter section marks. See `docs/super-charts.md` and `docs/liquidity-zones.md` for chart behavior.
 
 Liquidity Zones defaults to summed Binance/OKX/Gate.io/Bybit USDT-perpetual volume

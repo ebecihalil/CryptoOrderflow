@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowDownUp, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Clock3, RefreshCw } from 'lucide-react';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
@@ -10,6 +10,9 @@ import { orderFundingSources } from '@/lib/funding-source-order';
 import type { MarketExchange } from '@/types/market';
 import type { FundingRow, FundingSource, FundingTimeframe, FundingVenue } from '@/types/funding';
 import '@/styles/funding.css';
+import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { useCoinMemory } from '@/hooks/use-coin-memory';
+import { normalizeCoin } from '@/lib/coin-memory';
 
 const TIMEFRAMES: { value: FundingTimeframe; label: string }[] = [
   { value: 'current', label: 'Current' },
@@ -224,6 +227,8 @@ export function FundingPage() {
   const [sortField, setSortField] = useState<SortField>('aggregate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [page, setPage] = useState(0);
+  const memory = useCoinMemory('funding');
+  const [watchOnly, setWatchOnly] = useState(false);
   const query = useFundingSnapshot(timeframe);
   const snapshot = query.data;
   const exchanges = useMemo(
@@ -248,7 +253,8 @@ export function FundingPage() {
           || row.displayAsset.toLowerCase().includes(term)
           || Object.values(row.venues).some((venue) => venue.contracts.some((contract) => contract.symbol.toLowerCase().includes(term)));
         const matchesVenue = selected.length > 0 && selected.some((exchange) => Boolean(row.venues[exchange]));
-        return matchesSearch && matchesVenue;
+        const matchesWatch = !watchOnly || memory.watchlist.includes(normalizeCoin(row.asset));
+        return matchesSearch && matchesVenue && matchesWatch;
       })
       .sort((left, right) => {
         const a = sortValue(left, sortField);
@@ -257,7 +263,14 @@ export function FundingPage() {
         if (b === null || !Number.isFinite(b)) return -1;
         return (a - b) * (sortDirection === 'asc' ? 1 : -1) || left.asset.localeCompare(right.asset);
       });
-  }, [snapshot?.rows, search, selected, sortField, sortDirection]);
+  }, [snapshot?.rows, search, selected, sortField, sortDirection, watchOnly, memory.watchlist]);
+  const { remember } = memory;
+  useEffect(() => {
+    const term = normalizeCoin(search);
+    if (!term || !snapshot?.rows.some((row) => normalizeCoin(row.asset) === term)) return;
+    const timer = window.setTimeout(() => remember(term), 700);
+    return () => window.clearTimeout(timer);
+  }, [search, snapshot?.rows, remember]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const visibleRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -296,6 +309,8 @@ export function FundingPage() {
             <FundingExchangeFilter exchanges={exchanges} selected={selectedExchanges} onChange={setSelectedExchanges} />
           </div>
         </section>
+        <CoinShortcuts memory={memory} active={search} onPick={(coin) => { setSearch(coin); setPage(0); }}
+          watchOnly={watchOnly} onWatchOnlyChange={(value) => { setWatchOnly(value); setPage(0); }} />
 
         <p className="funding-comparison-note">
           <strong>Default comparison: 8 hours.</strong> Current funding rates are converted to an equivalent 8-hour rate for fair comparison. Each exchange’s native rate and actual interval are shown separately. Historical timeframes show actual settled funding totals.
@@ -381,6 +396,7 @@ export function FundingPage() {
                     <tr key={row.asset}>
                       <td className="funding-coin-cell">
                         <div className="funding-coin-content">
+                          <WatchStar memory={memory} coin={row.asset} />
                           <span className="funding-coin-logo"><CoinLogo asset={row.asset} /></span>
                           <span><strong>{row.displayAsset || row.asset}</strong><small>{row.asset}</small></span>
                         </div>

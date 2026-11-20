@@ -953,3 +953,4 @@
 .lsar-tabs a:hover { color:var(--lsar-strong); }
 .lsar-tabs a.active { color:var(--lsar-accent);font-weight:600; }
 .lsar-tabs a.active::after { content:'';position:absolute;right:10px;bottom:-1px;left:10px;height:2px;background:var(--lsar-accent); }
+.coin-cell-row { display:flex;align-items:center;gap:2px;min-width:0; }

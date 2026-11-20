@@ -9,7 +9,7 @@ test("LSAR removes the maximum-price control and explicitly requests uncapped da
     assert.match(app, /queryKey: \['market-snapshot', variant\.kind, 'all'\]/);
     // Both Global and Top Trader screeners request uncapped prices.
     assert.match(app, /getJson<LsarMarketSnapshot>\(`\/api\/market\/lsar\?maxPrice=all\$\{kindQuery\}`, signal\)/);
-    assert.match(app, /const hasActiveFilters = Boolean\(search\.trim\(\)\) \|\| selectedExchanges\.length !== exchanges\.length \|\| multipleOnly;/);
+    assert.match(app, /const hasActiveFilters = Boolean\(search\.trim\(\)\) \|\| selectedExchanges\.length !== exchanges\.length \|\| multipleOnly \|\| watchOnly;/);
 });
 test("LSAR keeps error-dot detection but removes failure prose from labels and tooltips", () => {
     assert.match(statusLine, /sourceFailureLabel\(source\?\.error\)/);

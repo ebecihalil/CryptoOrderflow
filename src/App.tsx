@@ -21,6 +21,9 @@ import { OpenInterestPage } from '@/components/open-interest-page';
 import { LeverageEstimatePage } from '@/components/leverage-estimate-page';
 import { SuperChartsPage } from '@/pages/super-charts-page';
 import { MODULES } from '@/lib/modules';
+import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { useCoinMemory, type CoinMemory } from '@/hooks/use-coin-memory';
+import { normalizeCoin } from '@/lib/coin-memory';
 import './styles/modules.css';
 import type {
   LsarInstrument,
@@ -195,6 +198,8 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
   const [{ selected: selectedExchanges, multipleOnly }, setExchangeSelection] = useState(() => selectExchanges(exchanges));
   const [search, setSearch] = useState('');
   const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
+  const memory = useCoinMemory(variant.kind === 'top' ? 'lsar-top' : 'lsar-global');
+  const [watchOnly, setWatchOnly] = useState(false);
 
   const snapshotQuery = useQuery({
     queryKey: ['market-snapshot', variant.kind, 'all'],
@@ -233,10 +238,19 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
         || (row.displayAsset ?? row.asset).toLowerCase().includes(searchTerm)
         || row.exchangeReadings.some((reading) => reading.symbol.toLowerCase().includes(searchTerm));
       const matchesExchange = matchesExchangeFilter(row.exchanges, selectedExchanges, multipleOnly);
-      return matchesAsset && matchesExchange;
+      const matchesWatch = !watchOnly || memory.watchlist.includes(normalizeCoin(row.asset));
+      return matchesAsset && matchesExchange && matchesWatch;
     });
     return filtered.sort((a, b) => compareMarketRows(a, b, timeframe, sortMode, sortTarget));
-  }, [snapshot?.rows, search, selectedExchanges, multipleOnly, timeframe, sortMode, sortTarget]);
+  }, [snapshot?.rows, search, selectedExchanges, multipleOnly, timeframe, sortMode, sortTarget, watchOnly, memory.watchlist]);
+  // Remember a coin once the search names it exactly (typed or picked).
+  const { remember } = memory;
+  useEffect(() => {
+    const term = normalizeCoin(search);
+    if (!term || !snapshot?.rows.some((row) => normalizeCoin(row.asset) === term)) return;
+    const timer = window.setTimeout(() => remember(term), 700);
+    return () => window.clearTimeout(timer);
+  }, [search, snapshot?.rows, remember]);
   const searchOptions = useMemo<AutocompleteOption[]>(() => (snapshot?.rows ?? []).map((row) => ({
     value: row.asset,
     label: row.displayAsset ?? row.asset,
@@ -247,7 +261,7 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
     void Promise.allSettled([snapshotQuery.refetch(), summaryQuery.refetch()]);
   };
 
-  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== exchanges.length || multipleOnly;
+  const hasActiveFilters = Boolean(search.trim()) || selectedExchanges.length !== exchanges.length || multipleOnly || watchOnly;
   const latestTimestamp = snapshot?.generatedAt ?? summary?.generatedAt ?? null;
   const latestRatioTimestamp =
     snapshot?.rows.reduce<string | null>((latest, row) => {
@@ -310,6 +324,9 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
             </div>
           </div>
         </section>
+
+        <CoinShortcuts memory={memory} active={search} onPick={(coin) => setSearch(coin)}
+          watchOnly={watchOnly} onWatchOnlyChange={setWatchOnly} />
 
         <div className="table-meta">
           <span>
@@ -394,12 +411,13 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
                   const expanded = expandedAsset === row.asset;
                   return (
                     <FragmentRow
+                      memory={memory}
                       exchanges={exchanges}
                       key={row.asset}
                       row={row}
                       selectedTimeframe={timeframe}
                       expanded={expanded}
-                      onToggle={() => setExpandedAsset(expanded ? null : row.asset)}
+                      onToggle={() => { if (!expanded) memory.remember(row.asset); setExpandedAsset(expanded ? null : row.asset); }}
                     />
                   );
                 })}
@@ -422,16 +440,19 @@ function LsarScreener({ variant }: { variant: LsarVariant }) {
   );
 }
 
-function FragmentRow({ row, selectedTimeframe, expanded, onToggle, exchanges }: { row: LsarInstrument; selectedTimeframe: LsarTimeframe; expanded: boolean; onToggle: () => void; exchanges: MarketExchange[] }) {
+function FragmentRow({ row, selectedTimeframe, expanded, onToggle, exchanges, memory }: { row: LsarInstrument; selectedTimeframe: LsarTimeframe; expanded: boolean; onToggle: () => void; exchanges: MarketExchange[]; memory: CoinMemory }) {
   return (
     <>
       <tr data-testid={`row-market-${row.asset}`}>
         <td className="coin-cell asset-cell" data-testid={`value-coin-${row.asset}`}>
+          <span className="coin-cell-row">
+          <WatchStar memory={memory} coin={row.asset} />
           <button onClick={onToggle} data-testid={`button-expand-${row.asset}`} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${row.displayAsset ?? row.asset} exchange readings`} className="coin-trigger">
             <span className="coin-chevron">{expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
             <CoinLogo asset={row.asset} />
             <span><span className="asset-name">{row.displayAsset ?? row.asset}</span><span className="asset-market">DATA: {row.exchanges.map((exchange) => exchange.toUpperCase()).join(' · ')}</span></span>
           </button>
+          </span>
         </td>
         <td className="price-cell" data-testid={`value-price-${row.asset}`}>
           {formatPrice(row.price)}

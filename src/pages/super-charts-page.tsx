@@ -9,6 +9,9 @@ import { CHART_STUDIES, type ChartStudyId } from '@/lib/supercharts';
 import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
 import { LAST_CHART_CONTRACT_KEY, readChartPreference, writeChartPreference, validChartContract } from '@/lib/chart-preferences.js';
 import '@/styles/super-charts.css';
+import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { useCoinMemory } from '@/hooks/use-coin-memory';
+import { normalizeCoin } from '@/lib/coin-memory';
 
 type MenuId = 'technical' | 'orderflow' | null;
 type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver';
@@ -30,6 +33,9 @@ export function SuperChartsPage() {
   const [indicators, setIndicators] = useCoinChartSetting<OrderflowId[]>(market?.asset ?? '', 'indicators', ['liquidity'],
     value => Array.isArray(value) && value.every(id => ORDERFLOW_ITEMS.some(item => item.id === id)));
   const [marketDraft, setMarketDraft] = useState('');
+  const memory = useCoinMemory('super-charts');
+  const { remember } = memory;
+  useEffect(() => { if (market?.asset) remember(market.asset); }, [market?.asset, remember]);
   const menuRef = useRef<HTMLDivElement>(null);
   const catalogue = useMarketContracts();
   const contracts = useMemo(
@@ -82,6 +88,14 @@ export function SuperChartsPage() {
       asset: contract.asset, exchange: contract.exchange, symbol: contract.symbol,
     });
   };
+  // A coin chip opens that coin on the current exchange when listed, else Binance, else any venue.
+  const selectCoin = (coin: string) => {
+    const key = normalizeCoin(coin);
+    const matches = contracts.filter((contract) => normalizeCoin(contract.asset) === key);
+    const chosen = matches.find((contract) => contract.exchange === market?.exchange)
+      ?? matches.find((contract) => contract.exchange.toLowerCase() === 'binance') ?? matches[0];
+    if (chosen) selectWatchlistContract(chosen);
+  };
   const toggleStudy = (id: ChartStudyId) => setStudies((current) =>
     current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const toggleIndicator = (id: OrderflowId) => setIndicators((current) =>
@@ -100,7 +114,7 @@ export function SuperChartsPage() {
         <section className="super-chart-marketbar" aria-label="Chart market selection">
           <div className="super-chart-market-copy">
             <span className="super-chart-market-kicker">ACTIVE CONTRACT</span>
-            <strong>{market?.asset ?? 'Select a contract'}</strong>
+            <strong className="super-chart-active-asset">{market?.asset ?? 'Select a contract'}{market && <WatchStar memory={memory} coin={market.asset} />}</strong>
             <small>{market ? `${market.exchange.toUpperCase()} native · ${market.symbol}` : 'Choose from the live catalogue'}</small>
           </div>
           <label className="super-chart-contract-field">
@@ -110,6 +124,7 @@ export function SuperChartsPage() {
               className="super-chart-contract-combo" inputClassName="super-chart-contract-input"
               autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
           </label>
+          <CoinShortcuts memory={memory} active={market?.asset} onPick={selectCoin} />
           {(catalogue.error || !catalogue.loading && contracts.length === 0) && (
             <div className="super-chart-catalogue-alert" role="status">
               <span>{catalogue.error ?? 'No live contracts are currently listed.'}</span>

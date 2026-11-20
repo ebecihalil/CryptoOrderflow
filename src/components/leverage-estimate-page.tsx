@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { RefreshCw } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
@@ -7,6 +7,8 @@ import { ExchangeLogo } from '@/components/exchange-logo';
 import { LeverageEstimateChart } from '@/components/leverage-estimate-chart';
 import { useLeverageEstimate, type LeverageRow, type LeverageTimeframe } from '@/hooks/use-leverage-estimate';
 import '@/styles/leverage-estimate.css';
+import { CoinShortcuts, WatchStar } from '@/components/coin-shortcuts';
+import { useCoinMemory } from '@/hooks/use-coin-memory';
 
 const TIMEFRAMES: Array<{ value: LeverageTimeframe; label: string }> = [
   { value: '5m', label: '5m' }, { value: '15m', label: '15m' }, { value: '30m', label: '30m' },
@@ -76,6 +78,11 @@ export function LeverageEstimatePage() {
   const rows = data?.rows ?? [];
   const loadingFirst = !data && query.isLoading;
   const fillingSources = !!data && data.isRefreshing && !rows.length;
+  const memory = useCoinMemory('leverage');
+  const { remember } = memory;
+  // Remember only coins that actually returned data (not typos).
+  useEffect(() => { if (data?.asset === asset && data.rows.length) remember(asset); }, [data?.asset, data?.rows.length, asset, remember]);
+  const pickCoin = (coin: string) => { setAsset(coin); setDraft(coin); };
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -91,7 +98,7 @@ export function LeverageEstimatePage() {
         <div className="lev-heading">
           <div>
             <span className="eyebrow">AGGREGATED PERPETUAL LEVERAGE</span>
-            <h1><CoinLogo asset={asset} /> {asset} leverage estimate</h1>
+            <h1><CoinLogo asset={asset} /> {asset} leverage estimate <WatchStar memory={memory} coin={asset} size={18} /></h1>
           </div>
           <button type="button" className="lev-refresh" onClick={() => void query.refetch()} disabled={query.isFetching}>
             <RefreshCw size={14} aria-hidden="true" /> Refresh
@@ -116,6 +123,7 @@ export function LeverageEstimatePage() {
           </div>
         </div>
 
+        <CoinShortcuts memory={memory} active={asset} onPick={pickCoin} />
         {query.error && <div className="lev-error" role="alert">{query.error.message}</div>}
         {data?.warnings.map((warning) => <div key={warning} className="lev-warning" role="status">{warning}</div>)}
 
