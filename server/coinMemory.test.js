@@ -50,3 +50,13 @@ test("every coin section shows recent coins and the personal watchlist (Super Ch
   assert.doesNotMatch(charts, /<WatchStar /);
   assert.match(charts, /<ChartWatchlist /);
 });
+
+test("every section except Super Charts has the side watchlist panel", () => {
+  for (const file of ["App.tsx", "components/funding-page.tsx", "components/open-interest-page.tsx", "components/leverage-estimate-page.tsx"]) {
+    const source = readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
+    assert.match(source, /<SectionWatchlist /, file);
+    assert.match(source, /section-watchlist-layout/, file);
+  }
+  const charts = readFileSync(new URL("../src/pages/super-charts-page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(charts, /<SectionWatchlist /);
+});

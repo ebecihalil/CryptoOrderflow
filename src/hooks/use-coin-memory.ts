@@ -4,7 +4,7 @@ import {
   RECENT_LIMIT, WATCHLIST_KEY, WATCHLIST_LIMIT, normalizeCoin, pushRecent, readList, recentKey, writeList,
   type CoinSection,
 } from '@/lib/coin-memory';
-import { WATCHLIST_QUERY_KEY, requestSignIn, useAuth, watchlistApi } from '@/hooks/use-auth';
+import { AUTH_KEY, WATCHLIST_QUERY_KEY, fetchMe, requestSignIn, useAuth, watchlistApi } from '@/hooks/use-auth';
 
 const CHANGE_EVENT = 'cof-coin-memory';
 let migrating = false;
@@ -18,7 +18,7 @@ const EMPTY: string[] = [];
 export function useCoinMemory(section: CoinSection) {
   const key = recentKey(section);
   const client = useQueryClient();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [recent, setRecent] = useState<string[]>(() => readList(key, RECENT_LIMIT));
 
   const watchQuery = useQuery({
@@ -73,7 +73,13 @@ export function useCoinMemory(section: CoinSection) {
   const toggle = useCallback(async (coinInput: string) => {
     const coin = normalizeCoin(coinInput);
     if (!coin) return;
-    if (!user) { requestSignIn('watchlist'); return; }
+    // Right after page load the sign-in check may still be running: wait for it
+    // instead of telling a signed-in user to sign up.
+    const current = user ?? (await client.ensureQueryData({ queryKey: AUTH_KEY, queryFn: fetchMe }).catch(() => null))?.user;
+    if (!current) { requestSignIn('watchlist'); return; }
+    if (!client.getQueryData(WATCHLIST_QUERY_KEY)) {
+      client.setQueryData(WATCHLIST_QUERY_KEY, await watchlistApi.list().catch(() => ({ coins: [] })));
+    }
     const previous = client.getQueryData<{ coins: string[] }>(WATCHLIST_QUERY_KEY)?.coins ?? [];
     const removing = previous.includes(coin);
     // Optimistic update, rolled back if the server refuses.
@@ -89,7 +95,7 @@ export function useCoinMemory(section: CoinSection) {
 
   const isWatched = useCallback((coin: string) => watchlist.includes(normalizeCoin(coin)), [watchlist]);
 
-  return { recent, watchlist, remember, toggle, isWatched, clearRecent, signedIn: !!user };
+  return { recent, watchlist, remember, toggle, isWatched, clearRecent, signedIn: !!user, authLoading };
 }
 
 export type CoinMemory = ReturnType<typeof useCoinMemory>;

@@ -22,13 +22,13 @@ export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchO
   const current = normalizeCoin(active);
   const { recent, signedIn } = memory;
   const watchlist = showWatchlist ? memory.watchlist : [];
-  if (!showWatchlist && !recent.length) return null;
+  if (!recent.length && !(showWatchlist && onWatchOnlyChange)) return null;
   return (
     <div className="coin-shortcuts" aria-label="Your coins">
       {showWatchlist && onWatchOnlyChange && (
         <button type="button" className={`coin-watch-only${watchOnly ? ' active' : ''}`} aria-pressed={!!watchOnly}
           onClick={() => (signedIn ? onWatchOnlyChange(!watchOnly) : requestSignIn('watchlist'))}
-          disabled={signedIn && !watchlist.length && !watchOnly}
+          disabled={memory.authLoading || (signedIn && !watchlist.length && !watchOnly)}
           title={!signedIn ? 'Sign up for a free account to use your watchlist'
             : watchlist.length ? 'Show only coins on your watchlist' : 'Star coins to build your watchlist'} data-testid="button-watch-only">
           <Star size={12} aria-hidden="true" fill={watchOnly ? 'currentColor' : 'none'} />
@@ -36,21 +36,7 @@ export function CoinShortcuts({ memory, onPick, active = '', watchOnly, onWatchO
           {!signedIn && <Lock size={11} aria-hidden="true" />}
         </button>
       )}
-      {showWatchlist && !signedIn && !onWatchOnlyChange && (
-        <button type="button" className="coin-watch-only" onClick={() => requestSignIn('watchlist')} data-testid="button-watch-locked"
-          title="Sign up for a free account to use your watchlist">
-          <Star size={12} aria-hidden="true" /> Watchlist <Lock size={11} aria-hidden="true" />
-        </button>
-      )}
-      {watchlist.length > 0 && (
-        <div className="coin-chip-group" role="group" aria-label="Your watchlist">
-          <span className="coin-chip-label"><Star size={11} aria-hidden="true" fill="currentColor" />Watchlist</span>
-          {watchlist.map((coin) => (
-            <button key={`w-${coin}`} type="button" className={`coin-chip watched${coin === current ? ' active' : ''}`}
-              onClick={() => onPick(coin)} data-testid={`chip-watch-${coin}`}>{coin}</button>
-          ))}
-        </div>
-      )}
+      {/* The watchlist itself lives in the side panel (SectionWatchlist). */}
       {recent.length > 0 && (
         <div className="coin-chip-group" role="group" aria-label="Recently viewed coins">
           <span className="coin-chip-label"><Clock3 size={11} aria-hidden="true" />Recent</span>
