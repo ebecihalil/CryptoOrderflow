@@ -44,6 +44,8 @@ type Props = {
   /** Leverage Estimate rows (time in ms); score 0–100. */
   leverageRows?: Array<{ time: number; leverageScore: number | null }> | null;
   leverageEnabled?: boolean;
+  /** Long Short Account Ratio panes (global / top trader); time in seconds. */
+  lsarPanes?: Array<{ key: string; label: string; color: string; points: Array<{ time: number; ratio: number; longPct: number }> }>;
   priceDivisor: number;
   /** Saved parameters for the popular-indicator registry, by indicator id. */
   extraSettings?: Record<string, Record<string, number>>;
@@ -87,6 +89,7 @@ function priceFormat(candles: Candle[]) {
 }
 
 const toTime = (time: number) => time as UTCTimestamp;
+const NO_LSAR_PANES: NonNullable<Props['lsarPanes']> = [];
 
 function compactCvd(value: number) {
   const magnitude = Math.abs(value);
@@ -95,7 +98,7 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, leverageRows = null, leverageEnabled = false, priceDivisor, extraSettings = {}, layerSettings = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, priceDivisor, extraSettings = {}, layerSettings = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -467,6 +470,17 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       for (const [level, color] of [[80, '#c75a52'], [60, '#c4a05c'], [40, '#89928a']] as const)
         lev.createPriceLine({ price: level, color: `${color}90`, lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
     }
+    for (const lsar of lsarPanes) {
+      if (!lsar.points.length) continue;
+      const pane = nextPane();
+      const line = pushSeries(chart.addSeries(LineSeries, {
+        color: lsar.color, lineWidth: 2, priceLineVisible: false,
+        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+      }, pane));
+      line.setData(lsar.points.map((point) => ({ time: toTime(point.time), value: point.ratio })));
+      // 1.0 = as many long as short accounts.
+      line.createPriceLine({ price: 1, color: '#89928a90', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+    }
     // Set proportions together after every pane exists. Sequential pixel-height
     // changes during add/remove can progressively squeeze sibling panes.
     const lowerPanes = [
@@ -480,6 +494,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       ...(spotCvdEnabled ? [{ key: 'spot-cvd', height: 142 }] : []),
       ...(oiDriverEnabled && oiDriver?.candles.length ? [{ key: 'oi-driver', height: 158 }] : []),
       ...(leverageEnabled && leveragePoints.length ? [{ key: 'leverage', height: 120 }] : []),
+      ...lsarPanes.filter((lsar) => lsar.points.length).map((lsar) => ({ key: lsar.key, height: 110 })),
     ];
     const priceHeight = Math.max(260, (mountRef.current?.clientHeight ?? 650) -
       lowerPanes.reduce((sum, pane) => sum + pane.height, 0) - 30);
@@ -555,7 +570,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
     };
     requestAnimationFrame(() => measureRef.current());
-  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled, leverageRows, leverageEnabled]);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiDriverEnabled, leverageRows, leverageEnabled, lsarPanes]);
 
   // ---- TradingView-style legends: name, inputs and value at the crosshair ----
   const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;
@@ -603,6 +618,12 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       if (key === 'perpetual-cvd') return [{ key: 'perpetual-cvd', label: 'Aggregated Perpetual CVD', params: (perpetualCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(perpetualCvd) }] }];
       if (key === 'spot-cvd') return [{ key: 'spot-cvd', label: 'Aggregated Spot CVD', params: (spotCvd?.anchor ?? '1w').toUpperCase(), color: CHART_COLORS.up, values: [{ text: cvdValue(spotCvd) }] }];
       if (key === 'oi-driver') return [{ key: 'oi-driver', label: 'Aggregated Open Interest', params: oiDriver?.asset, color: '#3b82f6' }];
+      const lsar = lsarPanes.find((item) => item.key === key);
+      if (lsar) {
+        const point = lsar.points.find((item) => item.time === legendTime) ?? lsar.points.at(-1);
+        return [{ key, label: lsar.label, params: 'OI-weighted', color: lsar.color,
+          values: point ? [{ text: point.ratio.toFixed(2), color: lsar.color }, { text: `${point.longPct.toFixed(1)}% long` }] : [{ text: '—' }] }];
+      }
       if (key === 'leverage') {
         const row = (leverageRows ?? []).find((item) => Math.floor(item.time / 1000) === legendTime) ?? (leverageRows ?? []).at(-1);
         const score = row?.leverageScore;
@@ -614,7 +635,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     };
     return paneLayout.map((pane) => ({ ...pane, rows: rowsFor(pane.key) })).filter((pane) => pane.rows.length);
   }, [paneLayout, legendTime, candles, studies, studyData, technicalSettings, extraData, extraSettings, liquidityEnabled, zones.length,
-    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, leverageRows, symbolLabel, timeframe]);
+    aggressiveBubblesEnabled, plottedBubbles.length, volumeByTime, funding?.method, fundingRows, perpetualCvd, spotCvd, oiDriver?.asset, leverageRows, lsarPanes, symbolLabel, timeframe]);
 
   return (
     <div className="native-chart-wrap">

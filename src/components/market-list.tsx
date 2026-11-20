@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Link } from 'wouter';
+import { SIGNED_OUT_EVENT, useAuth } from '@/hooks/use-auth';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Lock, LogIn, RotateCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { assignSlot, groupByPriority, moveSlot, normalizeSlots } from '@/lib/market-priority';
 import { CoinLogo } from '@/components/coin-logo';
 import { ExchangeLogo } from '@/components/exchange-logo';
@@ -52,13 +54,21 @@ const DEFAULTS: Prefs = {
 };
 const ROW_HEIGHT = 38;
 
+function normalizePrefs(saved: unknown): Prefs {
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return DEFAULTS;
+  const value = saved as Partial<Prefs> & { order?: unknown; exchanges?: unknown };
+  return { ...DEFAULTS, ...value, sort: { ...DEFAULTS.sort, ...value.sort },
+    hidden: Array.isArray(value.hidden) ? value.hidden.filter((item): item is string => typeof item === 'string') : [],
+    colors: value.colors && typeof value.colors === 'object' ? value.colors : {},
+    slots: normalizeSlots(value.slots, MARKET_LIST_EXCHANGES, DEFAULT_SLOTS, value) };
+}
 function readPrefs(): Prefs {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (saved && typeof saved === 'object') return { ...DEFAULTS, ...saved, sort: { ...DEFAULTS.sort, ...saved.sort },
-      slots: normalizeSlots(saved.slots, MARKET_LIST_EXCHANGES, DEFAULT_SLOTS, saved) };
-  } catch { /* storage blocked */ }
-  return DEFAULTS;
+  try { return normalizePrefs(JSON.parse(localStorage.getItem(KEY) ?? 'null')); } catch { return DEFAULTS; }
+}
+/** Settings saved to the signed-in account (follow the user to any device). */
+async function savePrefs(value: Prefs) {
+  await fetch('/api/me/prefs/market-list', { method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ value }) });
 }
 
 /** Decimals like exchange tickers: fewer for big prices, more for tiny ones. */
@@ -102,13 +112,52 @@ export function MarketList({ contracts, current, onSelect }: {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewport, setViewport] = useState(600);
   const listRef = useRef<HTMLDivElement>(null);
+  const { user, loading: authLoading } = useAuth();
+  // Account settings: loaded once after sign-in; changes are saved shortly after you make them.
+  const synced = useRef(false);
+  const saveTimer = useRef<number | undefined>(undefined);
+  const accountPrefs = useQuery({
+    queryKey: ['me-prefs', 'market-list', user?.email],
+    enabled: !!user,
+    queryFn: async () => {
+      const response = await fetch('/api/me/prefs/market-list', { credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Settings unavailable');
+      return (await response.json()) as { value: unknown };
+    },
+    staleTime: Infinity, retry: 1,
+  });
+  useEffect(() => {
+    if (!user) { synced.current = false; return; }
+    if (!accountPrefs.isSuccess || synced.current) return;
+    synced.current = true;
+    if (accountPrefs.data.value) {
+      const loaded = normalizePrefs(accountPrefs.data.value);
+      setPrefs(loaded);
+      try { localStorage.setItem(KEY, JSON.stringify(loaded)); } catch { /* storage blocked */ }
+    } else {
+      void savePrefs(prefs); // first sign-in: keep what this browser had
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, accountPrefs.isSuccess, accountPrefs.data]);
+  useEffect(() => () => window.clearTimeout(saveTimer.current), []);
+  // Sign-out resets the list to the defaults; the account's settings return on sign-in.
+  useEffect(() => {
+    const reset = () => { window.clearTimeout(saveTimer.current); synced.current = false; setPrefs(DEFAULTS); setExpanded(new Set()); setQuery(''); };
+    window.addEventListener(SIGNED_OUT_EVENT, reset);
+    return () => window.removeEventListener(SIGNED_OUT_EVENT, reset);
+  }, []);
   const update = (patch: Partial<Prefs>) => setPrefs((previous) => {
     const next = { ...previous, ...patch };
     try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage blocked */ }
+    if (synced.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => { void savePrefs(next); }, 700);
+    }
     return next;
   });
 
   const tickers = useQuery({
+    enabled: !!user,
     queryKey: ['market-tickers'],
     queryFn: async ({ signal }): Promise<TickersPayload> => {
       const response = await fetch('/api/market/tickers', { signal });
@@ -176,7 +225,7 @@ export function MarketList({ contracts, current, onSelect }: {
     const observer = new ResizeObserver(() => setViewport(element.clientHeight));
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [user]);
   useEffect(() => {
     if (!palette) return;
     const close = (event: PointerEvent) => { if (!(event.target as HTMLElement).closest?.('.market-list-palette, .market-list-flag')) setPalette(null); };
@@ -212,6 +261,30 @@ export function MarketList({ contracts, current, onSelect }: {
   );
   const unavailable = Object.entries(tickers.data?.exchanges ?? {})
     .filter(([exchange, entry]) => enabledOrder.includes(exchange) && entry.status === 'unavailable').map(([exchange]) => EXCHANGE_NAMES[exchange] ?? exchange);
+
+  if (authLoading || !user) {
+    const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+    return (
+      <aside className="market-list market-list-locked" aria-label="Market list" data-testid="market-list">
+        <header className="market-list-head">
+          <div>
+            <div className="market-list-eyebrow">USDT perpetuals · 24h</div>
+            <h2>Markets</h2>
+          </div>
+        </header>
+        {authLoading ? <p className="market-list-empty" role="status">Checking your account…</p> : (
+          <div className="market-list-gate" data-testid="market-list-locked">
+            <span className="market-list-gate-icon" aria-hidden="true"><Lock size={18} /></span>
+            <strong>Your market list</strong>
+            <p>Every coin across the exchanges with live price and 24h change: sort, filter, colour and set your exchange priority.
+              Saved to your account on any device. New here? You can create a free account on the next screen.</p>
+            <Link href={`/signin?next=${next}`} className="market-list-signin" data-testid="market-list-signin">
+              <LogIn size={14} aria-hidden="true" /> Sign in</Link>
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   return (
     <aside className="market-list" aria-label="Market list" data-testid="market-list">
@@ -359,7 +432,7 @@ export function MarketList({ contracts, current, onSelect }: {
         {tickers.isError ? (tickers.error?.message === 'restart'
           ? 'Prices unavailable: the server is running an older version. Restart it after updating.'
           : 'Prices unavailable right now; retrying.') : unavailable.length ? `No prices from ${unavailable.join(', ')} right now.`
-          : `Click a coin to chart it · ● colour · × remove · +N other exchanges · prices refresh every 15–60 s.`}
+          : `Click a coin to chart it · ● colour · × remove · +N other exchanges · saved to your account.`}
       </footer>
     </aside>
   );

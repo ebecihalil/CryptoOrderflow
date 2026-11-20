@@ -114,3 +114,12 @@ export function getTopTraderLsarSnapshot() {
 export function getTopTraderLsarSummary(timeframe) {
     return topCollector.getSummary(timeframe);
 }
+
+/** Top-trader readings for one coin (for the Super Charts LSAR pane). */
+export function getTopTraderLsarChartReadings(asset) {
+    getTopTraderLsarSnapshot();
+    return TOP_TRADER_EXCHANGES.flatMap(exchange => topCollector.readings(exchange)
+        .filter(reading => reading.asset === asset)
+        .map(reading => ({ asset: reading.asset, exchange, symbol: reading.symbol, points: reading.points ?? [],
+            longWindowPoints: reading.longWindowPoints ?? [], openInterestUsd: reading.openInterestUsd })));
+}

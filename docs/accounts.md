@@ -60,3 +60,10 @@ redeploy. Use a persistent disk and point `ACCOUNTS_DB` at it.
 
 - Email verification and password reset (needs an email-sending service).
 - Paid plans (e.g. Stripe). Accounts are free; a plan field can be added later.
+
+## Saved settings
+
+`GET/POST /api/me/prefs/:key` (keys: `market-list`, `super-charts`) store one
+JSON object per key and account, up to 16 KB, in the `user_prefs` table. Sign-out
+clears this browser's local copies, so the next person on the same computer
+starts from the defaults.

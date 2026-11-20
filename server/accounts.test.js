@@ -99,3 +99,35 @@ test("expired sessions stop working", async () => {
   assert.equal(accounts.userForToken(token), null);
   accounts.close();
 });
+
+test("saved settings per account: allowed keys only, objects only, size-limited, private per user", async () => {
+  const accounts = createAccountService({ file: ":memory:" });
+  const a = await accounts.signup("prefs-a@example.com", "password-123");
+  const b = await accounts.signup("prefs-b@example.com", "password-123");
+  assert.equal(accounts.getPref(a.user.id, "market-list"), null);
+  accounts.setPref(a.user.id, "market-list", { slots: ["bybit", null], colors: { "bybit:BTCUSDT": "blue" } });
+  assert.deepEqual(accounts.getPref(a.user.id, "market-list").slots, ["bybit", null]);
+  assert.equal(accounts.getPref(b.user.id, "market-list"), null, "another account never sees it");
+  accounts.setPref(a.user.id, "market-list", { slots: ["okx"] });
+  assert.deepEqual(accounts.getPref(a.user.id, "market-list"), { slots: ["okx"] }, "saving replaces");
+  assert.throws(() => accounts.getPref(a.user.id, "other"), e => e.status === 404);
+  assert.throws(() => accounts.setPref(a.user.id, "market-list", ["x"]), e => e.status === 400);
+  assert.throws(() => accounts.setPref(a.user.id, "market-list", { big: "x".repeat(20_000) }), e => e.status === 413);
+  accounts.close();
+});
+
+test("settings routes require sign-in", async () => {
+  const accounts = createAccountService({ file: ":memory:" });
+  const app = express(); app.use(express.json()); app.use("/api", createAccountRouter({ accounts }));
+  const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}/api`;
+  try {
+    assert.equal((await fetch(`${base}/me/prefs/market-list`)).status, 401);
+    const signup = await fetch(`${base}/auth/signup`, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "prefs-route@example.com", password: "password-123" }) });
+    const cookie = signup.headers.get("set-cookie").split(";")[0];
+    const saved = await fetch(`${base}/me/prefs/market-list`, { method: "POST", headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ value: { oneRow: false } }) });
+    assert.equal(saved.status, 200);
+    assert.deepEqual((await (await fetch(`${base}/me/prefs/market-list`, { headers: { cookie } })).json()).value, { oneRow: false });
+  } finally { server.close(); accounts.close(); }
+});

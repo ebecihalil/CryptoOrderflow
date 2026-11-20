@@ -14,7 +14,7 @@ export function readCookie(header, name) {
 }
 
 /**
- * /api/auth/* and /api/me/watchlist. Mutations must come from this site
+ * /api/auth/*, /api/me/watchlist and /api/me/prefs/:key. Mutations must come from this site
  * (Origin check) as JSON; the session cookie is HttpOnly + SameSite=Lax.
  */
 export function createAccountRouter({ accounts, limiter = createAttemptLimiter(), emailLimiter = createAttemptLimiter() }) {
@@ -90,6 +90,13 @@ export function createAccountRouter({ accounts, limiter = createAttemptLimiter()
   }));
   router.delete("/me/watchlist/:coin", guard((req, res) => {
     res.json({ coins: accounts.removeWatch(requireUser(req).id, req.params.coin) });
+  }));
+  // Saved settings for signed-in users (market list colours, filters, exchange priority).
+  router.get("/me/prefs/:key", guard((req, res) => {
+    res.json({ value: accounts.getPref(requireUser(req).id, req.params.key) });
+  }));
+  router.post("/me/prefs/:key", guard((req, res) => {
+    res.json({ value: accounts.setPref(requireUser(req).id, req.params.key, req.body?.value) });
   }));
   return router;
 }

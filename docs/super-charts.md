@@ -113,6 +113,11 @@ from the defaults.
 
 ## Market list
 
+Signed-out visitors see a locked panel with a blue Sign in button (it opens the
+normal Sign in page, which links to "Create a free account"). Once signed in,
+the list's colours, removed coins, filters and exchange priority are saved to
+the account (`GET/POST /api/me/prefs/market-list`) and follow you to any device.
+
 The right side of Super Charts lists every USDT perpetual on Binance, Bybit,
 OKX, Gate.io, Bitget, MEXC and BingX (the same coin on several exchanges is
 listed once per exchange) with last price, 24h change and 24h change %.
@@ -153,3 +158,33 @@ Estimate page. Available on 5m, 15m, 30m, 1h, 4h and 1D.
 | Perpetual / Spot CVD, Aggressive Volume Bubbles | 10 (Binance, Bybit, OKX, Gate.io, MEXC, Bitget, BingX, KuCoin, Kraken, HTX) |
 | Aggregated volume, Liquidity Zones | up to 7 (Binance, OKX, Gate.io, Bybit, Bitget, MEXC, BingX); a venue whose gaps would cut over 20% of the matched history is left out for that coin |
 | Leverage Estimate | 4 (Binance, OKX, Gate.io, Bybit: the venues publishing top-trader ratios) |
+| Global Long Short Account Ratio | 6 (Binance, Bybit, OKX, Gate.io, Bitget, Toobit: every venue publishing an all-accounts ratio) |
+| Top Trader Long Short Account Ratio | 3 (Binance, OKX, Gate.io: the venues publishing a top-trader account ratio) |
+
+## Your setup follows your account
+
+Indicators are not tied to a coin: the selected technical and orderflow
+indicators, their settings, the timeframe, volume options and favourite
+timeframes stay the same when you switch coins, until you remove them
+(`src/lib/chart-settings-store.js`). Signed in, this setup and the market list
+are saved to the account (`/api/me/prefs/super-charts`, `/api/me/prefs/market-list`)
+and load on any device. Signing out returns this browser to the defaults
+(RSI + Liquidity Zones, 1h; recent coins and chart zoom cleared; language and
+theme kept). Signing in again brings everything back.
+
+## Long Short Account Ratio panes
+
+Orderflow Indicators → Global / Top Trader Long Short Account Ratio add a pane
+with the ratio (long accounts ÷ short accounts; dashed line at 1.0) aggregated
+across exchanges, weighted by each contract's USD open interest — the same
+method as the LSAR pages. `GET /api/indicators/lsar-chart?asset=&timeframe=&kind=global|top`
+(`server/lsarChart.js`). Exchanges publish 5-minute history (about a day) and
+hourly history (about 12 days), so the panes cover 5m–1D. A candle is shown
+only when exchanges holding at least 80% of the OI have a reading.
+
+## Sign-in
+
+Super Charts requires a free account. Signed-out visitors see the sign-in
+form with example pictures of the main indicators and the exchange list
+(`src/components/super-charts-gate.tsx`; pictures are drawn from fixed sample
+data and labelled as examples).

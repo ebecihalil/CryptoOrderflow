@@ -12,6 +12,7 @@ import {
 } from '@/hooks/use-funding-indicator';
 import { useCvdIndicator, type CvdAnchor, type CvdMarket, type CvdPayload, type CvdTimeframe } from '@/hooks/use-cvd-indicator';
 import { useLeverageEstimate, type LeverageTimeframe } from '@/hooks/use-leverage-estimate';
+import { LSAR_CHART_FRAMES, useLsarChart } from '@/hooks/use-lsar-chart';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useOiDriver, type OiDriverSettings } from '@/hooks/use-oi-driver';
 import { OiIndicatorControls } from '@/components/oi-indicator-controls';
@@ -19,11 +20,11 @@ import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
 import { DEFAULT_TECHNICAL_SETTINGS, type TechnicalSettings } from '@/lib/technical-indicators';
-import { useCoinChartSetting } from '@/hooks/use-coin-chart-setting';
+import { useChartSetting } from '@/hooks/use-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
 /** Leverage Estimate exists on these chart timeframes (24h = 1D). */
 const LEVERAGE_FRAMES: Partial<Record<string, LeverageTimeframe>> = { '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '24h': '1d' };
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
@@ -89,21 +90,21 @@ const STUDY_SETTING_KEYS: Partial<Record<string, Array<keyof TechnicalSettings>>
 
 function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, expanded = false, onToggleExpanded }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
-  const [timeframe, setTimeframe] = useCoinChartSetting<LiquidityTimeframe>(asset, 'timeframe', '1h',
+  const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>('timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
   // 1s–30s candles are built from live trades of the selected contract only.
   const secondsMode = isSecondTimeframe(timeframe);
-  const [storedVolumeBasis, setVolumeBasis] = useCoinChartSetting<LiquidityVolumeMode>(asset, 'volumeBasis', 'aggregated',
+  const [storedVolumeBasis, setVolumeBasis] = useChartSetting<LiquidityVolumeMode>('volumeBasis', 'aggregated',
     value => value === 'single' || value === 'aggregated');
   const volumeBasis: LiquidityVolumeMode = secondsMode ? 'single' : storedVolumeBasis;
-  const [showVolume, setShowVolume] = useCoinChartSetting(asset, 'showVolume', true);
-  const [technicalSettings, setTechnicalSettings] = useCoinChartSetting<TechnicalSettings>(asset, 'technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
+  const [showVolume, setShowVolume] = useChartSetting('showVolume', true);
+  const [technicalSettings, setTechnicalSettings] = useChartSetting<TechnicalSettings>('technicalSettings', { ...DEFAULT_TECHNICAL_SETTINGS });
   // Parameters for the popular-indicator registry (Ichimoku, Keltner, ...), saved per coin.
-  const [extraSettings, setExtraSettings] = useCoinChartSetting<Record<string, Record<string, number>>>(asset, 'extraIndicatorSettings', {},
+  const [extraSettings, setExtraSettings] = useChartSetting<Record<string, Record<string, number>>>('extraIndicatorSettings', {},
     value => !!value && typeof value === 'object' && !Array.isArray(value));
-  const [liquiditySettings, setLiquiditySettings] = useCoinChartSetting(asset, 'liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
-  const [zoneColors, setZoneColors] = useCoinChartSetting(asset, 'zoneColors', DEFAULT_ZONE_COLORS);
-  const [oiDriverSettings, setOiDriverSettings] = useCoinChartSetting<OiDriverSettings>(asset, 'oiDriverSettings',
+  const [liquiditySettings, setLiquiditySettings] = useChartSetting('liquiditySettings', DEFAULT_LIQUIDITY_SETTINGS);
+  const [zoneColors, setZoneColors] = useChartSetting('zoneColors', DEFAULT_ZONE_COLORS);
+  const [oiDriverSettings, setOiDriverSettings] = useChartSetting<OiDriverSettings>('oiDriverSettings',
     DEFAULT_OI_DRIVER_SETTINGS,
     value => !!value && typeof value === 'object' && typeof value.showTotals === 'boolean' &&
       typeof value.stateColors === 'boolean' && typeof value.showLsar === 'boolean');
@@ -115,6 +116,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   const hasOiDriver = indicators.includes('oi-driver') && !secondsMode;
   const leverageFrame = LEVERAGE_FRAMES[timeframe];
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
+  const lsarFrameOk = LSAR_CHART_FRAMES.includes(timeframe);
+  const hasGlobalLsar = indicators.includes('global-lsar') && lsarFrameOk;
+  const hasTopLsar = indicators.includes('top-lsar') && lsarFrameOk;
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -143,22 +147,22 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
   const liquidityCandles = volumeBasis === 'single' ? candles : contiguousTail(aggregateVolumes, timeframe);
   const liquidity = useMemo(() => calculateLiquidityZones(liquidityCandles, liquiditySettings), [liquidityCandles, liquiditySettings]);
   const current = candles.at(-1);
-  const [fundingWindow, setFundingWindow] = useCoinChartSetting<FundingIndicatorWindow>(asset, 'fundingWindow', '7d',
+  const [fundingWindow, setFundingWindow] = useChartSetting<FundingIndicatorWindow>('fundingWindow', '7d',
     value => ['1d', '7d', '30d'].includes(String(value)));
-  const [fundingMethod, setFundingMethod] = useCoinChartSetting<FundingIndicatorMethod>(asset, 'fundingMethod', 'mean',
+  const [fundingMethod, setFundingMethod] = useChartSetting<FundingIndicatorMethod>('fundingMethod', 'mean',
     value => ['mean', 'median', 'weighted'].includes(String(value)));
-  const [fundingMode, setFundingMode] = useCoinChartSetting<'settled' | 'recordedLive'>(asset, 'fundingMode', 'settled',
+  const [fundingMode, setFundingMode] = useChartSetting<'settled' | 'recordedLive'>('fundingMode', 'settled',
     value => value === 'settled' || value === 'recordedLive');
-  const [fundingThreshold, setFundingThreshold] = useCoinChartSetting(asset, 'fundingThreshold', 0.08);
-  const [perpetualAnchor, setPerpetualAnchor] = useCoinChartSetting<CvdAnchor>(asset, 'perpetualAnchor', '1w',
+  const [fundingThreshold, setFundingThreshold] = useChartSetting('fundingThreshold', 0.08);
+  const [perpetualAnchor, setPerpetualAnchor] = useChartSetting<CvdAnchor>('perpetualAnchor', '1w',
     value => CVD_ANCHORS.some(anchor => anchor.value === value));
-  const [spotAnchor, setSpotAnchor] = useCoinChartSetting<CvdAnchor>(asset, 'spotAnchor', '1w',
+  const [spotAnchor, setSpotAnchor] = useChartSetting<CvdAnchor>('spotAnchor', '1w',
     value => CVD_ANCHORS.some(anchor => anchor.value === value));
-  const [bubbleMarket, setBubbleMarket] = useCoinChartSetting<AggressiveBubblesMarket>(asset, 'bubbleMarket', 'both',
+  const [bubbleMarket, setBubbleMarket] = useChartSetting<AggressiveBubblesMarket>('bubbleMarket', 'both',
     value => ['spot', 'perpetual', 'both'].includes(String(value)));
   // Default 'auto': 3x the average bubble for this coin/timeframe/market. A typed
   // value stays until the indicator is removed, then it is back to auto.
-  const [bubbleMinValue, setBubbleMinValue] = useCoinChartSetting<BubbleMinimum>(asset, 'bubbleMinimum', 'auto',
+  const [bubbleMinValue, setBubbleMinValue] = useChartSetting<BubbleMinimum>('bubbleMinimum', 'auto',
     value => value === 'auto' || Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 100_000_000);
   const [bubbleMinDraft, setBubbleMinDraft] = useState<string | null>(null);
   const [bubbleMinError, setBubbleMinError] = useState<string | null>(null);
@@ -198,6 +202,14 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
     ? aggressiveBubbles.payload : null;
   const oiDriver = useOiDriver(canonicalAsset, timeframe, exchange, nativeSymbol, candles, hasOiDriver, oiDriverSettings);
   const leverage = useLeverageEstimate(canonicalAsset, leverageFrame ?? '1h', hasLeverage);
+  const globalLsar = useLsarChart(canonicalAsset, timeframe, 'global', hasGlobalLsar);
+  const topLsar = useLsarChart(canonicalAsset, timeframe, 'top', hasTopLsar);
+  const lsarPanes = useMemo(() => [
+    ...(hasGlobalLsar ? [{ key: 'global-lsar', label: 'Global L/S Account Ratio', color: '#26a69a',
+      points: globalLsar.data?.asset === canonicalAsset && globalLsar.data.timeframe === timeframe ? globalLsar.data.points : [] }] : []),
+    ...(hasTopLsar ? [{ key: 'top-lsar', label: 'Top Trader L/S Account Ratio', color: '#f59e0b',
+      points: topLsar.data?.asset === canonicalAsset && topLsar.data.timeframe === timeframe ? topLsar.data.points : [] }] : []),
+  ], [hasGlobalLsar, hasTopLsar, globalLsar.data, topLsar.data, canonicalAsset, timeframe]);
   const leveragePayload = hasLeverage && leverage.data?.asset === canonicalAsset && leverage.data.timeframe === leverageFrame ? leverage.data : null;
 
   const commitBubbleMinimum = () => {
@@ -441,6 +453,10 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
         {(nativeFeed.error || nativePayloadCurrent && nativeFeed.payload?.error) && <span className="is-warning">{nativeFeed.error ?? nativeFeed.payload?.error}</span>}
         <span className="native-native-symbol">Native {contract.symbol}{contract.priceDivisor !== 1 ? ` · ×${contract.priceDivisor} contract` : ''}</span>
       </div>
+      {indicators.some((id) => id === 'global-lsar' || id === 'top-lsar') && !lsarFrameOk && <p className="native-seconds-note" role="status">
+        Long Short Account Ratio is available on 5m, 15m, 30m, 1h, 4h and 1D charts (exchanges publish it every 5 minutes).</p>}
+      {hasTopLsar && topLsar.isSuccess && !topLsar.data.points.length && <p className="native-seconds-note" role="status">
+        No top-trader ratio for {canonicalAsset} yet: Binance, OKX and Gate.io publish it only for some coins, and the server may still be collecting it.</p>}
       {indicators.includes('leverage') && !leverageFrame && <p className="native-seconds-note" role="status">
         Leverage Estimate is available on 5m, 15m, 30m, 1h, 4h and 1D charts.</p>}
       {hasLeverage && leverage.error && !leveragePayload && <p className="native-volume-warning" role="alert">Leverage Estimate: {leverage.error.message}</p>}
@@ -485,7 +501,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, e
             perpetualCvdEnabled={hasPerpetualCvd} spotCvdEnabled={hasSpotCvd}
              aggressiveBubbles={bubblePayload} aggressiveBubblesEnabled={hasAggressiveBubbles}
              oiDriver={oiDriver.payload} oiDriverEnabled={hasOiDriver} priceDivisor={contract.priceDivisor || 1}
-             leverageRows={leveragePayload?.rows ?? null} leverageEnabled={hasLeverage} />
+             leverageRows={leveragePayload?.rows ?? null} leverageEnabled={hasLeverage} lsarPanes={lsarPanes} />
           : <div className="native-chart-error" role="alert"><strong>{nativeFeed.error ? 'Native exchange feed unavailable' : 'No matching native candle history'}</strong>
             <span>{nativeFeed.error ?? 'The selected native contract has no candle history for this resolution.'}</span>
             <button type="button" onClick={nativeFeed.refresh}><RotateCw size={13} /> Retry price feed</button></div>}
