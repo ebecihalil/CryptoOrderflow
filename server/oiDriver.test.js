@@ -39,7 +39,7 @@ test("OI decreases distinguish a significant liquidation from a below-threshold 
   assert.match(calculateOiDriver(common).at(-1).state, /coverage missing/);
 });
 
-test("aggregate OI candles require a matched previous cohort and break when venue membership changes", () => {
+test("aggregate OI candles are continuous: each opens at the previous close, no jump when an exchange drops, no gaps", () => {
   const contracts = [
     { key: "binance:BTCUSDT", points: [
       { timestamp: 300_000, oiCoin: 10 }, { timestamp: 600_000, oiCoin: 11 }, { timestamp: 900_000, oiCoin: 12 },
@@ -50,11 +50,18 @@ test("aggregate OI candles require a matched previous cohort and break when venu
   ];
   const candles = buildOiDriverCandles(contracts, 300_000, 1_200_000);
   assert.equal(candles.length, 2);
-  assert.equal(candles[0].open, 30);
-  assert.equal(candles[0].close, 32);
-  assert.equal(candles[1].segmentStart, true);
-  assert.equal(candles[1].open, 11);
-  assert.equal(candles[1].close, 12);
+  assert.ok(Math.abs(candles[1].open - candles[0].close) < 1e-9, "opens at the previous close");
+  assert.ok(Math.abs(candles[1].close - 12) < 1e-9, "latest candle equals the real current total");
+  assert.ok(Math.abs(candles[0].close / candles[0].open - 32 / 30) < 1e-9, "each candle keeps its own move");
+  assert.ok(Math.abs(candles[1].close / candles[1].open - 12 / 11) < 1e-9);
+  // A missing candle in between becomes a flat candle (no gap).
+  const gappy = [{ key: "binance:BTCUSDT", points: [
+    { timestamp: 300_000, oiCoin: 10 }, { timestamp: 600_000, oiCoin: 11 },
+    { timestamp: 1_200_000, oiCoin: 11 }, { timestamp: 1_500_000, oiCoin: 13 } ] }];
+  const filled = buildOiDriverCandles(gappy, 300_000, 1_800_000);
+  const times = filled.map(bar => bar.time);
+  assert.deepEqual(times.slice(1).map((time, index) => time - times[index]), times.slice(1).map(() => 300));
+  assert.ok(filled.some(bar => bar.filled));
 });
 
 test("driver service rejects unverified contracts and assembles only supplied exchange observations", () => {

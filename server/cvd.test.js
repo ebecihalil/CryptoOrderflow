@@ -315,3 +315,21 @@ test("an active Binance websocket disconnects as soon as the shared gate reports
   handle.stop();
   assert.equal(onCooldown, undefined);
 });
+
+test("a rejected websocket handshake with a synchronous gate does not crash the server", async () => {
+  const sockets = [];
+  class FakeSocket extends EventEmitter {
+    constructor() { super(); this.readyState = 1; sockets.push(this); }
+    send() {} close() { this.emit("close"); } terminate() { this.emit("close"); } ping() {}
+  }
+  const inspected = [];
+  const streams = createCvdStreamFactory({ Socket: FakeSocket, now: () => T, wait: async () => {},
+    // exchangeRequestGate.inspect returns nothing (not a promise).
+    gates: { okx: { enter: async () => {}, isCoolingDown: false, inspect: response => { inspected.push(response.status); } } } });
+  const handle = await streams.start({ exchange: "okx", market: "perpetual", symbol: "BTC-USDT-SWAP" }, () => {}, () => {});
+  await new Promise(r => setImmediate(r));
+  const response = Object.assign(new EventEmitter(), { statusCode: 429, headers: { "retry-after": "5" }, resume() {} });
+  assert.doesNotThrow(() => sockets[0].emit("unexpected-response", {}, response));
+  assert.deepEqual(inspected, [429]);
+  handle.stop();
+});
