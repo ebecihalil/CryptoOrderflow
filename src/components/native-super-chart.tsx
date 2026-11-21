@@ -915,7 +915,6 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
             <div key="md-box" className="md-box" style={{ top: pane.top + pane.height - 6 }} data-testid="market-driver-box">
               <div className="md-box-state" style={{ color: bar.stateColor }}>{bar.driverTop}</div>
               {bar.driverBottom && <div className="md-box-note" style={{ color: bar.stateColor }}>{bar.driverBottom}</div>}
-              {bar.buyPct !== null && <div className="md-box-row"><span className="is-buy">Buy {bar.buyPct.toFixed(1)}%</span><span className="is-sell">Sell {(bar.sellPct ?? 0).toFixed(1)}%</span></div>}
               {(bar.pullback1 || bar.pullback2) && <div className="md-box-row is-pullback">Pullback {bar.pullback2 ? '20%' : '10%'}</div>}
               {totals && <dl className="md-box-totals">
                 <dt>Total OI</dt><dd>{totals.oiCoin ? compactCvd(totals.oiCoin) : '-'}</dd>

@@ -30,6 +30,7 @@ import { createLiquidationService } from "./server/liquidationService.js";
 import { ALWAYS_RECORD } from "./server/alwaysRecord.js";
 import { candleService } from "./server/chartCandles.js";
 import { getOiChartInputs } from "./server/openInterestMarketData.js";
+fundingIndicatorService.useOiHistory((asset, exchanges) => getOiChartInputs(asset, exchanges).long);
 import { OI_DRIVER_EXCHANGES } from "./server/oiDriverService.js";
 
 // kind=global (default): all-accounts LSAR. kind=top: top-trader accounts LSAR.

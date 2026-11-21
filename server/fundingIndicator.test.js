@@ -34,7 +34,7 @@ test("live feed returns all three methods immediately and loads settled history 
   const second = f.service.get({ asset: "BTC" });
   assert.equal(second.history.sourcesReady, 2);
   assert.ok(second.history.points.some(point => point.meanPct === -0.005));
-  assert.ok(second.history.points.every(point => !("weightedPct" in point)));
+  assert.ok(second.history.points.at(-1).live); // newest bar is the live snapshot
   assert.equal(f.calls.length, 2);
 });
 
@@ -85,7 +85,7 @@ test("native chart combines Liquidity Zones and funding without a hosted widget"
   assert.match(picker, /Aggregated Funding Rate/);
   assert.match(picker, /<NativeChartWorkspace/);
   assert.match(ui, /useChartSetting\('fundingThreshold', 0\.08\)/);
-  assert.match(ui, /props\.method === 'weighted' \? 'recordedLive'/);
+  assert.match(ui, /useChartSetting<FundingIndicatorMethod>\('fundingCalc', 'weighted'/);
   assert.match(ui, /8-hour/);
   assert.match(ui, /payload\.historyWindow === props\.window/);
   const hook = readFileSync(new URL("../src/hooks/use-funding-indicator.ts", import.meta.url), "utf8");

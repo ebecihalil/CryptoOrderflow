@@ -28,6 +28,9 @@ export function thinObservations(points, nowSeconds) {
 export function createFundingIndicatorService({
   inventory = getPerpetualInventory, fetchHistory = fetchFundingHistory, request = requestJson,
   gates = requestGates, now = Date.now, storageDir = root, timers = true,
+  // Per exchange recorded OI history (coins, 5-minute steps) used to weight past bars.
+  // server.js connects it to the OI screener (useOiHistory); without it past bars use today's OI shares.
+  oiHistory = null,
 } = {}) {
   const histories = new Map(), pending = new Map(), observations = new Map(), active = new Map();
   const loaded = new Set(), persisted = new Map();
@@ -146,7 +149,7 @@ export function createFundingIndicatorService({
         : key && pending.has(key) ? "loading" : "unavailable";
       if (hasPayments) {
         try {
-          if (normalizedSettledRates(entry).length) chartEntries.push(entry);
+          if (normalizedSettledRates(entry).length) chartEntries.push({ entry, exchange: source.exchange, oiUsd: source.oiUsd });
           else historyStatus = "unavailable";
         }
         catch { historyStatus = "unavailable"; }
@@ -156,7 +159,22 @@ export function createFundingIndicatorService({
           : historyStatus === "partial" ? "Only the available settled-payment history is plotted."
             : historyStatus === "unavailable" ? "Settled payments are not available yet." : undefined };
     });
-    const points = settledFundingChart(chartEntries, from / 1000, time, timeframe);
+    // OI at each bar from the recorded per-exchange history (nearest 5-minute step at or before the bar).
+    let long = {};
+    try { long = chartEntries.length && oiHistory ? oiHistory(asset, chartEntries.map(item => item.exchange)) ?? {} : {}; } catch { long = {}; }
+    const cursors = new Map();
+    const oiAt = (exchange, seconds) => {
+      const list = long[exchange];
+      if (!list?.length) return null;
+      const ms = seconds * 1000;
+      let index = cursors.get(exchange) ?? -1;
+      if (index >= 0 && list[index].timestamp > ms) index = -1;
+      while (index + 1 < list.length && list[index + 1].timestamp <= ms) index++;
+      cursors.set(exchange, index);
+      const point = list[index];
+      return point && ms - point.timestamp <= 3600_000 ? point.oiCoin : null;
+    };
+    const points = settledFundingChart(chartEntries, from / 1000, time, timeframe, { oiAt, live: current });
     const observed = observations.get(asset) ?? [];
     return { asset, generatedAt: new Date(now()).toISOString(), isRefreshing: pending.size > 0 || Object.values(states).some(state => state.running),
       basis: "normalized8h", current, sources: output,
@@ -166,6 +184,6 @@ export function createFundingIndicatorService({
         startedAt: observed.length ? new Date(observed[0].time * 1000).toISOString() : null },
       historyWindow: window, timeframe };
   }
-  return { get, stop: () => { if (timer) clearInterval(timer); timer = null; } };
+  return { get, useOiHistory: source => { oiHistory = source; }, stop: () => { if (timer) clearInterval(timer); timer = null; } };
 }
 export const fundingIndicatorService = createFundingIndicatorService();

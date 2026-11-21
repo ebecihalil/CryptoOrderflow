@@ -87,21 +87,43 @@ export function normalizedSettledRates(entry) {
   return result;
 }
 
-/** Latest known settled rate at each UTC bar, not historical funding forecasts. */
-export function settledFundingChart(entries, from, to, timeframe) {
-  const step = INDICATOR_STEPS[timeframe];
-  const series = entries.map(normalizedSettledRates).filter(points => points.length);
-  if (!series.length) return [];
+/**
+ * Latest known settled rate at each UTC bar, not historical funding forecasts.
+ * Entries are settled-payment histories, optionally tagged `{entry, exchange, oiUsd}`.
+ * OI-weighted values use each exchange's open interest AT THAT TIME (coins, from the
+ * recorded long OI history, `oiAt(exchange, seconds)`); when that is missing for any
+ * contributing exchange the bar uses today's OI shares instead (`oiUsd`).
+ * `live` (the current snapshot) replaces the newest bar, so the line ends at the live rate.
+ */
+export function settledFundingChart(entries, from, to, timeframe, { oiAt = null, live = null } = {}) {
+  const tagged = entries.map(item => item?.entry ? item : { entry: item, exchange: null, oiUsd: null });
+  const series = tagged.map(item => ({ ...item, points: normalizedSettledRates(item.entry) })).filter(item => item.points.length);
+  if (!series.length && !live) return [];
   const indices = series.map(() => -1), result = [];
+  const lastBucket = bucketStart(timeframe, to);
   for (let time = firstBucketFrom(timeframe, from); time <= to; time = nextBucket(timeframe, time)) {
+    if (time === lastBucket && live && live.sourceCount > 0) {
+      result.push({ time, meanPct: live.meanPct, medianPct: live.medianPct, weightedPct: live.weightedPct ?? live.meanPct,
+        sourceCount: live.sourceCount, live: true });
+      continue;
+    }
     const rates = [];
-    series.forEach((points, index) => {
+    series.forEach((item, index) => {
+      const points = item.points;
       while (indices[index] + 1 < points.length && points[indices[index] + 1].time <= time) indices[index]++;
       const point = points[indices[index]];
-      if (point && time - point.time <= point.periodSeconds + 60) rates.push({ ratePct: point.ratePct });
+      if (point && time - point.time <= point.periodSeconds + 60) rates.push({ ratePct: point.ratePct, exchange: item.exchange, oiUsd: item.oiUsd });
     });
     const values = aggregateFundingRates(rates);
-    result.push({ time, meanPct: values.meanPct, medianPct: values.medianPct, sourceCount: values.sourceCount });
+    let weightedPct = null;
+    if (rates.length) {
+      const then = oiAt ? rates.map(rate => rate.exchange ? oiAt(rate.exchange, time) : null) : [];
+      const useThen = then.length === rates.length && then.every(value => finite(value) && value > 0);
+      const weights = useThen ? then : rates.map(rate => finite(rate.oiUsd) && rate.oiUsd > 0 ? rate.oiUsd : 0);
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      weightedPct = total > 0 ? rates.reduce((sum, rate, k) => sum + rate.ratePct * weights[k], 0) / total : values.meanPct;
+    }
+    result.push({ time, meanPct: values.meanPct, medianPct: values.medianPct, weightedPct, sourceCount: values.sourceCount });
   }
   return result;
 }

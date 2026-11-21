@@ -87,7 +87,25 @@ test("mean/median settled plots have no historical OI weights, lookahead or endl
   assert.equal(result[0].meanPct, null);
   assert.equal(result[1].meanPct, 0.16);
   assert.equal(result.at(-1).meanPct, null);
-  assert.ok(result.every(point => !("weightedPct" in point)));
+  // No OI known: the weighted value falls back to the mean.
+  assert.equal(result[1].weightedPct, 0.16);
+});
+
+test("settled plot weights each bar by that time's OI, falls back to today's OI, and ends at the live rate", () => {
+  const start = 1800000000;
+  const pay = rates => ({ points: rates.map((ratePct, k) => ({ timestamp: (start + k * 3600) * 1000, ratePct })) });
+  const entries = [
+    { entry: pay([0.01, 0.01, 0.01, 0.01]), exchange: "a", oiUsd: 100 },
+    { entry: pay([0.04, 0.04, 0.04, 0.04]), exchange: "b", oiUsd: 300 },
+  ];
+  const oiAt = (exchange, time) => time === start + 3600 ? (exchange === "a" ? 3 : 1) : null;
+  const live = { meanPct: -1, medianPct: -1, weightedPct: -1.36, sourceCount: 2 };
+  const result = settledFundingChart(entries, start, start + 3 * 3600 + 120, "1h", { oiAt, live });
+  // 1h payments normalized to 8h: 0.08 and 0.32.
+  assert.ok(Math.abs(result[1].weightedPct - (0.08 * 3 + 0.32 * 1) / 4) < 1e-9); // OI at that time
+  assert.ok(Math.abs(result[2].weightedPct - (0.08 * 100 + 0.32 * 300) / 400) < 1e-9); // today's OI shares
+  assert.equal(result.at(-1).weightedPct, -1.36);
+  assert.equal(result.at(-1).live, true);
 });
 
 test("recorded live chart does not backfill pre-tracking history and preserves observation gaps", () => {
