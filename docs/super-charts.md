@@ -314,3 +314,20 @@ the developing session (dashed POC). Settings: market, Buy/Sell or Total,
 sessions to keep (1–7), rows, value area %, width %, left/right placement.
 Sessions are UTC days; the chart's own Volume pane replaces the script's
 vertical volume bars.
+
+## History retention (120 days)
+
+| Data | Full detail | Older (kept until) |
+|---|---|---|
+| CVD / perp & spot flows (`cvdIndicator.js`) | 1-minute, 14 days | 5-minute steps (exact CVD high/low), 120 days |
+| Bubbles / Session Volume Profile (bubble ledger) | 5-minute × 0.05%, 7 days | hourly × 0.25%, 30 days |
+| Liquidations + feed-connected spans | each event, 2 days | 5-minute totals per exchange/side, 120 days |
+| Open interest (`oiLongHistory.js`) | ~30 s samples, 30 hours | 5-minute per-exchange totals, 120 days |
+| Long/short ratios (`lsarChart.js`) | every computed 5m and 1h point | 120 days (exchanges publish ~12 days) |
+| Funding | settled history 122 days; live quotes per minute 7 days | hourly live quotes, 120 days |
+
+Long OI history and order flow are recorded for coins viewed in the last 2 hours
+and, all the time, for the top coins in `ALWAYS_RECORD` (default
+`BTC,ETH,SOL,XRP,DOGE`, max 10; set it as a server environment variable). A
+background job refreshes their ratio and funding history every 10 minutes.
+Recordings are saved every 60 seconds.

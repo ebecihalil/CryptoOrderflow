@@ -82,6 +82,8 @@ export function bubbleThreshold(points, { mode = "auto", multiplier = DEFAULT_VO
 
 export function createAggressiveBubbleLedger({
   market, now = Date.now, retentionSeconds = 7200, maxCells = 12_000, bucketSeconds = 60,
+  // Long history: cells older than this move into hourly cells with 5 merged price bands (0.25%).
+  archiveAfterSeconds = null, archiveBucketSeconds = 3600, archiveBandFactor = 5,
 } = {}) {
   if (![60, 300].includes(bucketSeconds)) throw new Error("Invalid bubble recording bucket.");
   const cells = new Map();
@@ -91,9 +93,28 @@ export function createAggressiveBubbleLedger({
     if (!force && now() - lastPrunedAt < 5000 && cells.size <= maxCells) return;
     lastPrunedAt = now();
     const cutoff = now() / 1000 - retentionSeconds;
-    for (const [key, cell] of cells) if (cell.minute + bucketSeconds <= cutoff) cells.delete(key);
-    while (cells.size > maxCells) {
-      cells.delete(cells.keys().next().value);
+    for (const [key, cell] of cells) if (cell.minute + (cell.archived ? archiveBucketSeconds : bucketSeconds) <= cutoff) cells.delete(key);
+    if (archiveAfterSeconds) {
+      const archiveBefore = now() / 1000 - archiveAfterSeconds;
+      for (const [key, cell] of cells) {
+        if (cell.archived || cell.minute + bucketSeconds > archiveBefore) continue;
+        cells.delete(key);
+        const minute = Math.floor(cell.minute / archiveBucketSeconds) * archiveBucketSeconds;
+        const band = Math.floor(cell.band / archiveBandFactor) * archiveBandFactor;
+        const archiveKey = `a:${minute}:${band}:${cell.side}`;
+        const target = cells.get(archiveKey);
+        if (!target) cells.set(archiveKey, { ...cell, minute, band, archived: true, sources: new Set(cell.sources) });
+        else {
+          target.value += cell.value; target.quantity += cell.quantity; target.tradeCount += cell.tradeCount;
+          cell.sources.forEach(source => target.sources.add(source));
+          target.first = Math.min(target.first, cell.first); target.last = Math.max(target.last, cell.last);
+        }
+      }
+    }
+    if (cells.size > maxCells) {
+      // Over the safety limit: drop the oldest cells first.
+      const ordered = [...cells].sort((a, b) => a[1].minute - b[1].minute);
+      for (const [key] of ordered.slice(0, cells.size - maxCells)) cells.delete(key);
       truncated = true;
     }
   }
@@ -159,16 +180,16 @@ export function createAggressiveBubbleLedger({
         !["buy", "sell"].includes(c.side) || !Number.isFinite(c.value) || c.value <= 0 ||
         !Number.isFinite(c.quantity) || c.quantity <= 0 || !Number.isSafeInteger(c.tradeCount) || c.tradeCount < 1 ||
         !Number.isSafeInteger(c.first) || !Number.isSafeInteger(c.last) || c.first > c.last ||
-        Math.floor(c.first / (archiveStep * 1000)) * archiveStep !== c.minute ||
-        Math.floor(c.last / (archiveStep * 1000)) * archiveStep !== c.minute ||
+        Math.floor(c.first / ((c.archived ? archiveBucketSeconds : archiveStep) * 1000)) * (c.archived ? archiveBucketSeconds : archiveStep) !== c.minute ||
+        Math.floor(c.last / ((c.archived ? archiveBucketSeconds : archiveStep) * 1000)) * (c.archived ? archiveBucketSeconds : archiveStep) !== c.minute ||
         c.last > now() + 5000 || !Array.isArray(c.sources) || !c.sources.length ||
         c.sources.some(s => typeof s !== "string" || allowedSources && !allowedSources.includes(s))) throw new Error("Invalid bubble cell.");
-      if (c.minute + archiveStep <= now() / 1000 - retentionSeconds) continue;
-      const originalKey = `${c.minute}:${c.band}:${c.side}`;
+      if (c.minute + (c.archived ? archiveBucketSeconds : archiveStep) <= now() / 1000 - retentionSeconds) continue;
+      const originalKey = `${c.archived ? "a:" : ""}${c.minute}:${c.band}:${c.side}`;
       if (originalKeys.has(originalKey)) throw new Error("Duplicate bubble cell.");
       originalKeys.add(originalKey);
-      const minute = Math.floor(c.minute / bucketSeconds) * bucketSeconds;
-      const key = `${minute}:${c.band}:${c.side}`;
+      const minute = c.archived ? c.minute : Math.floor(c.minute / bucketSeconds) * bucketSeconds;
+      const key = `${c.archived ? "a:" : ""}${minute}:${c.band}:${c.side}`;
       const existing = restored.get(key);
       if (!existing) restored.set(key, { ...c, minute, sources: new Set(c.sources) });
       else {

@@ -25,6 +25,7 @@ import { createAccountRouter } from "./server/accountRoutes.js";
 import { getLsarChart } from "./server/lsarChart.js";
 import { createPerpLeverageService } from "./server/perpLeverage.js";
 import { aggregatedOiService } from "./server/aggregatedOi.js";
+import { ALWAYS_RECORD } from "./server/alwaysRecord.js";
 import { candleService } from "./server/chartCandles.js";
 import { getOiChartInputs } from "./server/openInterestMarketData.js";
 import { OI_DRIVER_EXCHANGES } from "./server/oiDriverService.js";
@@ -251,6 +252,17 @@ app.get("/api/market/summary", (req, res) => {
   if (!kind) return;
   res.json({ kind, ...(kind === "top" ? getTopTraderLsarSummary(timeframe) : getLsarMarketSummary(timeframe)) });
 });
+
+// Always-recorded top coins: keep their long/short ratio and funding history growing
+// (order flow, liquidations and open interest are recorded by their own collectors).
+const keepTopCoinsRecorded = () => {
+  for (const asset of ALWAYS_RECORD) {
+    for (const kind of ["global", "top"]) { try { getLsarChart({ asset, kind, timeframe: "5m" }); } catch { /* next round */ } }
+    try { fundingIndicatorService.get({ asset, timeframe: "1h", window: "7d" }); } catch { /* next round */ }
+  }
+};
+setTimeout(keepTopCoinsRecorded, 20_000).unref();
+setInterval(keepTopCoinsRecorded, 10 * 60_000).unref();
 
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found." });

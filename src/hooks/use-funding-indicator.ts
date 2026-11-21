@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type FundingIndicatorTimeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '24h' | '1w' | '1mo' | '3mo';
-export type FundingIndicatorWindow = '1d' | '7d' | '30d';
+export type FundingIndicatorWindow = '1d' | '7d' | '30d' | '90d' | '120d';
 export type FundingIndicatorMethod = 'mean' | 'median' | 'weighted';
 export type FundingIndicatorSource = {
   exchange: string;

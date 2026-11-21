@@ -22,6 +22,45 @@ export function cvdAnchorStart(seconds, anchor) {
 export function newCvdMinute(time, gap = false) {
   return { time, delta: 0, high: 0, low: 0, buyValue: 0, sellValue: 0, trades: 0, sources: [], gap };
 }
+/**
+ * Merge a LATER minute record into an earlier one (same compacted bucket): flow adds up and
+ * the CVD high/low stay exact (the later record's extremes are offset by the earlier delta).
+ */
+export function mergeCvdMinute(into, later) {
+  into.high = Math.max(into.high, into.delta + later.high);
+  into.low = Math.min(into.low, into.delta + later.low);
+  into.delta += later.delta;
+  into.buyValue += later.buyValue; into.sellValue += later.sellValue; into.trades += later.trades;
+  for (const source of later.sources ?? []) if (!into.sources.includes(source)) into.sources.push(source);
+  into.gap = !!(into.gap || later.gap);
+  if (later.byExchange) {
+    into.byExchange ??= {};
+    for (const [exchange, [buy, sell]] of Object.entries(later.byExchange)) {
+      const row = into.byExchange[exchange] ??= [0, 0];
+      row[0] += buy; row[1] += sell;
+    }
+  }
+  return into;
+}
+/**
+ * Long history: records older than `olderThan` (unix s) are merged into `step`-second
+ * buckets (default 5 minutes). Recent records keep their 1-minute detail.
+ */
+export function compactCvdMinutes(minutes, olderThan, step = 300) {
+  const old = [...minutes.values()].filter(row => row.time < olderThan && !(row.span >= step)).sort((a, b) => a.time - b.time);
+  let merged = 0;
+  for (const row of old) {
+    const bucket = Math.floor(row.time / step) * step;
+    let target = minutes.get(bucket);
+    if (target === row) { row.span = step; continue; }
+    if (!target) { target = { ...row, time: bucket, sources: [...row.sources], ...(row.byExchange ? { byExchange: Object.fromEntries(Object.entries(row.byExchange).map(([k, v]) => [k, [...v]])) } : {}), span: step };
+      minutes.set(bucket, target); minutes.delete(row.time); merged++; continue; }
+    mergeCvdMinute(target, row);
+    target.span = step;
+    minutes.delete(row.time); merged++;
+  }
+  return merged;
+}
 export function addCvdTrade(minute, trade) {
   if (!["buy", "sell"].includes(trade.side) || !(trade.value > 0 && Number.isFinite(trade.value))) throw new Error("Invalid signed trade.");
   const signed = trade.side === "buy" ? trade.value : -trade.value;

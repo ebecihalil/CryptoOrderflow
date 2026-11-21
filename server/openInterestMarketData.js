@@ -9,6 +9,8 @@ import { fetchOiHistoryWindow, hasOiBackfill, mergeOiPoints } from "./openIntere
 import { volumeSupplement } from "./openInterestVolume.js";
 import { createOiHistoryQueue } from "./oiHistoryQueue.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
+import { createOiLongHistory } from "./oiLongHistory.js";
+import { ALWAYS_RECORD } from "./alwaysRecord.js";
 
 const directory = process.env.OI_HISTORY_DIR ? resolve(process.env.OI_HISTORY_DIR)
     : fileURLToPath(new URL("../.cache/open-interest/", import.meta.url));
@@ -16,6 +18,9 @@ const histories = new Map(), loaded = new Set(), dirty = new Set(), requestedFra
 const nativeHistories = new Map();
 let timer = null, saveTimer = null;
 const retention = 30 * 3600_000;
+// 120-day, 5-minute per-exchange totals for viewed and always-recorded coins.
+const longHistory = createOiLongHistory({ directory: join(directory, "long"), always: ALWAYS_RECORD });
+let lastLongRecord = 0;
 function mergePoints(key, incoming, now) {
     histories.set(key, mergeOiPoints(histories.get(key) ?? [], incoming, now));
 }
@@ -94,8 +99,21 @@ function schedule(states, now) {
         .sort((a, b) => Number(isCryptoAsset(b.asset)) - Number(isCryptoAsset(a.asset)) || b.oiUsd - a.oiUsd);
     queue.schedule(readings);
 }
+function contractsFor(states, asset, now, exchanges = null) {
+    return Object.entries(states).filter(([exchange]) => exchange !== "cme" && (!exchanges || exchanges.includes(exchange)))
+        .flatMap(([exchange, state]) => state.readings
+            .filter(item => item.asset === asset && now - item.fetchedAt <= 900_000 && coinSize(item) !== null)
+            .map(item => ({ ...item, exchange, key: `${exchange}:${item.symbol}`, oiCoin: coinSize(item),
+                points: [...(histories.get(`${exchange}:${item.symbol}`) ?? [])] })));
+}
+function recordLong(states, now) {
+    if (now - lastLongRecord < 300_000) return;
+    lastLongRecord = now;
+    for (const asset of longHistory.tracked()) longHistory.record(asset, contractsFor(states, asset, now));
+    longHistory.save();
+}
 function backgroundTick() {
-    try { const now = Date.now(); schedule(inventoryAndSamples(now), now); }
+    try { const now = Date.now(), states = inventoryAndSamples(now); schedule(states, now); recordLong(states, now); }
     catch (error) { console.warn("OI background collection failed:", error.message); }
 }
 export function getOpenInterestSnapshot(timeframe = "1h", selection = [], comparison = "candle") {
@@ -128,11 +146,9 @@ export function getOpenInterestSnapshot(timeframe = "1h", selection = [], compar
 export function getOiChartInputs(asset, exchanges) {
     const snapshot = getOpenInterestSnapshot("1h");
     const now = Date.now(), states = inventoryAndSamples(now);
-    const contracts = Object.entries(states).filter(([exchange]) => exchanges.includes(exchange))
-        .flatMap(([exchange, state]) => state.readings
-            .filter(item => item.asset === asset && now - item.fetchedAt <= 900_000 && coinSize(item) !== null)
-            .map(item => ({ ...item, key: `${exchange}:${item.symbol}`, oiCoin: coinSize(item),
-                points: [...(histories.get(`${exchange}:${item.symbol}`) ?? [])] })));
-    return { contracts, sources: Object.entries(states).filter(([exchange]) => exchanges.includes(exchange))
+    longHistory.track(asset);
+    const contracts = contractsFor(states, asset, now, exchanges);
+    const long = Object.fromEntries(Object.entries(longHistory.series(asset)).filter(([exchange]) => exchanges.includes(exchange)));
+    return { contracts, long, sources: Object.entries(states).filter(([exchange]) => exchanges.includes(exchange))
         .map(([exchange, state]) => ({ exchange, status: state.status })), refreshing: snapshot.isRefreshing };
 }

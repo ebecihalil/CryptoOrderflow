@@ -302,7 +302,20 @@ export function createPerpLeverageService({ cvd, oiInputs, candles: candleSource
     const price = await candleSource.get({ exchange: query.exchange, symbol: query.symbol, timeframe });
     const spotMinutes = cvd.flowMinutes(asset, "spot"), perpMinutes = cvd.flowMinutes(asset, "perpetual");
     const oi = oiInputs(asset, oiExchanges);
-    const oiContracts = oi.contracts.map(contract => ({ exchange: contract.exchange ?? String(contract.key).split(":")[0], points: contract.points }));
+    // Open interest per exchange: the 120-day 5-minute history plus the live total now.
+    const live = new Map();
+    for (const contract of oi.contracts) {
+      const exchange = contract.exchange ?? String(contract.key).split(":")[0];
+      const row = live.get(exchange) ?? { oiCoin: 0, timestamp: Infinity, contracts: [] };
+      row.oiCoin += contract.oiCoin || 0; row.timestamp = Math.min(row.timestamp, contract.fetchedAt ?? Date.now()); row.contracts.push(contract);
+      live.set(exchange, row);
+    }
+    const oiContracts = [...live].map(([exchange, row]) => {
+      const long = oi.long?.[exchange] ?? [];
+      // Without long history yet, fall back to the recent per-contract samples.
+      if (!long.length) return row.contracts.map(contract => ({ exchange, points: contract.points }));
+      return [{ exchange, points: [...long, ...(row.timestamp > (long.at(-1)?.timestamp ?? 0) ? [{ timestamp: row.timestamp, oiCoin: row.oiCoin }] : [])] }];
+    }).flat();
     const liquidation = cvd.liquidationSnapshot(asset);
     let fundingPoints = [];
     try { fundingPoints = funding?.get({ asset, timeframe, window: "7d" })?.history?.points ?? []; } catch { fundingPoints = []; }
