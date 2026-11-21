@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, RotateCcw, Save, Settings2, X } from 'lucide-react';
+import { Check, Eye, EyeOff, RotateCcw, Save, Settings2, X } from 'lucide-react';
 import { helpFor } from '@/lib/indicator-help';
 import '@/styles/chart-pane-legends.css';
 
@@ -20,13 +20,16 @@ type Props = {
   settings: Record<string, ReactNode | undefined>;
   actions?: Record<string, LayerActions>;
   onRemove?: (key: string) => void;
+  /** Layers currently hidden (kept on the chart, not drawn). */
+  hidden?: string[];
+  onToggleHidden?: (key: string) => void;
 };
 
 /**
  * TradingView-style labels at the top-left of every chart pane: name, inputs
  * and live values, with ⚙ (settings + how to read it) and × (remove).
  */
-export function ChartPaneLegends({ panes, settings, actions = {}, onRemove }: Props) {
+export function ChartPaneLegends({ panes, settings, actions = {}, onRemove, hidden = [], onToggleHidden }: Props) {
   const [open, setOpen] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -51,13 +54,20 @@ export function ChartPaneLegends({ panes, settings, actions = {}, onRemove }: Pr
             const hasPanel = Boolean(settings[row.key] || help);
             const isOpen = open === row.key;
             return (
-              <div className="pane-legend-row" key={row.key} data-testid={`legend-${row.key}`}>
+              <div className={`pane-legend-row${hidden.includes(row.key) ? ' is-hidden' : ''}`} key={row.key} data-testid={`legend-${row.key}`}>
                 {row.color && <i className="pane-legend-swatch" style={{ background: row.color }} aria-hidden="true" />}
                 <span className="pane-legend-name">{row.label}</span>
                 {row.params && <span className="pane-legend-params">{row.params}</span>}
-                {row.values?.map((value, index) => (
+                {!hidden.includes(row.key) && row.values?.map((value, index) => (
                   <span key={index} className="pane-legend-value" style={value.color ? { color: value.color } : undefined}>{value.text}</span>
                 ))}
+                {onToggleHidden && row.key !== 'price' && (
+                  <button type="button" className="pane-legend-eye" aria-pressed={hidden.includes(row.key)}
+                    aria-label={`${hidden.includes(row.key) ? 'Show' : 'Hide'} ${row.label}`} title={hidden.includes(row.key) ? 'Show' : 'Hide'}
+                    onClick={() => onToggleHidden(row.key)} data-testid={`legend-eye-${row.key}`}>
+                    {hidden.includes(row.key) ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+                  </button>
+                )}
                 {hasPanel && (
                   <button type="button" className={`pane-legend-gear${isOpen ? ' is-open' : ''}`} aria-expanded={isOpen}
                     aria-label={`${row.label} settings and explanation`} title="Settings & how to read it"

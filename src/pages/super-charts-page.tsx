@@ -197,7 +197,7 @@ function SuperChartsWorkspace() {
           )}
         </div>
         <div className="super-chart-workspace-layout has-market-list">
-          {/* One to four charts; click a chart to make it the one the toolbar and market list change. */}
+          {/* One to four charts, each with its own toolbar; the clicked chart is the one the market list changes. */}
           <div className={`super-chart-workspace-main sc-cells${layout.count > 1 ? ' is-multi' : ''}`} style={gridStyle(layout)} data-testid="chart-cells">
             {CELL_AREAS.slice(0, layout.count).map((area, index) => (
               <div key={area} className={`sc-cell${index === activeCell ? ' is-active' : ''}`} style={{ gridArea: area }}
@@ -206,23 +206,23 @@ function SuperChartsWorkspace() {
               <NativeChartWorkspace contract={cellContract(index)} studies={cellStudies(index)} indicators={cellIndicators(index)}
                 cellId={layoutSync.interval ? 0 : index} syncId={index}
                 sync={layout.count > 1 ? { crosshair: layoutSync.crosshair, time: layoutSync.time, range: layoutSync.range } : undefined}
-                toolbarStart={index !== activeCell ? undefined : <div className="sc-symbol">
+                toolbarStart={<div className="sc-symbol">
                   <Link href="/" className="sc-home" aria-label="Crypto Order Flow home" title="Home">CO</Link>
-                  <MarketAutocomplete value={marketDraft} onChange={selectMarket} options={options}
+                  <MarketAutocomplete value={index === activeCell ? marketDraft : cellContract(index)?.label ?? ''} onChange={selectMarket} options={options}
                     label="Search perpetual contracts" placeholder={catalogue.loading ? 'Loading…' : 'Symbol search'}
                     className="super-chart-contract-combo sc-symbol-search" inputClassName="super-chart-contract-input"
                     autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
                   <LayoutPicker value={layout.id} onChange={(id) => { setLayoutId(id); if (activeCell >= layoutById(id).count) setActiveCell(0); }}
                   sync={layoutSync} onSyncChange={setLayoutSync} />
                 </div>}
-                toolbarMenus={index !== activeCell ? undefined : 
-            <div className="super-chart-menu-bar" ref={menuRef}>
+                toolbarMenus={
+            <div className="super-chart-menu-bar" ref={index === activeCell ? menuRef : undefined}>
               <div className="super-chart-dropdown">
                 <button type="button" className="super-chart-menu-trigger" aria-haspopup="true" aria-expanded={menu === 'technical'}
                   onClick={() => setMenu((current) => current === 'technical' ? null : 'technical')}>
                   Technical Indicators <span className="super-chart-selection-count">{cellStudies(index).length}</span><ChevronDown size={14} aria-hidden="true" />
                 </button>
-                {menu === 'technical' && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
+                {menu === 'technical' && index === activeCell && <div className="super-chart-menu is-studies" role="group" aria-label="Technical indicators">
                   <input className="super-chart-menu-search" type="search" placeholder={`Search ${CHART_STUDIES.length} indicators…`} autoFocus
                     value={studyQuery} onChange={(event) => setStudyQuery(event.target.value)} aria-label="Search technical indicators" data-testid="study-search" />
                   {CHART_STUDY_GROUPS.filter((group) => CHART_STUDIES.some((study) => study.group === group && studyMatches(study.label))).map((group) => (
@@ -245,7 +245,7 @@ function SuperChartsWorkspace() {
                   onClick={() => setMenu((current) => current === 'orderflow' ? null : 'orderflow')}>
                   Orderflow Indicators <span className="super-chart-selection-count">{cellIndicators(index).length}</span><ChevronDown size={14} aria-hidden="true" />
                 </button>
-                {menu === 'orderflow' && <div className="super-chart-menu" role="group" aria-label="Orderflow indicators">
+                {menu === 'orderflow' && index === activeCell && <div className="super-chart-menu" role="group" aria-label="Orderflow indicators">
                   {ORDERFLOW_ITEMS.map((item) => (
                     <button type="button" key={item.id} className={cellIndicators(index).includes(item.id) ? 'is-selected' : ''}
                       aria-pressed={cellIndicators(index).includes(item.id)} onClick={() => toggleIndicator(item.id)}>

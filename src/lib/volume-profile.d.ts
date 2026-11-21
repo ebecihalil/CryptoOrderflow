@@ -9,5 +9,5 @@ export type SessionProfile = {
 };
 export type VolumeProfilePayload = { asset: string; market: string; sessions: Array<{ time: number; levels: Array<{ price: number; buy: number; sell: number }> }> };
 export const VOLUME_PROFILE_DEFAULTS: VolumeProfileSettings;
-export function buildSessionProfile(session: VolumeProfilePayload['sessions'][number], settings?: VolumeProfileSettings, priceDivisor?: number): SessionProfile | null;
-export function buildProfiles(payload: VolumeProfilePayload | null, settings?: VolumeProfileSettings, priceDivisor?: number, nowSeconds?: number): SessionProfile[];
+export function buildSessionProfile(session: VolumeProfilePayload['sessions'][number], settings?: VolumeProfileSettings, priceDivisor?: number, range?: { low: number; high: number } | null): SessionProfile | null;
+export function buildProfiles(payload: VolumeProfilePayload | null, settings?: VolumeProfileSettings, priceDivisor?: number, nowSeconds?: number, candles?: Array<{ time: number; high: number; low: number }> | null): SessionProfile[];

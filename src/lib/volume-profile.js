@@ -11,9 +11,12 @@ export const VOLUME_PROFILE_DEFAULTS = {
  * @param session {time (UTC day start, s), levels: [{price, buy, sell}]}
  * @returns {start, end, low, high, rowStep, rows: [{low, high, up, down, inValueArea}], poc, vah, val, total, maxRow}
  */
-export function buildSessionProfile(session, settings = VOLUME_PROFILE_DEFAULTS, priceDivisor = 1) {
+export function buildSessionProfile(session, settings = VOLUME_PROFILE_DEFAULTS, priceDivisor = 1, range = null) {
+  // Only trades inside the chart's own price range for the session (0.5% tolerance): other exchanges
+  // sometimes list a different token under the same ticker at a very different price.
   const levels = (session.levels ?? []).filter(level => level.price > 0 && (level.buy > 0 || level.sell > 0))
-    .map(level => ({ ...level, price: level.price * priceDivisor }));
+    .map(level => ({ ...level, price: level.price * priceDivisor }))
+    .filter(level => !range || (level.price >= range.low * 0.995 && level.price <= range.high * 1.005));
   if (!levels.length) return null;
   const low = Math.min(...levels.map(level => level.price)), high = Math.max(...levels.map(level => level.price));
   const count = Math.max(1, Math.min(200, Math.round(settings.rows)));
@@ -42,13 +45,21 @@ export function buildSessionProfile(session, settings = VOLUME_PROFILE_DEFAULTS,
 }
 
 /** Completed sessions to keep plus the developing (current) one. */
-export function buildProfiles(payload, settings = VOLUME_PROFILE_DEFAULTS, priceDivisor = 1, nowSeconds = Date.now() / 1000) {
+export function buildProfiles(payload, settings = VOLUME_PROFILE_DEFAULTS, priceDivisor = 1, nowSeconds = Date.now() / 1000, candles = null) {
+  // The chart's high/low per session day (when candles are given).
+  const ranges = new Map();
+  for (const bar of candles ?? []) {
+    const day = Math.floor(bar.time / 86400) * 86400, range = ranges.get(day);
+    if (!range) ranges.set(day, { low: bar.low, high: bar.high });
+    else { range.low = Math.min(range.low, bar.low); range.high = Math.max(range.high, bar.high); }
+  }
   const today = Math.floor(nowSeconds / 86400) * 86400;
   const sessions = (payload?.sessions ?? []).filter(session => session.time <= today);
   const completed = sessions.filter(session => session.time < today).slice(-Math.max(1, Math.min(7, settings.sessions)));
   const developing = settings.developing ? sessions.filter(session => session.time === today) : [];
   return [...completed, ...developing].map(session => {
-    const profile = buildSessionProfile(session, settings, priceDivisor);
+    if (candles && !ranges.has(session.time)) return null;
+    const profile = buildSessionProfile(session, settings, priceDivisor, candles ? ranges.get(session.time) : null);
     return profile && { ...profile, developing: session.time === today, end: session.time === today ? Math.min(profile.end, nowSeconds) : profile.end };
   }).filter(Boolean);
 }
