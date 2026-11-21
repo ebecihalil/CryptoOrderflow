@@ -10,7 +10,7 @@ const firstBucketFrom = (timeframe, from) => {
   const start = bucketStart(timeframe, from);
   return start < from ? nextBucket(timeframe, start) : start;
 };
-export const INDICATOR_WINDOWS = { "1d": 86400, "7d": 604800, "30d": 2592000 };
+export const INDICATOR_WINDOWS = { "1d": 86400, "7d": 604800, "30d": 2592000, "90d": 7776000, "120d": 10368000 };
 const finite = value => typeof value === "number" && Number.isFinite(value);
 
 export function validateFundingIndicatorQuery(query = {}) {

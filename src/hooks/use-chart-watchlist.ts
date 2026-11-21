@@ -8,7 +8,7 @@ export type ChartWatchlistItem = {
   historyStart: string | null; historyEnd: string | null; storageFailed: boolean;
 };
 export type ChartWatchlistPayload = {
-  items: ChartWatchlistItem[]; limit: number; retentionDays: number; shared: boolean;
+  items: ChartWatchlistItem[]; limit: number; retentionDays: number; bubbleHours?: number; shared: boolean;
   storageWarning: string; storageFailed: boolean;
 };
 

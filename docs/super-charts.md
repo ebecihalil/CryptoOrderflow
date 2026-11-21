@@ -315,20 +315,17 @@ sessions to keep (1–7), rows, value area %, width %, left/right placement.
 Sessions are UTC days; the chart's own Volume pane replaces the script's
 vertical volume bars.
 
-## History retention
+## History retention (server settings)
 
-| Data | Full detail | Older (kept until) |
+Set as environment variables in the systemd drop-in (`server/retention.js`):
+
+| Setting | Default | Controls |
 |---|---|---|
-| CVD / perp & spot flows (`cvdIndicator.js`) | 1-minute, 14 days | 5-minute steps (exact CVD high/low), 30 days |
-| Aggressive Volume Bubbles (bubble ledger) | 5-minute × 0.05%, 24 hours | — |
-| Session Volume Profile (profile ledger) | — | hourly × 0.25% cells, 30 days |
-| Liquidations + feed-connected spans | each event, 2 days | 5-minute totals per exchange/side, 30 days |
-| Open interest (`oiLongHistory.js`) | ~30 s samples, 30 hours | 5-minute per-exchange totals, 30 days |
-| Long/short ratios (`lsarChart.js`) | every computed 5m and 1h point | 30 days (exchanges publish ~12 days) |
-| Funding | settled history 32 days; live quotes per minute 7 days | hourly live quotes, 30 days |
+| `RECORD_DAYS` | 30 | CVD (1-minute for 14 days, then 5-minute), liquidations (events 2 days, then 5-minute totals), per-exchange OI (5-minute), long/short ratio history, funding live quotes and settled history |
+| `BUBBLE_HOURS` | 24 | Aggressive Volume Bubbles (5-minute × 0.05%; beyond 7 days older cells become hourly × 0.25%) |
+| `PROFILE_DAYS` | `RECORD_DAYS` | Session Volume Profile (hourly × 0.25% cells) |
+| `ALWAYS_RECORD` | empty | Coins recorded 24/7 (max 10), e.g. `BTC,ETH,SOL,XRP,DOGE` |
 
-Order flow and long OI history are recorded for coins viewed recently (30
-minutes for trades, 2 hours for OI) and, all the time, for coins listed in the
-`ALWAYS_RECORD` server environment variable (empty = off; e.g. `BTC,ETH`; needs
-more CPU than the 1 GB free server has). A background job refreshes their ratio
-and funding history every 10 minutes. Recordings are saved every 5 minutes.
+Small 1 GB server: keep the defaults. Ampere 4 OCPU / 24 GB: e.g. `RECORD_DAYS=120`,
+`BUBBLE_HOURS=720`, `ALWAYS_RECORD=BTC,ETH,SOL,XRP,DOGE`. Other coins are recorded
+while viewed (30 minutes for trades, 2 hours for OI). Recordings save every 5 minutes.

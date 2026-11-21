@@ -1,3 +1,4 @@
+import { RECORD_DAYS } from "./retention.js";
 import { readFileSync, mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -12,9 +13,9 @@ const root = fileURLToPath(new URL("../.cache/", import.meta.url));
 const unsupportedHistory = new Set(["lighter", "paradex", "coinex", "bitmex", "backpack", "toobit"]);
 const trim = (map, size) => { while (map.size > size) map.delete(map.keys().next().value); };
 
-/** Live funding quotes: every minute for 7 days, one per hour after that, kept 30 days. */
+/** Live funding quotes: every minute for 7 days, one per hour after that, kept RECORD_DAYS. */
 export function thinObservations(points, nowSeconds) {
-  const detail = nowSeconds - 7 * 86400, cutoff = nowSeconds - 30 * 86400, hours = new Set(), out = [];
+  const detail = nowSeconds - 7 * 86400, cutoff = nowSeconds - RECORD_DAYS * 86400, hours = new Set(), out = [];
   for (const point of points) {
     if (point.time < cutoff) continue;
     if (point.time >= detail) { out.push(point); continue; }
@@ -41,7 +42,7 @@ export function createFundingIndicatorService({
       const saved = JSON.parse(readFileSync(join(storageDir, "funding-indicator", `${asset}.json`), "utf8"));
       if (!Array.isArray(saved)) throw new Error("Invalid recorded quotes.");
       const valid = saved.filter(point => Number.isFinite(point.time) && point.time * 1000 <= now() &&
-        point.time * 1000 >= now() - 30 * 86400_000 && ["meanPct", "medianPct", "weightedPct"].every(key =>
+        point.time * 1000 >= now() - RECORD_DAYS * 86400_000 && ["meanPct", "medianPct", "weightedPct"].every(key =>
           typeof point[key] === "number" && Number.isFinite(point[key])) && Number.isInteger(point.sourceCount) && point.sourceCount > 0);
       observations.set(asset, thinObservations(valid.sort((a, b) => a.time - b.time), now() / 1000));
     } catch (error) {
@@ -113,8 +114,8 @@ export function createFundingIndicatorService({
       let entry = result;
       if (old?.complete && old.from <= from && result.complete) {
         const merged = new Map([...old.points, ...result.points].map(point => [point.timestamp, point]));
-        entry = { ...result, from: Math.max(old.from, to - 32 * 86400_000),
-          points: [...merged.values()].filter(point => point.timestamp >= to - 32 * 86400_000) };
+        entry = { ...result, from: Math.max(old.from, to - Math.max(32, RECORD_DAYS + 2) * 86400_000),
+          points: [...merged.values()].filter(point => point.timestamp >= to - Math.max(32, RECORD_DAYS + 2) * 86400_000) };
       }
       // Funding page's compact sums are never mistaken for actual event history.
       histories.set(key, { entry, nextAttempt: now() + 300_000 });

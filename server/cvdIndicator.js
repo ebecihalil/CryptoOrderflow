@@ -6,6 +6,7 @@ import path from "node:path";
 import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
 import { ALWAYS_RECORD } from "./alwaysRecord.js";
+import { RECORD_DAYS, BUBBLE_HOURS, PROFILE_DAYS } from "./retention.js";
 import { CVD_EXCHANGES, createCvdMarketResolver, cvdExchangesFor } from "./cvdMarkets.js";
 import { createCvdStreamFactory, LIQUIDATION_EXCHANGES } from "./cvdStreams.js";
 import { createPriceConsistency } from "./priceConsistency.js";
@@ -14,8 +15,8 @@ import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger,
 import { secondCandleRecorder } from "./secondCandles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
-// History: 30 days; 1-minute detail for the last 14 days, 5-minute steps before that.
-const RETENTION = 30 * 86400, FULL_DETAIL = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
+// History: RECORD_DAYS (default 30); 1-minute detail for the last 14 days, 5-minute steps before that.
+const RETENTION = RECORD_DAYS * 86400, FULL_DETAIL = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
 const timeOrder = (a, b) => {
   if (a.time !== b.time) return a.time - b.time;
   if (a.exchange !== b.exchange) return a.exchange.localeCompare(b.exchange);
@@ -96,8 +97,8 @@ export function createCvdIndicatorService({
   // Liquidations (and when each liquidation feed was connected) are kept 30 days
   // and saved with the recording: the leverage model needs to know both what was
   // liquidated and when the feeds could see it.
-  // Kept 30 days: individual events for 2 days, then 5-minute totals per exchange and side.
-  const LIQ_RETENTION_MS = 30 * 86400_000, LIQ_DETAIL_MS = 2 * 86400_000;
+  // Kept RECORD_DAYS: individual events for 2 days, then 5-minute totals per exchange and side.
+  const LIQ_RETENTION_MS = RECORD_DAYS * 86400_000, LIQ_DETAIL_MS = 2 * 86400_000;
   const trimLiquidations = group => {
     const cutoff = now() - LIQ_RETENTION_MS, detail = now() - LIQ_DETAIL_MS;
     let list = group.liquidations.filter(item => item.time >= cutoff);
@@ -270,11 +271,12 @@ export function createCvdIndicatorService({
         handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [], liqCoverage: new Map() };
       // Bubbles: 5-minute cells for the last 24 hours (5m and every larger chart timeframe are whole
       // multiples of 5 minutes, so each bubble lands on the candle it traded in).
-      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 86400,
-        maxCells: 60_000, bucketSeconds: 300 });
+      // Longer than 7 days: older cells become hourly with 0.25% price steps.
+      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: BUBBLE_HOURS * 3600,
+        maxCells: BUBBLE_HOURS <= 48 ? 60_000 : 300_000, bucketSeconds: 300, archiveAfterSeconds: BUBBLE_HOURS > 168 ? 7 * 86400 : null });
       // Session Volume Profile: hourly cells with 0.25% price steps for 30 days (light).
-      group.profile = createAggressiveBubbleLedger({ market, now, retentionSeconds: 30 * 86400,
-        maxCells: 80_000, bucketSeconds: 300, archiveAfterSeconds: 3600 });
+      group.profile = createAggressiveBubbleLedger({ market, now, retentionSeconds: PROFILE_DAYS * 86400,
+        maxCells: Math.min(500_000, Math.max(80_000, PROFILE_DAYS * 3000)), bucketSeconds: 300, archiveAfterSeconds: 3600 });
       // 1-minute cells for the last 12 hours, for 1m and 3m charts: with 5-minute
       // cells a trade from minute 4 would be drawn on minute 0's candle (off its range).
       group.fineBubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 12 * 3600,

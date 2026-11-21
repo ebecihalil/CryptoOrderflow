@@ -1,3 +1,4 @@
+import { RECORD_DAYS, BUBBLE_HOURS } from "./retention.js";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { cvdIndicatorService } from "./cvdIndicator.js";
@@ -47,7 +48,7 @@ export function createChartWatchlist({
   })();
   function snapshot() {
     return { items: items.map(i => ({ ...i, ...recorder.recordingStatus(i.asset) })),
-      limit: 5, retentionDays: 30, shared: true, storageWarning, storageFailed };
+      limit: 5, retentionDays: RECORD_DAYS, bubbleHours: BUBBLE_HOURS, shared: true, storageWarning, storageFailed };
   }
   function mutate(work) {
     const task = queue.then(async () => { await ready; if (closed) throw fail("Watchlist is shutting down.", 503); return work(); });
