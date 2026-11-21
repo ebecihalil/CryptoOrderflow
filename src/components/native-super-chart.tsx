@@ -628,7 +628,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         color: bar.bodyColor, wickColor: bar.color, borderColor: bar.color })));
       // Whale OI spike labels and bullish / bearish signal states.
       const markers = [
-        ...(marketDriver?.labels ?? []).map((item) => ({ time: item.time, position: 'aboveBar' as const, color: item.color, shape: 'circle' as const, size: 0, text: `— ${item.text}` })),
+        // Whale OI spike: a short vertical tick pointing at the candle with the rise % on top, always green.
+        ...(marketDriver?.labels ?? []).flatMap((item) => [
+          { time: item.time, position: 'aboveBar' as const, color: '#22c55e', shape: 'circle' as const, size: 0, text: '│' },
+          { time: item.time, position: 'aboveBar' as const, color: '#22c55e', shape: 'circle' as const, size: 0, text: item.text },
+        ]),
         ...bars.filter((bar) => bar.bullId).map((bar) => ({ time: bar.time, position: 'belowBar' as const, color: '#22c55e', shape: 'arrowUp' as const, text: '' })),
         ...bars.filter((bar) => bar.bearId).map((bar) => ({ time: bar.time, position: 'aboveBar' as const, color: '#ef4444', shape: 'arrowDown' as const, text: '' })),
       ].sort((a, b) => a.time - b.time).map((marker) => ({ ...marker, time: toTime(marker.time) }));
