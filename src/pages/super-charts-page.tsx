@@ -8,6 +8,9 @@ import { CELL_AREAS, CHART_LAYOUTS, gridStyle, layoutById } from '@/lib/chart-la
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
 import { useMarketContracts, type MarketContract } from '@/hooks/use-market-contracts';
+import { useTradingAccount, useTradingStatus, type TradingMode } from '@/hooks/use-trading';
+import { TradeTicket } from '@/components/trade-ticket';
+import { TradeAccountPanel } from '@/components/trade-account-panel';
 import { CHART_STUDIES, CHART_STUDY_GROUPS, type ChartStudyId } from '@/lib/supercharts';
 import { useChartSetting } from '@/hooks/use-chart-setting';
 import { useChartSettingsSync } from '@/hooks/use-chart-settings-sync';
@@ -176,6 +179,31 @@ function SuperChartsWorkspace() {
     setCellLayers((current) => ({ ...current, [index]: { studies: current[index]?.studies ?? studies, indicators: toggled(current[index]?.indicators ?? indicators, id) } }));
   };
 
+  // Owner-only Bybit trading: order ticket on the right, account panel under the charts.
+  const tradingStatus = useTradingStatus();
+  // Real money only for the owner; paper trading for every signed-in user.
+  const canReal = !!tradingStatus.data?.enabled;
+  const tradingOn = canReal || !!tradingStatus.data?.paper;
+  const [savedMode, setSavedMode] = useState<TradingMode>(() => { try { return localStorage.getItem('trade-mode') === 'real' ? 'real' : 'paper'; } catch { return 'paper'; } });
+  const tradeMode: TradingMode = canReal ? savedMode : 'paper';
+  const setTradeMode = (mode: TradingMode) => { setSavedMode(mode); try { localStorage.setItem('trade-mode', mode); } catch { /* */ } };
+  const tradingAccount = useTradingAccount(tradeMode, tradingOn);
+  const [ticketOpen, setTicketOpen] = useState(() => { try { return localStorage.getItem('trade-ticket-open') === '1'; } catch { return false; } });
+  const [panelCollapsed, setPanelCollapsed] = useState(() => { try { return localStorage.getItem('trade-panel-collapsed') === '1'; } catch { return false; } });
+  const toggleTicket = () => setTicketOpen((open) => { try { localStorage.setItem('trade-ticket-open', open ? '0' : '1'); } catch { /* */ } return !open; });
+  const togglePanel = () => setPanelCollapsed((value) => { try { localStorage.setItem('trade-panel-collapsed', value ? '0' : '1'); } catch { /* */ } return !value; });
+  const activeContract = cellContract(activeCell);
+  const tradeSymbol = useMemo(() => {
+    if (!activeContract) return null;
+    if (activeContract.exchange.toLowerCase() === 'bybit') return activeContract.symbol;
+    const bybit = contracts.find((contract) => contract.exchange.toLowerCase() === 'bybit' && contract.asset === activeContract.asset && contract.symbol.endsWith('USDT'));
+    return bybit?.symbol ?? `${activeContract.asset}USDT`;
+  }, [activeContract, contracts]);
+  const openTradeSymbol = (symbol: string) => {
+    const contract = contracts.find((item) => item.exchange.toLowerCase() === 'bybit' && item.symbol === symbol);
+    if (contract) selectWatchlistContract(contract);
+  };
+
   return (
     <div className="terminal module-app super-charts-app">
       <AppHeader title="Super Charts" mark="SC" sectionLabel="Super Charts (Indicators)" subtitle="Perpetual Markets" />
@@ -198,7 +226,8 @@ function SuperChartsWorkspace() {
             </div>
           )}
         </div>
-        <div className="super-chart-workspace-layout has-market-list">
+        <div className={`super-chart-workspace-layout has-market-list${tradingOn && ticketOpen ? ' has-trade-ticket' : ''}`}>
+          <div className={`sc-stack${tradingOn ? ' has-trade-panel' : ''}${panelCollapsed ? ' is-panel-collapsed' : ''}`}>
           {/* One to four charts, each with its own toolbar; the clicked chart is the one the market list changes. */}
           <div className={`super-chart-workspace-main sc-cells${layout.count > 1 ? ' is-multi' : ''}`} style={gridStyle(layout)} data-testid="chart-cells">
             {CELL_AREAS.slice(0, layout.count).map((area, index) => (
@@ -216,6 +245,8 @@ function SuperChartsWorkspace() {
                     autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
                   <LayoutPicker value={layout.id} onChange={(id) => { setLayoutId(id); if (activeCell >= layoutById(id).count) setActiveCell(0); }}
                   sync={layoutSync} onSyncChange={setLayoutSync} />
+                  {tradingOn && index === activeCell && <button type="button" className={`sc-trade-toggle${ticketOpen ? ' is-on' : ''}`}
+                    onClick={toggleTicket} aria-pressed={ticketOpen} title="Bybit order ticket" data-testid="trade-toggle">Trade</button>}
                 </div>}
                 toolbarMenus={
             <div className="super-chart-menu-bar" ref={index === activeCell ? menuRef : undefined}>
@@ -266,6 +297,10 @@ function SuperChartsWorkspace() {
               </div>
             ))}
           </div>
+          {tradingOn && <TradeAccountPanel mode={tradeMode} account={tradingAccount.data} error={tradingAccount.error as Error | null} testnet={!!tradingStatus.data?.testnet}
+            collapsed={panelCollapsed} onToggle={togglePanel} onSymbol={openTradeSymbol} />}
+          </div>
+          {tradingOn && ticketOpen && <TradeTicket mode={tradeMode} canReal={canReal} onMode={setTradeMode} symbol={tradeSymbol} account={tradingAccount.data} testnet={!!tradingStatus.data?.testnet} onClose={toggleTicket} />}
           {/* Exchange-style list of every contract. */}
           <MarketList contracts={contracts} current={cellContract(activeCell)} onSelect={selectWatchlistContract} />
         </div>

@@ -25,3 +25,24 @@ Example: `echo "Environment=ALWAYS_RECORD=BTC,ETH,SOL,XRP,DOGE,BNB" >> /etc/syst
 ## Firewall note
 Oracle's Ubuntu image rejects traffic before custom rules: the 80/443 ACCEPT rules must come
 before the REJECT rule (`iptables -L INPUT -n --line-numbers`), then `netfilter-persistent save`.
+
+## Trading (Bybit)
+
+- **Paper trading** works for every signed-in user, with no setup: a simulated 10,000 USDT account on live Bybit prices, saved in `.cache/paper/`.
+- **Real trading** is only for the owner account and needs a Bybit API key in a systemd drop-in (never in git):
+
+```
+nano /etc/systemd/system/crypto.service.d/bybit.conf
+```
+```
+[Service]
+Environment=BYBIT_API_KEY=your_key
+Environment=BYBIT_API_SECRET=your_secret
+Environment=TRADING_OWNER_EMAIL=your-site-login-email
+Environment=BYBIT_TESTNET=1
+```
+```
+chmod 600 /etc/systemd/system/crypto.service.d/bybit.conf && systemctl daemon-reload && systemctl restart crypto
+```
+Remove the `BYBIT_TESTNET=1` line (then daemon-reload + restart) to switch from testnet to real money.
+Bybit key: API type "System-generated", permissions **Contracts: Orders + Positions** only (no Withdraw, no Transfer), IP restriction 79.76.111.157.
