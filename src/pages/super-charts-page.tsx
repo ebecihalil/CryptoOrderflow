@@ -4,7 +4,6 @@ import { Link } from 'wouter';
 import { AppHeader } from '@/components/app-header';
 import { MarketList } from '@/components/market-list';
 import { DEFAULT_LAYOUT_SYNC, LayoutPicker, type LayoutSync } from '@/components/layout-picker';
-import { TimeZonePicker } from '@/components/time-zone-picker';
 import { CELL_AREAS, CHART_LAYOUTS, gridStyle, layoutById } from '@/lib/chart-layouts';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
 import { NativeChartWorkspace } from '@/components/native-chart-workspace';
@@ -217,7 +216,6 @@ function SuperChartsWorkspace() {
                     autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
                   <LayoutPicker value={layout.id} onChange={(id) => { setLayoutId(id); if (activeCell >= layoutById(id).count) setActiveCell(0); }}
                   sync={layoutSync} onSyncChange={setLayoutSync} />
-                  {index === 0 && <TimeZonePicker />}
                 </div>}
                 toolbarMenus={
             <div className="super-chart-menu-bar" ref={index === activeCell ? menuRef : undefined}>
