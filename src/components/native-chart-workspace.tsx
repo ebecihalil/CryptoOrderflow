@@ -16,6 +16,9 @@ import { LSAR_CHART_FRAMES, useLsarChart } from '@/hooks/use-lsar-chart';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useAggregatedOi } from '@/hooks/use-aggregated-oi';
 import { useVolumeProfile } from '@/hooks/use-volume-profile';
+import { useMarketDriver } from '@/hooks/use-market-driver';
+import { useLiquidations } from '@/hooks/use-liquidations';
+import { calculateMarketDriver, MARKET_DRIVER_DEFAULTS, type MarketDriverSettings } from '@/lib/market-driver';
 import { buildProfiles, VOLUME_PROFILE_DEFAULTS, type VolumeProfileSettings } from '@/lib/volume-profile';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
 import type { MarketContract } from '@/hooks/use-market-contracts';
@@ -25,7 +28,7 @@ import { useChartSetting } from '@/hooks/use-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'volume-profile' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'volume-profile' | 'oi-driver' | 'market-driver' | 'liquidations' | 'leverage' | 'global-lsar' | 'top-lsar';
 
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
   /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
@@ -142,6 +145,11 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const leverageFrame = belowFiveMinutes ? '5m' : PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
   const hasVolumeProfile = indicators.includes('volume-profile');
+  const hasMarketDriver = indicators.includes('market-driver') && !secondsMode;
+  const hasLiquidations = indicators.includes('liquidations') && !secondsMode;
+  const [liquidationLabels, setLiquidationLabels] = useChartSetting<boolean>('liquidationLabels', true, value => typeof value === 'boolean');
+  const [marketDriverSettings, setMarketDriverSettings] = useChartSetting<MarketDriverSettings>('marketDriverSettings', MARKET_DRIVER_DEFAULTS,
+    value => !!value && typeof value === 'object' && typeof (value as MarketDriverSettings).flatBodyPct === 'number');
   // Eye button: indicators hidden in THIS chart window (still selected, not drawn).
   const [hiddenLayers, setHiddenLayers] = useChartSetting<string[]>(`hiddenLayers:${syncId}`, [],
     value => Array.isArray(value) && value.every(item => typeof item === 'string'));
@@ -156,7 +164,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const hasTopLsar = indicators.includes('top-lsar') && !!lsarFrame;
   const paneNotes: Record<string, string> = {};
   const fromOneMinute = 'Available from 1m charts (built from minute data).';
-  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles'])
+  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'market-driver', 'liquidations'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = fromOneMinute;
   if (longFrame) for (const id of ['global-lsar', 'top-lsar', 'leverage'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (history is kept by the server).';
@@ -243,6 +251,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         factory: { window: '7d', method: 'mean', mode: 'settled', threshold: 0.08 } };
       case 'perpetual-cvd': return { read: () => perpetualAnchor, apply: setPerpetualAnchor, factory: '1w' };
       case 'spot-cvd': return { read: () => spotAnchor, apply: setSpotAnchor, factory: '1w' };
+      case 'market-driver': return { read: () => marketDriverSettings, apply: setMarketDriverSettings, factory: MARKET_DRIVER_DEFAULTS };
       case 'volume-profile': return { read: () => volumeProfileSettings, apply: setVolumeProfileSettings, factory: VOLUME_PROFILE_DEFAULTS as VolumeProfileSettings };
       case 'aggressive-bubbles': return { read: () => ({ market: bubbleMarket, minimum: bubbleMinValue, multiplier: bubbleMultiplier }),
         apply: (value) => { setBubbleMarket(value.market); setBubbleMinValue(value.minimum); setBubbleMultiplier(value.multiplier);
@@ -286,6 +295,15 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
   const aggregatedOi = useAggregatedOi(canonicalAsset, timeframe, hasOiDriver);
+  const liquidationFeed = useLiquidations(canonicalAsset, timeframe, exchange, nativeSymbol, hasLiquidations);
+  const liquidations = hasLiquidations && liquidationFeed.data?.asset === canonicalAsset && liquidationFeed.data.timeframe === timeframe
+    ? liquidationFeed.data : null;
+  const marketDriverFeed = useMarketDriver(canonicalAsset, timeframe, exchange, nativeSymbol, hasMarketDriver);
+  const marketDriver = useMemo(() => {
+    const data = marketDriverFeed.data;
+    if (!hasMarketDriver || !data || data.asset !== canonicalAsset || data.timeframe !== timeframe) return null;
+    return { ...calculateMarketDriver(data.bars, marketDriverSettings), totals: data.totals, settings: marketDriverSettings };
+  }, [hasMarketDriver, marketDriverFeed.data, canonicalAsset, timeframe, marketDriverSettings]);
   const volumeProfile = useVolumeProfile(canonicalAsset, volumeProfileSettings.market, hasVolumeProfile);
   const volumeProfiles = useMemo(() => hasVolumeProfile && volumeProfile.data?.asset === canonicalAsset
     ? buildProfiles(volumeProfile.data, volumeProfileSettings, contract.priceDivisor || 1, Date.now() / 1000, candles) : null,
@@ -486,6 +504,36 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
       'top-lsar': plotStyle('top-lsar'),
       'perpetual-cvd': cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd) || undefined,
       'spot-cvd': cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd) || undefined,
+      liquidations: hasLiquidations ? <section className="native-bubble-controls" aria-label="Aggregated Liquidations controls">
+        <div className="native-cvd-heading">
+          <div><span className="module-kicker">RECORDED LIQUIDATIONS · {(liquidations?.exchanges ?? ['binance', 'bybit', 'okx', 'deribit']).join(' · ').toUpperCase()}</span><h2>Aggregated Liquidations</h2></div>
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          <label className="super-chart-control native-check"><input type="checkbox" checked={liquidationLabels}
+            onChange={(event) => setLiquidationLabels(event.target.checked)} /> <span>Show % of OI on the last closed candle</span></label>
+        </div>
+        <p className="native-cvd-status" role="status">Green bars up = long liquidations, red bars down = short liquidations (USD). The % is the share of these exchanges' open interest that was liquidated in the candle.</p>
+      </section> : undefined,
+      'market-driver': hasMarketDriver ? <section className="native-bubble-controls" aria-label="Market Driver controls">
+        <div className="native-cvd-heading">
+          <div><span className="module-kicker">AGGREGATED OI · PERP CVD · LIQUIDATIONS · TOP TRADER L/S</span><h2>Market Driver</h2></div>
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          {([['Colour OI candles by Market Driver', 'stateColors'], ['Show totals', 'showTotals'], ['Use top-trader L/S ratio', 'useLsr']] as const).map(([label, key]) => (
+            <label key={key} className="super-chart-control native-check"><input type="checkbox" checked={marketDriverSettings[key]}
+              onChange={(event) => setMarketDriverSettings({ ...marketDriverSettings, [key]: event.target.checked })} /> <span>{label}</span></label>))}
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          {([['Flat body %', 'flatBodyPct', 0, 100, 1], ['Low-activity length', 'flatActivityLength', 1, 500, 1], ['Low-activity factor', 'flatActivityFactor', 1, 20, 0.5],
+            ['Pinbar body %', 'pinbarBodyPct', 0, 100, 1], ['Pinbar wick %', 'pinbarWickPct', 0, 100, 1], ['Pinbar wick ratio', 'pinbarWickRatio', 1, 20, 0.1],
+            ['Spike multiplier', 'spikeMult', 1, 50, 0.5], ['Spike average length', 'avgLength', 2, 500, 1], ['Max sideways bars', 'maxSidewaysBars', 1, 200, 1],
+            ['Pullback 1 %', 'pullback1', 1, 100, 1], ['Pullback 2 %', 'pullback2', 1, 100, 1]] as const).map(([label, key, min, max, step]) => (
+            <label key={key} className="super-chart-control"><span>{label}</span>
+              <input type="number" min={min} max={max} step={step} value={marketDriverSettings[key]}
+                onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) setMarketDriverSettings({ ...marketDriverSettings, [key]: Math.min(max, Math.max(min, value)) }); }} /></label>))}
+        </div>
+        <p className="native-cvd-status" role="status">Colours: blue = aggressive longs opening, red = aggressive shorts opening, green = limit buy absorption, orange = limit sell absorption, yellow = short exits/liquidations, purple = long exits/liquidations, grey = neutral. A grey body means aggressive volume is below its 20-bar average. ▲ / ▼ mark bullish / bearish signal states; % labels mark whale OI spikes.</p>
+      </section> : undefined,
       'volume-profile': hasVolumeProfile ? <section className="native-bubble-controls" aria-label="Session Volume Profile controls">
         <div className="native-cvd-heading">
           <div><span className="module-kicker">REAL AGGRESSIVE BUY / SELL VOLUME AT PRICE · UTC SESSIONS</span><h2>Session Volume Profile</h2></div>
@@ -646,6 +694,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
            volumeProfiles={volumeProfiles} volumeProfileSettings={hasVolumeProfile ? volumeProfileSettings : null}
            hiddenLayers={hiddenLayers} onToggleLayer={toggleLayer} layerStyles={layerStyles}
+           marketDriver={marketDriver} marketDriverEnabled={indicators.includes('market-driver')}
+           liquidations={liquidations?.bars ?? null} liquidationsEnabled={indicators.includes('liquidations')} liquidationLabels={liquidationLabels}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
