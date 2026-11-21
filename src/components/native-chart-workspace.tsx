@@ -694,7 +694,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            layerSettings={layerSettings} layerActions={layerActions} liquidityEnabled={hasLiquidity}
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
-           tradeOverlay={trade.overlay} tradeLines={trade.lines}
+           tradeOverlay={trade.overlay} tradeLines={trade.lines} tradeConfirm={trade.confirm}
            volumeProfiles={volumeProfiles} volumeProfileSettings={hasVolumeProfile ? volumeProfileSettings : null}
            hiddenLayers={hiddenLayers} onToggleLayer={toggleLayer} layerStyles={layerStyles}
            marketDriver={marketDriver} marketDriverEnabled={indicators.includes('market-driver')}

@@ -87,6 +87,8 @@ type Props = {
   /** Trading: Buy / Sell buttons under the symbol row, and order / position lines on the price pane. */
   tradeOverlay?: ReactNode;
   tradeLines?: TradeLine[];
+  /** Confirm / Cancel bar for TP / SL changes, centred on the price pane. */
+  tradeConfirm?: ReactNode;
   liquidityEnabled?: boolean;
   symbolLabel?: string;
 };
@@ -138,7 +140,7 @@ function compactCvd(value: number) {
 
 const NO_HIDDEN: string[] = [];
 const NO_STYLES: Record<string, 'line' | 'columns'> = {};
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel, volumeProfiles = null, volumeProfileSettings = null, hiddenLayers = NO_HIDDEN, onToggleLayer, layerStyles = NO_STYLES, marketDriver = null, marketDriverEnabled = false, liquidations = null, liquidationsEnabled = false, liquidationLabels = true, tradeOverlay = null, tradeLines = NO_TRADE_LINES }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel, volumeProfiles = null, volumeProfileSettings = null, hiddenLayers = NO_HIDDEN, onToggleLayer, layerStyles = NO_STYLES, marketDriver = null, marketDriverEnabled = false, liquidations = null, liquidationsEnabled = false, liquidationLabels = true, tradeOverlay = null, tradeLines = NO_TRADE_LINES, tradeConfirm = null }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const getTradeApi = useCallback(() => bundleRef.current, []);
@@ -943,6 +945,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
           hidden={hiddenLayers} onToggleHidden={onToggleLayer} priceExtra={tradeOverlay} />
         {paneLayout[0] && <TradeLines lines={tradeLines} getApi={getTradeApi} paneTop={paneLayout[0].top} paneHeight={paneLayout[0].height}
           format={(price) => price.toLocaleString(undefined, { maximumSignificantDigits: 8, useGrouping: false })} />}
+        {tradeConfirm && paneLayout[0] && <div className="trade-confirm-wrap" style={{ top: paneLayout[0].top + paneLayout[0].height / 2 }}>{tradeConfirm}</div>}
       </div>
     </div>
   );
