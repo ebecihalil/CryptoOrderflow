@@ -173,7 +173,7 @@ export function createAggregatedOiService({ inputs = getOiChartInputs, request =
     const timeframe = query.timeframe ?? "1h";
     if (!/^[A-Z0-9]{1,30}$/.test(asset) || !isCryptoAsset(asset) || !ALL_TIMEFRAMES.includes(timeframe))
       throw Object.assign(new Error("A crypto asset and a chart timeframe are required."), { status: 400 });
-    const { contracts } = inputs(asset, AGGREGATED_OI_EXCHANGES);
+    const { contracts, long: longSource } = inputs(asset, AGGREGATED_OI_EXCHANGES);
     const interval = nativeInterval(timeframe);
     const entries = contracts.filter(item => OI_HISTORY_EXCHANGES.includes(item.exchange)).map(item => [item, history(item, interval)]);
     // First load waits (briefly) for the exchange history; later loads use the cache.
@@ -186,6 +186,12 @@ export function createAggregatedOiService({ inputs = getOiChartInputs, request =
       const live = Number.isFinite(item.oiCoin) ? [{ timestamp: Math.min(time, item.fetchedAt ?? time), oiCoin: item.oiCoin }] : [];
       return { key: `${item.exchange}:${item.symbol}`, points: [...native, ...(item.points ?? []), ...live] };
     });
+    // Older history: the 120-day per-exchange totals, only before that exchange's own contract data begins.
+    const longSeries = Object.entries(longSource ?? {}).map(([exchange, points]) => {
+      const firstOwn = Math.min(...series.filter(item => item.key.startsWith(`${exchange}:`)).flatMap(item => item.points.map(point => point.timestamp)));
+      return { key: `long:${exchange}`, points: points.filter(point => point.timestamp < firstOwn) };
+    }).filter(item => item.points.length);
+    series.push(...longSeries);
     const currentTotal = contracts.reduce((sum, item) => sum + (Number.isFinite(item.oiCoin) ? item.oiCoin : 0), 0);
     const candles = buildAggregatedOiCandles(series, timeframe, time, currentTotal);
     const byExchange = {};

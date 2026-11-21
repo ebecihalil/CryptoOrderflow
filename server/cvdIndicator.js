@@ -5,15 +5,17 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { canonicalAsset } from "./assetIdentity.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
+import { ALWAYS_RECORD } from "./alwaysRecord.js";
 import { CVD_EXCHANGES, createCvdMarketResolver, cvdExchangesFor } from "./cvdMarkets.js";
 import { createCvdStreamFactory, LIQUIDATION_EXCHANGES } from "./cvdStreams.js";
 import { createPriceConsistency } from "./priceConsistency.js";
-import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery } from "./cvdMath.js";
+import { addCvdTrade, newCvdMinute, buildCvdCandles, cvdAnchorStart, validateCvdQuery, compactCvdMinutes } from "./cvdMath.js";
 import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger, validateAggressiveBubblesQuery } from "./aggressiveBubbles.js";
 import { secondCandleRecorder } from "./secondCandles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
-const RETENTION = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
+// History: 120 days; 1-minute detail for the last 14 days, 5-minute steps before that.
+const RETENTION = 120 * 86400, FULL_DETAIL = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
 const timeOrder = (a, b) => {
   if (a.time !== b.time) return a.time - b.time;
   if (a.exchange !== b.exchange) return a.exchange.localeCompare(b.exchange);
@@ -31,9 +33,12 @@ export function createCvdIndicatorService({
   storageDir = process.env.WATCHLIST_DATA_DIR || fileURLToPath(new URL("../.cache/cvd-recordings/", import.meta.url)), timers = true,
   // Live perpetual trades also feed the seconds-candle recorder (1s–30s charts).
   onPerpetualTrade = trade => secondCandleRecorder.ingest(trade),
+  // Top coins recorded all the time (no gaps when nobody has them open); not part of the 5-coin watchlist.
+  alwaysRecord = timers ? ALWAYS_RECORD : [],
 } = {}) {
   const groups = new Map();
   const pinned = new Set();
+  const core = new Set(alwaysRecord.map(item => canonicalAsset(item).asset).filter(isCryptoAsset));
   // Trades far from the other exchanges' price (wrong token / stale venue) are left out of CVD and bubbles.
   const consistency = createPriceConsistency();
   let saveQueue = Promise.resolve();
@@ -80,16 +85,36 @@ export function createCvdIndicatorService({
     group.queue = pending;
     const earliest = Math.floor(now() / 1000) - RETENTION;
     for (const t of group.minutes.keys()) if (t < earliest) group.minutes.delete(t);
+    if (!(now() - (group.compactedAt ?? 0) < 600_000)) {
+      group.compactedAt = now();
+      if (compactCvdMinutes(group.minutes, Math.floor(now() / 1000) - FULL_DETAIL)) group.dirty = true;
+    }
     for (const t of group.gaps) if (t < earliest) group.gaps.delete(t);
     for (const [id, t] of group.ids) if (t < now() - 180_000) group.ids.delete(id);
   }
-  // Liquidations (and when each liquidation feed was connected) are kept 7 days
+  // Liquidations (and when each liquidation feed was connected) are kept 120 days
   // and saved with the recording: the leverage model needs to know both what was
   // liquidated and when the feeds could see it.
-  const LIQ_RETENTION_MS = 7 * 86400_000;
+  // Kept 120 days: individual events for 2 days, then 5-minute totals per exchange and side.
+  const LIQ_RETENTION_MS = 120 * 86400_000, LIQ_DETAIL_MS = 2 * 86400_000;
   const trimLiquidations = group => {
-    const cutoff = now() - LIQ_RETENTION_MS;
-    group.liquidations = group.liquidations.filter(item => item.time >= cutoff).slice(-200_000);
+    const cutoff = now() - LIQ_RETENTION_MS, detail = now() - LIQ_DETAIL_MS;
+    let list = group.liquidations.filter(item => item.time >= cutoff);
+    if (list.some(item => item.time < detail && !item.aggregated)) {
+      const buckets = new Map(), kept = [];
+      for (const item of list) {
+        if (item.time >= detail || item.aggregated && !buckets.has(`${item.exchange}:${item.side}:${item.time}`)) {
+          if (item.aggregated) buckets.set(`${item.exchange}:${item.side}:${item.time}`, item); else kept.push(item);
+          continue;
+        }
+        const time = Math.floor(item.time / 300_000) * 300_000, key = `${item.exchange}:${item.side}:${time}`;
+        const bucket = buckets.get(key);
+        if (bucket) bucket.usd += item.usd;
+        else buckets.set(key, { exchange: item.exchange, symbol: "*", side: item.side, time, usd: item.usd, aggregated: true });
+      }
+      list = [...buckets.values(), ...kept].sort((a, b) => a.time - b.time);
+    }
+    group.liquidations = list.slice(-200_000);
     for (const [exchange, spans] of group.liqCoverage) group.liqCoverage.set(exchange, spans.filter(span => span[1] >= cutoff));
   };
   /** Closed coverage spans plus each live feed's open span, ending now. */
@@ -130,7 +155,7 @@ export function createCvdIndicatorService({
     try {
       const body = JSON.parse(gunzipSync(await readFile(file(group)), { maxOutputLength: 60_000_000 }));
       if (body.version !== 1 || body.asset !== group.asset || body.market !== group.market ||
-        !Array.isArray(body.minutes) || body.minutes.length > 150_000 || !Number.isFinite(body.startedAt)) throw new Error("Invalid recording.");
+        !Array.isArray(body.minutes) || body.minutes.length > 400_000 || !Number.isFinite(body.startedAt)) throw new Error("Invalid recording.");
       for (const r of body.minutes) {
         if (!Number.isSafeInteger(r.time) || r.time > now() / 1000 || r.time < now() / 1000 - RETENTION ||
           !["delta", "high", "low", "buyValue", "sellValue", "trades"].every(k => Number.isFinite(r[k])) ||
@@ -237,10 +262,11 @@ export function createCvdIndicatorService({
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
         sources: initialSources(market), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
         handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [], liqCoverage: new Map() };
-      // 5-minute cells for up to 7 days (5m and every larger chart timeframe are whole
+      // 5-minute cells for the last 7 days (5m and every larger chart timeframe are whole
       // multiples of 5 minutes, so each bubble lands on the candle it traded in).
-      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 7 * 86400,
-        maxCells: 150_000, bucketSeconds: 300 });
+      // Older than 7 days: hourly cells with 0.25% price steps, kept for 30 days.
+      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 30 * 86400,
+        maxCells: 260_000, bucketSeconds: 300, archiveAfterSeconds: 7 * 86400 });
       // 1-minute cells for the last 12 hours, for 1m and 3m charts: with 5-minute
       // cells a trade from minute 4 would be drawn on minute 0's candle (off its range).
       group.fineBubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 12 * 3600,
@@ -281,7 +307,7 @@ export function createCvdIndicatorService({
       if (group.active && !pinned.has(group.asset) && now() - group.lastUsed > IDLE_MS) stopGroup(group);
       else if (group.active) {
         flush(group);
-        if (!group.lastSaveAttempt || now() - group.lastSaveAttempt >= 15_000) {
+        if (!group.lastSaveAttempt || now() - group.lastSaveAttempt >= 60_000) {
           group.lastSaveAttempt = now(); void save(group);
         }
       }
@@ -370,7 +396,7 @@ export function createCvdIndicatorService({
   function pinAsset(input) {
     const asset = canonicalAsset(input).asset;
     if (!isCryptoAsset(asset)) throw Object.assign(new Error("Only crypto coins can be watched."), { status: 400 });
-    if (!pinned.has(asset) && pinned.size >= 5) throw Object.assign(new Error("The server watchlist is limited to five coins."), { status: 409 });
+    if (!pinned.has(asset) && [...pinned].filter(item => !core.has(item)).length >= 5) throw Object.assign(new Error("The server watchlist is limited to five coins."), { status: 409 });
     const existed = pinned.has(asset);
     pinned.add(asset);
     try {
@@ -379,6 +405,7 @@ export function createCvdIndicatorService({
   }
   function unpinAsset(input) {
     const asset = canonicalAsset(input).asset;
+    if (core.has(asset)) return;
     pinned.delete(asset);
     for (const market of ["spot", "perpetual"]) {
       const group = groups.get(`${market}:${asset}`);
@@ -426,7 +453,15 @@ export function createCvdIndicatorService({
     const group = groups.get(`${market}:${asset}`);
     return group ? [...group.minutes.values()].filter(minute => minute.byExchange) : [];
   }
-  return { get, getBubbles, getVolumeProfile, flowMinutes, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
+  // Start the always-recorded top coins shortly after startup.
+  if (core.size && timers) setTimeout(() => {
+    for (const asset of core) {
+      pinned.add(asset);
+      for (const market of ["spot", "perpetual"]) { try { get({ asset, market, timeframe: "1h", anchor: "1w" }); } catch { /* retried on use */ } }
+    }
+  }, 3000).unref?.();
+  const alwaysRecorded = () => [...core];
+  return { get, getBubbles, getVolumeProfile, flowMinutes, alwaysRecorded, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
     clearInterval(tick);
     groups.forEach(stopGroup);
     await Promise.all([...groups.values()].map(async group => {

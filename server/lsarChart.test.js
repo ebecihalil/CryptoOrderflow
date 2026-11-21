@@ -32,10 +32,24 @@ test("larger timeframes use the hourly history and the last reading in each cand
 
 test("query validation and kind routing", () => {
   const calls = [];
-  const deps = { globalReadings: a => (calls.push(["global", a]), []), topReadings: a => (calls.push(["top", a]), []) };
+  const deps = { directory: null, globalReadings: a => (calls.push(["global", a]), []), topReadings: a => (calls.push(["top", a]), []) };
   assert.equal(getLsarChart({ asset: "BTC", kind: "top", timeframe: "1h" }, deps).kind, "top");
   getLsarChart({ asset: "eth" }, deps);
   assert.deepEqual(calls, [["top", "BTC"], ["global", "ETH"]]);
   for (const bad of [{ asset: "BTC", timeframe: "1m" }, { asset: "BTC", kind: "x" }, { asset: "" }])
     assert.throws(() => getLsarChart(bad, deps), e => e.status === 400);
+});
+
+test("ratio history is kept beyond what exchanges publish (merged, aggregated, 120 days)", async () => {
+  const { mergeLsarHistory } = await import("./lsarChart.js");
+  const store = { "5m": new Map(), "1h": new Map() };
+  const day = 86400, now = 200 * day * 1000;
+  // Day 1: exchanges return hourly points for an old window; later they are gone from the exchange.
+  mergeLsarHistory(store, { "1h": [{ time: 150 * day, ratio: 1.5, longPct: 60 }, { time: 150 * day + 3600, ratio: 2, longPct: 66.67 }] }, "1h", now);
+  const later = mergeLsarHistory(store, { "1h": [{ time: 199 * day, ratio: 1, longPct: 50 }] }, "24h", now);
+  assert.deepEqual(later.map(p => p.time), [150 * day, 199 * day]);
+  assert.equal(later[0].ratio, 2, "last reading in the day");
+  // Older than 120 days is dropped.
+  mergeLsarHistory(store, {}, "1h", (150 + 121) * day * 1000);
+  assert.equal(store["1h"].size, 1);
 });

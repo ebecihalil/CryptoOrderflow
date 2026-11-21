@@ -12,6 +12,18 @@ const root = fileURLToPath(new URL("../.cache/", import.meta.url));
 const unsupportedHistory = new Set(["lighter", "paradex", "coinex", "bitmex", "backpack", "toobit"]);
 const trim = (map, size) => { while (map.size > size) map.delete(map.keys().next().value); };
 
+/** Live funding quotes: every minute for 7 days, one per hour after that, kept 120 days. */
+export function thinObservations(points, nowSeconds) {
+  const detail = nowSeconds - 7 * 86400, cutoff = nowSeconds - 120 * 86400, hours = new Set(), out = [];
+  for (const point of points) {
+    if (point.time < cutoff) continue;
+    if (point.time >= detail) { out.push(point); continue; }
+    const hour = Math.floor(point.time / 3600);
+    if (!hours.has(hour)) { hours.add(hour); out.push(point); }
+  }
+  return out;
+}
+
 export function createFundingIndicatorService({
   inventory = getPerpetualInventory, fetchHistory = fetchFundingHistory, request = requestJson,
   gates = requestGates, now = Date.now, storageDir = root, timers = true,
@@ -29,9 +41,9 @@ export function createFundingIndicatorService({
       const saved = JSON.parse(readFileSync(join(storageDir, "funding-indicator", `${asset}.json`), "utf8"));
       if (!Array.isArray(saved)) throw new Error("Invalid recorded quotes.");
       const valid = saved.filter(point => Number.isFinite(point.time) && point.time * 1000 <= now() &&
-        point.time * 1000 >= now() - 7 * 86400_000 && ["meanPct", "medianPct", "weightedPct"].every(key =>
+        point.time * 1000 >= now() - 120 * 86400_000 && ["meanPct", "medianPct", "weightedPct"].every(key =>
           typeof point[key] === "number" && Number.isFinite(point[key])) && Number.isInteger(point.sourceCount) && point.sourceCount > 0);
-      observations.set(asset, valid.sort((a, b) => a.time - b.time).slice(-10080));
+      observations.set(asset, thinObservations(valid.sort((a, b) => a.time - b.time), now() / 1000));
     } catch (error) {
       if (error.code !== "ENOENT") console.warn("Recorded funding cache is unavailable; a new live series will start.");
     }
@@ -48,7 +60,7 @@ export function createFundingIndicatorService({
       weightedPct: current.weightedPct, weightedFallback: current.weightedFallback, sourceCount: current.sourceCount };
     if (previous && Math.floor(previous.time / 60) === Math.floor(point.time / 60)) points[points.length - 1] = point;
     else points.push(point);
-    const retained = points.filter(item => item.time >= current.time - 7 * 86400).slice(-10080);
+    const retained = thinObservations(points, current.time);
     observations.set(asset, retained); trim(observations, 20);
     if (storageDir && now() - (persisted.get(asset) ?? 0) >= 60_000) {
       try {
@@ -101,8 +113,8 @@ export function createFundingIndicatorService({
       let entry = result;
       if (old?.complete && old.from <= from && result.complete) {
         const merged = new Map([...old.points, ...result.points].map(point => [point.timestamp, point]));
-        entry = { ...result, from: Math.max(old.from, to - 32 * 86400_000),
-          points: [...merged.values()].filter(point => point.timestamp >= to - 32 * 86400_000) };
+        entry = { ...result, from: Math.max(old.from, to - 122 * 86400_000),
+          points: [...merged.values()].filter(point => point.timestamp >= to - 122 * 86400_000) };
       }
       // Funding page's compact sums are never mistaken for actual event history.
       histories.set(key, { entry, nextAttempt: now() + 300_000 });
