@@ -198,7 +198,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const current = candles.at(-1);
   const [fundingWindow, setFundingWindow] = useChartSetting<FundingIndicatorWindow>('fundingWindow', '7d',
     value => ['1d', '7d', '30d', '90d', '120d'].includes(String(value)));
-  const [fundingMethod, setFundingMethod] = useChartSetting<FundingIndicatorMethod>('fundingMethod', 'mean',
+  const [fundingMethod, setFundingMethod] = useChartSetting<FundingIndicatorMethod>('fundingCalc', 'weighted',
     value => ['mean', 'median', 'weighted'].includes(String(value)));
   const [fundingMode, setFundingMode] = useChartSetting<'settled' | 'recordedLive'>('fundingMode', 'settled',
     value => value === 'settled' || value === 'recordedLive');
@@ -248,7 +248,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         factory: { settings: DEFAULT_LIQUIDITY_SETTINGS, colors: DEFAULT_ZONE_COLORS } };
       case 'funding': return { read: () => ({ window: fundingWindow, method: fundingMethod, mode: fundingMode, threshold: fundingThreshold }),
         apply: (value) => { setFundingWindow(value.window); setFundingMethod(value.method); setFundingMode(value.mode); setFundingThreshold(value.threshold); },
-        factory: { window: '7d', method: 'mean', mode: 'settled', threshold: 0.08 } };
+        factory: { window: '7d', method: 'weighted', mode: 'settled', threshold: 0.08 } };
       case 'perpetual-cvd': return { read: () => perpetualAnchor, apply: setPerpetualAnchor, factory: '1w' };
       case 'spot-cvd': return { read: () => spotAnchor, apply: setSpotAnchor, factory: '1w' };
       case 'market-driver': return { read: () => marketDriverSettings, apply: setMarketDriverSettings, factory: MARKET_DRIVER_DEFAULTS };
@@ -749,7 +749,7 @@ function FundingEnabledWorkspace(props: FundingProps) {
   const feed = useFundingIndicator(asset || 'BTC', props.timeframe as FundingIndicatorTimeframe, props.window, props.enabled);
   const payload = props.enabled && feed.payload && normalizeFundingAsset(feed.payload.asset) === asset &&
     feed.payload.timeframe === props.timeframe && feed.payload.historyWindow === props.window ? feed.payload : null;
-  const mode = props.method === 'weighted' ? 'recordedLive' : props.mode;
+  const mode = props.mode;
   const points = mode === 'settled' ? payload?.history.points ?? [] : payload?.observations.points ?? [];
   const plot: FundingPlotData = { points, method: props.method, threshold: props.threshold };
   const methodField = props.method === 'mean' ? 'meanPct' : props.method === 'median' ? 'medianPct' : 'weightedPct';
@@ -769,7 +769,7 @@ function FundingEnabledWorkspace(props: FundingProps) {
         <label className="super-chart-control"><span>History window</span><select value={props.window}
           onChange={(event) => props.setWindow(event.target.value as FundingIndicatorWindow)} aria-label="Funding history window">
           <option value="1d">1 day</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="120d">120 days</option></select></label>
-        <label className="super-chart-control"><span>Funding plot</span><select value={mode} disabled={props.method === 'weighted'}
+        <label className="super-chart-control"><span>Funding plot</span><select value={mode}
           onChange={(event) => props.setMode(event.target.value as 'settled' | 'recordedLive')} aria-label="Funding history type">
           <option value="settled">Settled payments</option><option value="recordedLive">Recorded live</option></select></label>
         <label className="super-chart-control"><span>Neutral threshold</span><input type="number" min="0" step="0.01" value={props.threshold} aria-label="Funding neutral threshold percent"
@@ -795,8 +795,8 @@ function FundingEnabledWorkspace(props: FundingProps) {
             {source.intervalHours && source.intervalHours !== 8 ? ` · native ${fmtPct(source.nativeRatePct)} / ${source.intervalHours}h` : ''} · {fmtOi(source.oiUsd)}</span></span>)}
         {!payload?.sources.length && <span>Venue inventory appears when discovery completes.</span>}</div>
       <p className="native-hint">{props.method === 'weighted'
-        ? `OI-weighted plots use recorded live observations only. Each weight is contemporaneous open interest; historical settled rates are never weighted with today’s OI.${payload?.current.weightedFallback ? ' The current snapshot falls back to the simple mean because usable OI is not available.' : ''}`
-        : 'Settled mean and median use actual venue payment history. Rates are normalized to an 8-hour basis; no missing intervals are filled.'}
+        ? `OI-weighted: each venue's rate counts by its open interest at that time (recorded OI history; today's OI shares where that is missing). The newest candle is the live rate, the same as the Funding page.${payload?.current.weightedFallback ? ' The current snapshot falls back to the simple mean because usable OI is not available.' : ''}`
+        : 'Settled mean and median use actual venue payment history; the newest candle is the live rate. Rates are normalized to an 8-hour basis; no missing intervals are filled.'}
         {props.method === 'weighted' && payload && (() => {
           const fallbackCount = payload.observations.points.filter((point) => point.weightedFallback && point.weightedPct !== null && point.weightedPct !== undefined).length;
           return fallbackCount ? ` ${fallbackCount} recorded live point${fallbackCount === 1 ? '' : 's'} use the feed’s mean fallback where contemporaneous OI was unavailable.` : '';
