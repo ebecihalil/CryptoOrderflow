@@ -17,7 +17,8 @@ import {
   getLsarMarketSummary,
 } from "./server/lsarMarketData.js";
 import { getTopTraderLsarSnapshot, getTopTraderLsarSummary } from "./server/topTraderLsarMarketData.js";
-import { createAccountService } from "./server/accounts.js";
+import { createAccountService, createAttemptLimiter } from "./server/accounts.js";
+import { createContactService, CONTACT_TOPICS } from "./server/contact.js";
 import { secondCandleService } from "./server/secondCandleService.js";
 import { isSecondTimeframe } from "./server/timeframes.js";
 import { createAccountRouter } from "./server/accountRoutes.js";
@@ -54,6 +55,18 @@ app.use(express.json({ limit: "20kb" }));
 // Free accounts: sign up / sign in, per-account watchlist.
 const accounts = createAccountService();
 app.use("/api", createAccountRouter({ accounts }));
+// Contact Us: saved on the server and emailed to the owner (Reply-To = visitor).
+const contact = createContactService();
+const contactLimiter = createAttemptLimiter({ limit: 5, windowMs: 60 * 60_000 });
+app.get("/api/contact/topics", (_req, res) => res.json({ topics: CONTACT_TOPICS }));
+app.post("/api/contact", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Bots fill the hidden "website" field; pretend success and drop it.
+  if (req.body?.website) return res.json({ ok: true });
+  if (!contactLimiter.hit(`ip:${req.ip}`)) return res.status(429).json({ error: "Too many messages. Please try again in an hour." });
+  try { await contact.submit(req.body ?? {}); res.json({ ok: true }); }
+  catch (error) { res.status(error.status === 400 ? 400 : 500).json({ error: error.status === 400 ? error.message : "Your message could not be sent. Please try again later." }); }
+});
 setInterval(() => accounts.purgeExpired(), 6 * 3600_000).unref();
 
 app.get("/api/chart/watchlist", async (_req, res) => {

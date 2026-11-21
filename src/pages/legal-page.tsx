@@ -1,20 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { AppHeader } from '@/components/app-header';
+import { useAuth } from '@/hooks/use-auth';
 import { SiteFooter } from '@/components/site-footer';
 import '@/styles/legal.css';
 
 const UPDATED = '20 November 2026';
-export type LegalKind = 'about' | 'disclaimer' | 'terms' | 'privacy' | 'cookies';
+export type LegalKind = 'about' | 'contact' | 'disclaimer' | 'terms' | 'privacy' | 'cookies';
 const TITLES: Record<LegalKind, string> = {
-  about: 'About Us', disclaimer: 'Disclaimer', terms: 'Terms of Use', privacy: 'Privacy Policy', cookies: 'Cookie Preferences',
+  about: 'About Us', contact: 'Contact Us', disclaimer: 'Disclaimer', terms: 'Terms of Use', privacy: 'Privacy Policy', cookies: 'Cookie Preferences',
 };
 
 function About() {
   return (
     <>
       <h1>About Us</h1>
-      <p className="legal-lede">Crypto Order Flow turns raw exchange data into clear views of what traders are actually doing — who is buying, who is selling, who is leveraged and where positions are being opened or closed.</p>
+      <p className="legal-lede">Crypto Order Flow is a trading platform that turns raw exchange data into clear views of what traders are actually doing — who is buying, who is selling, who is leveraged and where positions are being opened or closed.</p>
       <h2>The founder</h2>
       <p>After completing my engineering education in Turkey, I pursued an MBA in Business at the University of Wales and lived in London for 16 years. I built and sold my own e-commerce brand, which gave me financial freedom. Today I am a full-time trader, focused on simplifying statistical data and backtesting it to build clear technical strategies.</p>
       <h2>Why order flow</h2>
@@ -22,7 +23,7 @@ function About() {
       <p>Instead of making unrealistic assumptions from the shape of past candles, I want to understand what really happened inside each candle and use that to judge what is most likely to happen next. That is why this site focuses on order-flow data — CVD, open interest, liquidations, funding, long/short positioning and leverage — collected from as many exchanges as possible and shown in a way that is easy to read.</p>
       <h2>What we aim for</h2>
       <p>I want to share this way of reading the market and help build a well-informed audience: traders who understand the mechanics behind price, make decisions with more context and manage their risk with their eyes open.</p>
-      <p className="legal-callout">Crypto Order Flow is an analytics and educational tool. Nothing on it is financial advice. Please read the <Link href="/disclaimer">Disclaimer</Link>.</p>
+      <p className="legal-callout">Crypto Order Flow is a trading platform for charts and order-flow analysis, built for information and education. Nothing on it is financial advice. Please read the <Link href="/disclaimer">Disclaimer</Link>.</p>
     </>
   );
 }
@@ -32,7 +33,7 @@ function Disclaimer() {
     <>
       <h1>Disclaimer</h1>
       <p className="legal-updated">Last updated {UPDATED}</p>
-      <p className="legal-callout">Crypto Order Flow is a market-data and educational tool. Nothing on this website is financial, investment, trading, legal or tax advice, and nothing on it is a recommendation or an offer to buy, sell or hold any asset.</p>
+      <p className="legal-callout">Crypto Order Flow is a trading platform for market data, charts and analysis, built for information and education. Nothing on this website is financial, investment, trading, legal or tax advice, and nothing on it is a recommendation or an offer to buy, sell or hold any asset.</p>
       <h2>Information and education only</h2>
       <p>All charts, indicators, estimates, rankings, signals, descriptions and other content are provided for general information and educational purposes. They describe what market data shows; they do not tell you what to do. Any explanation of how traders "usually" read an indicator is educational, not a trading instruction.</p>
       <h2>No personal recommendation</h2>
@@ -58,7 +59,7 @@ function Terms() {
       <p className="legal-updated">Last updated {UPDATED}</p>
       <p>These terms apply to your use of Crypto Order Flow (the "site"). By using the site or creating an account you agree to them. If you do not agree, please do not use the site.</p>
       <h2>1. The service</h2>
-      <p>The site provides crypto market data, charts and analytical indicators for information and education. It is not a trading platform, exchange, wallet or advisory service, and it never holds or moves your funds. The <Link href="/disclaimer">Disclaimer</Link> forms part of these terms.</p>
+      <p>Crypto Order Flow is a trading platform for crypto market data, charts and analytical indicators, provided for information and education. Trading itself happens on the exchanges you choose: the site does not execute orders, is not an exchange, broker or wallet, does not give investment advice and never holds or moves your funds. The <Link href="/disclaimer">Disclaimer</Link> forms part of these terms.</p>
       <h2>2. Eligibility</h2>
       <p>You must be at least 18 years old and allowed to use services like this where you live.</p>
       <h2>3. Your account</h2>
@@ -94,6 +95,7 @@ function Privacy() {
         <li><strong>Sign in with Google:</strong> we only receive your email address and whether Google has verified it. We do not get your contacts, files, name or other Google data, and we do not keep Google tokens.</li>
         <li><strong>Your settings:</strong> watchlist, recent coins, chart layouts, indicators and indicator settings, so they follow you across devices.</li>
         <li><strong>Session cookie:</strong> one cookie that keeps you signed in (see <Link href="/cookies">Cookie Preferences</Link>).</li>
+        <li><strong>Contact messages:</strong> if you use the Contact Us form, your name, email address and message, used only to answer you.</li>
         <li><strong>Technical logs:</strong> our server may briefly log technical information such as IP address and request errors to keep the site secure and working.</li>
       </ul>
       <h2>Why we use it</h2>
@@ -159,8 +161,56 @@ function Cookies() {
   );
 }
 
+const TOPICS = ['General question', 'Feedback / feature idea', 'Bug report', 'Account', 'Partnership', 'Other'];
+function Contact() {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ name: '', email: '', topic: TOPICS[0], message: '', website: '' });
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const email = form.email || user?.email || '';
+  const set = (key: keyof typeof form) => (event: { target: { value: string } }) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const submit = async (event: { preventDefault(): void }) => {
+    event.preventDefault();
+    setStatus('sending'); setError(null);
+    try {
+      const response = await fetch('/api/contact', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...form, email }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Your message could not be sent.');
+      setStatus('sent');
+    } catch (failure) {
+      setStatus('idle'); setError(failure instanceof Error ? failure.message : 'Your message could not be sent.');
+    }
+  };
+  if (status === 'sent') return (
+    <>
+      <h1>Contact Us</h1>
+      <p className="legal-callout" role="status">Thank you — your message has been sent. We will reply to <strong>{email}</strong> as soon as we can.</p>
+      <button type="button" className="legal-button" onClick={() => { setForm((current) => ({ ...current, message: '' })); setStatus('idle'); }}>Send another message</button>
+    </>
+  );
+  return (
+    <>
+      <h1>Contact Us</h1>
+      <p>Questions, feedback, a bug or an idea for a new indicator? Send us a message and we will reply to the email address you give.</p>
+      <form className="contact-form" onSubmit={submit} data-testid="contact-form">
+        <label>Name<input required maxLength={80} value={form.name} onChange={set('name')} autoComplete="name" /></label>
+        <label>Your email (we reply here)<input required type="email" maxLength={254} value={email} onChange={set('email')} autoComplete="email" /></label>
+        <label>Topic<select value={form.topic} onChange={set('topic')}>{TOPICS.map((topic) => <option key={topic}>{topic}</option>)}</select></label>
+        <label>Message<textarea required minLength={10} maxLength={5000} rows={7} value={form.message} onChange={set('message')} /></label>
+        {/* Hidden from people; bots fill it in. */}
+        <input className="contact-hp" tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.website} onChange={set('website')} name="website" />
+        {error && <p className="contact-error" role="alert">{error}</p>}
+        <button type="submit" className="legal-button contact-send" disabled={status === 'sending'}>{status === 'sending' ? 'Sending…' : 'Send message'}</button>
+        <p className="legal-updated">Your email is used only to answer you (see the <Link href="/privacy">Privacy Policy</Link>). We never ask for passwords, private keys or seed phrases.</p>
+      </form>
+    </>
+  );
+}
+
 export function LegalPage({ kind }: { kind: LegalKind }) {
-  const Body = { about: About, disclaimer: Disclaimer, terms: Terms, privacy: Privacy, cookies: Cookies }[kind];
+  useEffect(() => { window.scrollTo(0, 0); }, [kind]);
+  const Body = { about: About, contact: Contact, disclaimer: Disclaimer, terms: Terms, privacy: Privacy, cookies: Cookies }[kind];
   return (
     <div className="terminal module-app">
       <AppHeader title="Crypto Order Flow" mark="CO" sectionLabel={TITLES[kind]} subtitle="Market Toolkit" />
