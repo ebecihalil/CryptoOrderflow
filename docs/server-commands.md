@@ -12,7 +12,7 @@ Secrets live only in `/etc/systemd/system/crypto.service.d/google.conf` on the s
 5. `journalctl -u crypto -n 8 --no-pager` (ends with "listening on port 10000")
 
 ## Checks
-- Memory: `free -h; ps -o rss=,cmd= -C node | awk '{printf "site uses %.0f MB\n", $1/1024}'`
+- Memory: `free -h` and `ps -o rss= -p $(pgrep -f "node server.js" | head -1) | awk '{printf "site uses %.0f MB\n", $1/1024}'`
 - Google sign-in on: `curl -s https://79-76-111-157.sslip.io/api/auth/providers` → `{"google":true}`
 - Contact email errors: `journalctl -u crypto --since "1 hour ago" --no-pager | grep -i contact`
 - Saved contact messages: `cd /opt/crypto && node -e "const {DatabaseSync}=require('node:sqlite');const d=new DatabaseSync('.cache/contact.sqlite');console.table(d.prepare('select id,datetime(created_at/1000,\'unixepoch\') as time,name,email,topic,emailed from contact_messages order by id desc limit 10').all())"`
