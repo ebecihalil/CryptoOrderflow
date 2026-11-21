@@ -26,6 +26,7 @@ import { getLsarChart } from "./server/lsarChart.js";
 import { createPerpLeverageService } from "./server/perpLeverage.js";
 import { aggregatedOiService } from "./server/aggregatedOi.js";
 import { createMarketDriverService } from "./server/marketDriverService.js";
+import { createLiquidationService } from "./server/liquidationService.js";
 import { ALWAYS_RECORD } from "./server/alwaysRecord.js";
 import { candleService } from "./server/chartCandles.js";
 import { getOiChartInputs } from "./server/openInterestMarketData.js";
@@ -178,6 +179,13 @@ app.get("/api/indicators/volume-profile", (req, res) => {
 });
 // OI Market Driver pane: price, aggregated OI, perpetual CVD, liquidations and top-trader L/S per candle.
 const marketDriverService = createMarketDriverService({ candles: candleService, aggregatedOi: aggregatedOiService, cvd: cvdIndicatorService });
+// Aggregated Liquidations pane: long/short liquidations per candle and % of the feed exchanges' OI.
+const liquidationService = createLiquidationService({ candles: candleService, cvd: cvdIndicatorService, oiInputs: getOiChartInputs });
+app.get("/api/indicators/liquidations", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(await liquidationService.get(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400 ? error.message : "Liquidations are currently unavailable." }); }
+});
 app.get("/api/indicators/market-driver", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try { res.json(await marketDriverService.get(req.query)); }

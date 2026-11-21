@@ -17,6 +17,7 @@ import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum 
 import { useAggregatedOi } from '@/hooks/use-aggregated-oi';
 import { useVolumeProfile } from '@/hooks/use-volume-profile';
 import { useMarketDriver } from '@/hooks/use-market-driver';
+import { useLiquidations } from '@/hooks/use-liquidations';
 import { calculateMarketDriver, MARKET_DRIVER_DEFAULTS, type MarketDriverSettings } from '@/lib/market-driver';
 import { buildProfiles, VOLUME_PROFILE_DEFAULTS, type VolumeProfileSettings } from '@/lib/volume-profile';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
@@ -27,7 +28,7 @@ import { useChartSetting } from '@/hooks/use-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'volume-profile' | 'oi-driver' | 'market-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'volume-profile' | 'oi-driver' | 'market-driver' | 'liquidations' | 'leverage' | 'global-lsar' | 'top-lsar';
 
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
   /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
@@ -145,6 +146,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
   const hasVolumeProfile = indicators.includes('volume-profile');
   const hasMarketDriver = indicators.includes('market-driver') && !secondsMode;
+  const hasLiquidations = indicators.includes('liquidations') && !secondsMode;
+  const [liquidationLabels, setLiquidationLabels] = useChartSetting<boolean>('liquidationLabels', true, value => typeof value === 'boolean');
   const [marketDriverSettings, setMarketDriverSettings] = useChartSetting<MarketDriverSettings>('marketDriverSettings', MARKET_DRIVER_DEFAULTS,
     value => !!value && typeof value === 'object' && typeof (value as MarketDriverSettings).flatBodyPct === 'number');
   // Eye button: indicators hidden in THIS chart window (still selected, not drawn).
@@ -161,7 +164,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const hasTopLsar = indicators.includes('top-lsar') && !!lsarFrame;
   const paneNotes: Record<string, string> = {};
   const fromOneMinute = 'Available from 1m charts (built from minute data).';
-  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'market-driver'])
+  if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles', 'market-driver', 'liquidations'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = fromOneMinute;
   if (longFrame) for (const id of ['global-lsar', 'top-lsar', 'leverage'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (history is kept by the server).';
@@ -292,6 +295,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
   const aggregatedOi = useAggregatedOi(canonicalAsset, timeframe, hasOiDriver);
+  const liquidationFeed = useLiquidations(canonicalAsset, timeframe, exchange, nativeSymbol, hasLiquidations);
+  const liquidations = hasLiquidations && liquidationFeed.data?.asset === canonicalAsset && liquidationFeed.data.timeframe === timeframe
+    ? liquidationFeed.data : null;
   const marketDriverFeed = useMarketDriver(canonicalAsset, timeframe, exchange, nativeSymbol, hasMarketDriver);
   const marketDriver = useMemo(() => {
     const data = marketDriverFeed.data;
@@ -498,6 +504,16 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
       'top-lsar': plotStyle('top-lsar'),
       'perpetual-cvd': cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd) || undefined,
       'spot-cvd': cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd) || undefined,
+      liquidations: hasLiquidations ? <section className="native-bubble-controls" aria-label="Aggregated Liquidations controls">
+        <div className="native-cvd-heading">
+          <div><span className="module-kicker">RECORDED LIQUIDATIONS · {(liquidations?.exchanges ?? ['binance', 'bybit', 'okx', 'deribit']).join(' · ').toUpperCase()}</span><h2>Aggregated Liquidations</h2></div>
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          <label className="super-chart-control native-check"><input type="checkbox" checked={liquidationLabels}
+            onChange={(event) => setLiquidationLabels(event.target.checked)} /> <span>Show % of OI on the last closed candle</span></label>
+        </div>
+        <p className="native-cvd-status" role="status">Green bars up = long liquidations, red bars down = short liquidations (USD). The % is the share of these exchanges' open interest that was liquidated in the candle.</p>
+      </section> : undefined,
       'market-driver': hasMarketDriver ? <section className="native-bubble-controls" aria-label="OI Market Driver controls">
         <div className="native-cvd-heading">
           <div><span className="module-kicker">AGGREGATED OI · PERP CVD · LIQUIDATIONS · TOP TRADER L/S</span><h2>OI Market Driver</h2></div>
@@ -679,6 +695,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            volumeProfiles={volumeProfiles} volumeProfileSettings={hasVolumeProfile ? volumeProfileSettings : null}
            hiddenLayers={hiddenLayers} onToggleLayer={toggleLayer} layerStyles={layerStyles}
            marketDriver={marketDriver} marketDriverEnabled={indicators.includes('market-driver')}
+           liquidations={liquidations?.bars ?? null} liquidationsEnabled={indicators.includes('liquidations')} liquidationLabels={liquidationLabels}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
