@@ -151,6 +151,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   syncIdRef.current = syncId;
   const captureViewRef = useRef<() => void>(() => {});
   const [hover, setHover] = useState<Candle | null>(null);
+  // Candle under the pointer only while the pointer is inside the Market Driver pane.
+  const [driverHoverTime, setDriverHoverTime] = useState<number | null>(null);
   // Top offset of every pane, for the TradingView-style legends.
   const [paneLayout, setPaneLayout] = useState<Array<{ key: string; top: number; height: number }>>([]);
   // Chart times are shown in the chosen time zone (header menu); candles stay exchange (UTC) candles.
@@ -214,11 +216,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const marketDriverBox = useMemo(() => {
     if (!marketDriverEnabled || !marketDriver) return null;
     const bars = marketDriver.bars.filter((bar): bar is MarketDriverBar => !!bar);
-    const time = hover?.time ?? candles.at(-1)?.time ?? null;
+    const time = driverHoverTime ?? candles.at(-1)?.time ?? null;
     const bar = bars.find((item) => item.time === time) ?? bars.at(-1);
     if (!bar) return null;
     return { bar, totals: marketDriver.settings.showTotals ? marketDriver.totals : null };
-  }, [marketDriverEnabled, marketDriver, hover, candles]);
+  }, [marketDriverEnabled, marketDriver, driverHoverTime, candles]);
   candleDataRef.current = candles;
   const volumeByTime = useMemo(() => new Map(volumeCandles.map((bar) => [bar.time, bar.volume])), [volumeCandles]);
   const studyData = useMemo(() => calculateTechnicalIndicators(candles, technicalSettings), [candles, technicalSettings]);
@@ -331,8 +333,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     window.addEventListener('pointerup', remeasure);
     resize.observe(mount);
     const crosshairHandler = (param: Parameters<IChartApi['subscribeCrosshairMove']>[0] extends (arg: infer A) => void ? A : never) => {
-      if (!param.time) { setHover(null); setBubbleHover(null); return; }
+      if (!param.time) { setHover(null); setBubbleHover(null); setDriverHoverTime(null); return; }
       const time = typeof param.time === 'number' ? param.time : null;
+      const inDriverPane = param.paneIndex !== undefined && paneKeysRef.current[param.paneIndex] === 'market-driver';
+      setDriverHoverTime(inDriverPane ? time : null);
       setHover(time === null ? null : candleDataRef.current.find((item) => item.time === time) ?? null);
       const point = (param.paneIndex === undefined || param.paneIndex === 0) && param.seriesData.has(candleSeries) ? param.point : undefined;
       setBubbleHover(point ? bundleRef.current?.bubblePrimitive?.findBubbleAt(point.x, point.y) ?? null : null);
@@ -359,6 +363,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       const bars = candleDataRef.current;
       if (detail.type === 'crosshair' && syncRef.current.crosshair) {
         applying = true;
+        setDriverHoverTime(null);
         if (detail.time === null || !bars.length) { chart.clearCrosshairPosition(); setHover(null); }
         else {
           // Same moment on this chart: the candle that contains it (timeframes can differ).
@@ -851,7 +856,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       }
       if (key === 'market-driver') {
         const hasBars = (marketDriver?.bars ?? []).some((bar) => !!bar);
-        return [{ key: 'market-driver', label: 'Market Driver', params: 'Agg OI · Top L/S', color: '#3b82f6',
+        return [{ key: 'market-driver', label: 'Market Driver', params: 'Agg OI in coins · Top L/S', color: '#3b82f6',
           values: hasBars ? [] : paneNotes['market-driver'] ? undefined : [{ text: 'Collecting data...' }] }];
       }
       if (key === 'oi-driver') {
