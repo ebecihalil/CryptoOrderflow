@@ -159,3 +159,8 @@
 .trade-connect-note { margin:12px 0 0;color:var(--lsar-muted);font-size:11px; }
 .trade-connect-setup { margin-top:12px;padding:10px 12px;border:1px solid #f7a600;border-radius:7px;background:rgba(247,166,0,.08); }
 .trade-connect-setup p { margin:6px 0 0;color:var(--lsar-muted);font-size:12px;line-height:1.5; }
+/* Inactive TP / SL handles on the order / position line: outlined; active lines are filled. */
+.trade-line-handle { display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border:1px solid;border-radius:3px;background:var(--lsar-surface);font:700 11px var(--app-font-mono);cursor:ns-resize;user-select:none;white-space:nowrap; }
+.trade-line.is-filled .trade-line-label .trade-line-grip { color:#fff;opacity:.8; }
+.trade-confirm-wrap { position:absolute;left:0;right:60px;z-index:7;display:flex;justify-content:center;transform:translateY(-50%);pointer-events:none; }
+.trade-confirm { display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--lsar-border);border-radius:8px;background:var(--lsar-surface);color:var(--lsar-ink);font:12px var(--app-font-mono);box-shadow:0 10px 30px rgba(0,0,0,.4);pointer-events:auto; }

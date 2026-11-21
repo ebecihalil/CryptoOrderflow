@@ -1,10 +1,10 @@
 // Per-chart trading: Buy / Sell buttons under the symbol legend and the order / TP / SL,
 // position and open-order lines for the contract this chart shows.
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useTradingAccount, useTradingActions, useTradingMarket, useTradingStatus, type TradeTarget, type TradingMode } from '@/hooks/use-trading';
 import { tradeStore, useTradeStore } from '@/lib/trade-store';
 import { orderPrice, stepDecimals } from '@/components/trade-ticket';
-import type { TradeLine } from '@/components/trade-lines';
+import { TradeConfirm, type TradeLine } from '@/components/trade-lines';
 
 const BUY = '#2962ff', SELL = '#f23645', TP = '#089981', SL = '#f23645';
 const TYPE_LABEL = { market: 'Market', limit: 'Limit', stop: 'Stop', stopLimit: 'Stop Limit' } as const;
@@ -12,7 +12,7 @@ const num = (value: string | null | undefined) => { const n = Number(value); ret
 const compact = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: value >= 100 ? 0 : 4 });
 const signedUsd = (value: number) => `${value >= 0 ? '+' : ''}${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT`;
 
-export function useChartTrade(contract: { exchange: string; symbol: string; asset: string } | null): { overlay: ReactNode; lines: TradeLine[] } {
+export function useChartTrade(contract: { exchange: string; symbol: string; asset: string } | null): { overlay: ReactNode; lines: TradeLine[]; confirm: ReactNode } {
   const status = useTradingStatus();
   const connection = useTradeStore((s) => s.connection);
   const ticketOpen = useTradeStore((s) => s.ticketOpen);
@@ -36,6 +36,11 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
   const mine = useCallback((item: { exchange?: string; symbol: string }) => !!chartTarget && item.symbol === chartTarget.symbol &&
     (mode === 'real' || (item.exchange ?? 'bybit') === chartTarget.exchange), [chartTarget, mode]);
 
+  // TP / SL changes on an open position wait for Confirm (centre of the chart).
+  const [pending, setPending] = useState<{ ref: { exchange?: string; asset?: string | null; symbol: string }; takeProfit?: string; stopLoss?: string } | null>(null);
+  const propose = (ref: { exchange?: string; asset?: string | null; symbol: string }, change: { takeProfit?: string; stopLoss?: string }) =>
+    setPending((current) => current && current.ref.symbol === ref.symbol && current.ref.exchange === ref.exchange ? { ...current, ...change } : { ref, ...change });
+
   const lines = useMemo<TradeLine[]>(() => {
     if (!connected || !chartTarget) return [];
     const out: TradeLine[] = [];
@@ -49,46 +54,53 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
         const color = side === 'Buy' ? BUY : SELL;
         const pnl = (target: number) => coins === null ? null : (side === 'Buy' ? target - entry : entry - target) * coins;
         const field = type === 'stop' ? 'trigger' : 'price';
+        const tpPrice = num(tp), slPrice = num(sl);
+        const tpActive = tpOn && !!tpPrice, slActive = slOn && !!slPrice;
         out.push({ id: 'draft', price: entry, color, dashed: true, text: `${coins === null ? '—' : compact(coins)} | ${TYPE_LABEL[type]}`,
-          chip: { text: side, color }, draggable: type !== 'market', onDrag: (p) => tradeStore.setDraft({ [field]: fix(p) }), onCancel: () => tradeStore.setTicketOpen(false) });
+          chip: { text: side, color }, draggable: type !== 'market', onDrag: (p) => tradeStore.setDraft({ [field]: fix(p) }), onCancel: () => tradeStore.setTicketOpen(false),
+          // Inactive TP / SL wait on the order line; dragging one away activates it.
+          handles: [
+            ...(tpActive ? [] : [{ id: 'draft-tp-handle', text: 'TP', color: TP, onDrop: (p: number) => tradeStore.setDraft({ tpOn: true, tp: fix(p) }) }]),
+            ...(slActive ? [] : [{ id: 'draft-sl-handle', text: 'SL', color: SL, onDrop: (p: number) => tradeStore.setDraft({ slOn: true, sl: fix(p) }) }]),
+          ] });
         if (type === 'stopLimit' && num(trigger)) out.push({ id: 'draft-trigger', price: num(trigger)!, color, dashed: true, text: 'Stop trigger',
           draggable: true, onDrag: (p) => tradeStore.setDraft({ trigger: fix(p) }) });
-        const tpPrice = num(tp), slPrice = num(sl);
-        if (tpOn && tpPrice) {
-          const v = pnl(tpPrice);
-          out.push({ id: 'draft-tp', price: tpPrice, color: TP, dashed: true, text: `TP${v === null ? '' : ` ${signedUsd(v)}`}`, draggable: true,
+        if (tpActive) {
+          const v = pnl(tpPrice!);
+          out.push({ id: 'draft-tp', price: tpPrice!, color: TP, filled: true, dashed: true, text: `TP${v === null ? '' : ` ${signedUsd(v)}`}`, draggable: true,
             onDrag: (p) => tradeStore.setDraft({ tp: fix(p) }), onCancel: () => tradeStore.setDraft({ tpOn: false }) });
-        } else out.push({ id: 'draft-tp', price: entry, ghostOffset: side === 'Buy' ? -26 : 26, color: TP, text: 'TP', draggable: true,
-          onDrag: (p) => tradeStore.setDraft({ tpOn: true, tp: fix(p) }) });
-        if (slOn && slPrice) {
-          const v = pnl(slPrice);
-          out.push({ id: 'draft-sl', price: slPrice, color: SL, dashed: true, text: `SL${v === null ? '' : ` ${signedUsd(v)}`}`, draggable: true,
+        }
+        if (slActive) {
+          const v = pnl(slPrice!);
+          out.push({ id: 'draft-sl', price: slPrice!, color: SL, filled: true, dashed: true, text: `SL${v === null ? '' : ` ${signedUsd(v)}`}`, draggable: true,
             onDrag: (p) => tradeStore.setDraft({ sl: fix(p) }), onCancel: () => tradeStore.setDraft({ slOn: false }) });
-        } else out.push({ id: 'draft-sl', price: entry, ghostOffset: side === 'Buy' ? 26 : -26, color: SL, text: 'SL', draggable: true,
-          onDrag: (p) => tradeStore.setDraft({ slOn: true, sl: fix(p) }) });
+        }
       }
     }
-    // ---- open positions: entry with PnL, TP / SL (drag to change; set on release) ----
+    // ---- open positions: entry with PnL; TP / SL handles on the line, changes confirmed in the middle ----
     for (const position of account.data?.positions ?? []) {
       if (!mine(position)) continue;
       const entry = num(position.entryPrice), pnl = num(position.unrealisedPnl) ?? 0;
       if (!entry) continue;
       const ref = { exchange: position.exchange, asset: position.asset, symbol: position.symbol };
       const long = position.side === 'Buy';
-      out.push({ id: `pos-${position.symbol}`, price: entry, color: long ? TP : SL, text: `${long ? 'Long' : 'Short'} ${position.size}`,
-        chip: { text: signedUsd(pnl), color: pnl >= 0 ? TP : SL },
-        onCancel: () => { if (window.confirm(`Close ${long ? 'LONG' : 'SHORT'} ${position.size} ${position.symbol} at market?`)) closePosition.mutate(ref); } });
       const size = num(position.size) ?? 0;
       const exitPnl = (p: number) => (long ? p - entry : entry - p) * size;
-      const tpPrice = num(position.takeProfit), slPrice = num(position.stopLoss);
-      if (tpPrice) out.push({ id: `pos-tp-${position.symbol}`, price: tpPrice, color: TP, dashed: true, text: `TP ${signedUsd(exitPnl(tpPrice))}`, draggable: true,
-        onDrop: (p) => setTpsl.mutate({ ...ref, takeProfit: fix(p) }), onCancel: () => setTpsl.mutate({ ...ref, takeProfit: 0 }) });
-      else out.push({ id: `pos-tp-${position.symbol}`, price: entry, ghostOffset: long ? -26 : 26, color: TP, text: 'TP', draggable: true,
-        onDrop: (p) => setTpsl.mutate({ ...ref, takeProfit: fix(p) }) });
-      if (slPrice) out.push({ id: `pos-sl-${position.symbol}`, price: slPrice, color: SL, dashed: true, text: `SL ${signedUsd(exitPnl(slPrice))}`, draggable: true,
-        onDrop: (p) => setTpsl.mutate({ ...ref, stopLoss: fix(p) }), onCancel: () => setTpsl.mutate({ ...ref, stopLoss: 0 }) });
-      else out.push({ id: `pos-sl-${position.symbol}`, price: entry, ghostOffset: long ? 26 : -26, color: SL, text: 'SL', draggable: true,
-        onDrop: (p) => setTpsl.mutate({ ...ref, stopLoss: fix(p) }) });
+      const wait = pending && pending.ref.symbol === position.symbol && pending.ref.exchange === position.exchange ? pending : null;
+      // Shown TP / SL: a pending change wins over the saved one ("0" = removed).
+      const tpPrice = num(wait?.takeProfit !== undefined ? wait.takeProfit : position.takeProfit) || null;
+      const slPrice = num(wait?.stopLoss !== undefined ? wait.stopLoss : position.stopLoss) || null;
+      out.push({ id: `pos-${position.symbol}`, price: entry, color: long ? TP : SL, text: `${long ? 'Long' : 'Short'} ${position.size}`,
+        chip: { text: signedUsd(pnl), color: pnl >= 0 ? TP : SL },
+        onCancel: () => { if (window.confirm(`Close ${long ? 'LONG' : 'SHORT'} ${position.size} ${position.symbol} at market?`)) closePosition.mutate(ref); },
+        handles: [
+          ...(tpPrice ? [] : [{ id: `pos-tp-handle-${position.symbol}`, text: 'TP', color: TP, onDrop: (p: number) => propose(ref, { takeProfit: fix(p) }) }]),
+          ...(slPrice ? [] : [{ id: `pos-sl-handle-${position.symbol}`, text: 'SL', color: SL, onDrop: (p: number) => propose(ref, { stopLoss: fix(p) }) }]),
+        ] });
+      if (tpPrice) out.push({ id: `pos-tp-${position.symbol}`, price: tpPrice, color: TP, filled: true, dashed: true, text: `TP ${signedUsd(exitPnl(tpPrice))}`, draggable: true,
+        onDrop: (p) => propose(ref, { takeProfit: fix(p) }), onCancel: () => propose(ref, { takeProfit: '0' }) });
+      if (slPrice) out.push({ id: `pos-sl-${position.symbol}`, price: slPrice, color: SL, filled: true, dashed: true, text: `SL ${signedUsd(exitPnl(slPrice))}`, draggable: true,
+        onDrop: (p) => propose(ref, { stopLoss: fix(p) }), onCancel: () => propose(ref, { stopLoss: '0' }) });
     }
     // ---- open orders ----
     for (const order of account.data?.orders ?? []) {
@@ -100,7 +112,7 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
         onCancel: () => cancelOrder.mutate({ exchange: order.exchange, symbol: order.symbol, orderId: order.orderId }) });
     }
     return out;
-  }, [connected, chartTarget, ticketOpen, isTarget, quote, draft, account.data, mine, fix, setTpsl, cancelOrder, closePosition]);
+  }, [connected, chartTarget, ticketOpen, isTarget, quote, draft, account.data, mine, fix, pending, cancelOrder, closePosition]);
 
   const overlay = connected && quote ? (
     <div className="chart-trade-buttons" data-testid="chart-trade-buttons">
@@ -109,5 +121,11 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
       <button type="button" className="is-buy" onClick={() => tradeStore.openTicket('Buy', ticketOpen ? orderPrice(draft.type, draft.side, draft.price, draft.trigger, quote) : null)}><b>{quote.ask ?? '—'}</b><small>BUY</small></button>
     </div>
   ) : null;
-  return { overlay, lines };
+  const describe = (label: string, value: string | undefined) => value === undefined ? null : `${label} ${value === '0' ? 'removed' : value}`;
+  const confirm = pending ? <TradeConfirm busy={setTpsl.isPending}
+    text={`${pending.ref.symbol}: ${[describe('TP', pending.takeProfit), describe('SL', pending.stopLoss)].filter(Boolean).join(' · ')}`}
+    onCancel={() => setPending(null)}
+    onConfirm={() => setTpsl.mutate({ ...pending.ref, ...(pending.takeProfit !== undefined ? { takeProfit: pending.takeProfit } : {}),
+      ...(pending.stopLoss !== undefined ? { stopLoss: pending.stopLoss } : {}) }, { onSuccess: () => setPending(null), onError: (error) => window.alert(error.message) })} /> : null;
+  return { overlay, lines, confirm };
 }
