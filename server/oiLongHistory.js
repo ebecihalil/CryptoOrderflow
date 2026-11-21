@@ -1,4 +1,4 @@
-// Long open-interest history (120 days) per coin and exchange, at 5-minute steps.
+// Long open-interest history (30 days) per coin and exchange, at 5-minute steps.
 // The OI screener samples every contract about every 30 s but keeps only 30 hours;
 // keeping that for every contract for months would not fit. This keeps, for the
 // coins people view (and the always-recorded top coins), the TOTAL open interest
@@ -9,9 +9,10 @@
 // makes a fake drop).
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
+import { RECORD_DAYS } from "./retention.js";
 
 export const OI_LONG_STEP_MS = 300_000;
-export const OI_LONG_RETENTION_MS = 120 * 86400_000;
+export const OI_LONG_RETENTION_MS = RECORD_DAYS * 86400_000;
 const FRESH_MS = 15 * 60_000, TRACK_MS = 2 * 3600_000;
 
 /** Per exchange, the total OI at each 5-minute step that every contract covers. */

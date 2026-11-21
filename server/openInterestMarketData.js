@@ -18,7 +18,7 @@ const histories = new Map(), loaded = new Set(), dirty = new Set(), requestedFra
 const nativeHistories = new Map();
 let timer = null, saveTimer = null;
 const retention = 30 * 3600_000;
-// 120-day, 5-minute per-exchange totals for viewed and always-recorded coins.
+// 30-day, 5-minute per-exchange totals for viewed and always-recorded coins.
 const longHistory = createOiLongHistory({ directory: join(directory, "long"), always: ALWAYS_RECORD });
 let lastLongRecord = 0;
 function mergePoints(key, incoming, now) {

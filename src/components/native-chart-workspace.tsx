@@ -152,7 +152,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = fromOneMinute;
   if (longFrame) for (const id of ['global-lsar', 'top-lsar', 'leverage'])
-    if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (history is kept 120 days).';
+    if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (history is kept by the server).';
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -491,7 +491,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
             <label key={key} className="super-chart-control native-check"><input type="checkbox" checked={volumeProfileSettings[key]}
               onChange={(event) => setVolumeProfileSettings({ ...volumeProfileSettings, [key]: event.target.checked })} /> <span>{label}</span></label>))}
         </div>
-        <p className="native-cvd-status" role="status">Built from every recorded executed trade on all exchanges: taker buys (teal) and taker sells (red) at each price, per UTC day. History starts when the server began recording this coin (kept 30 days).</p>
+        <p className="native-cvd-status" role="status">Built from every recorded executed trade on all exchanges: taker buys (teal) and taker sells (red) at each price, per UTC day. History starts when the server began recording this coin.</p>
       </section> : undefined,
       'aggressive-bubbles': hasAggressiveBubbles ? <section className="native-bubble-controls" aria-label="Aggressive Volume Bubbles controls">
         <div className="native-cvd-heading">

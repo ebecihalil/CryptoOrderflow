@@ -40,16 +40,17 @@ test("query validation and kind routing", () => {
     assert.throws(() => getLsarChart(bad, deps), e => e.status === 400);
 });
 
-test("ratio history is kept beyond what exchanges publish (merged, aggregated, 120 days)", async () => {
+test("ratio history is kept beyond what exchanges publish (merged, aggregated, RECORD_DAYS)", async () => {
   const { mergeLsarHistory } = await import("./lsarChart.js");
+  const { RECORD_DAYS } = await import("./retention.js");
   const store = { "5m": new Map(), "1h": new Map() };
   const day = 86400, now = 200 * day * 1000;
-  // Day 1: exchanges return hourly points for an old window; later they are gone from the exchange.
-  mergeLsarHistory(store, { "1h": [{ time: 150 * day, ratio: 1.5, longPct: 60 }, { time: 150 * day + 3600, ratio: 2, longPct: 66.67 }] }, "1h", now);
+  // Exchanges return hourly points for an older window; later those are gone from the exchange.
+  mergeLsarHistory(store, { "1h": [{ time: 180 * day, ratio: 1.5, longPct: 60 }, { time: 180 * day + 3600, ratio: 2, longPct: 66.67 }] }, "1h", now);
   const later = mergeLsarHistory(store, { "1h": [{ time: 199 * day, ratio: 1, longPct: 50 }] }, "24h", now);
-  assert.deepEqual(later.map(p => p.time), [150 * day, 199 * day]);
+  assert.deepEqual(later.map(p => p.time), [180 * day, 199 * day]);
   assert.equal(later[0].ratio, 2, "last reading in the day");
-  // Older than 120 days is dropped.
-  mergeLsarHistory(store, {}, "1h", (150 + 121) * day * 1000);
+  // Older than RECORD_DAYS is dropped.
+  mergeLsarHistory(store, {}, "1h", (180 + RECORD_DAYS + 1) * day * 1000);
   assert.equal(store["1h"].size, 1);
 });

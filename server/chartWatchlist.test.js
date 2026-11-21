@@ -76,7 +76,7 @@ test("price-level recordings restore across a service restart without recreating
     a.get({ asset: "BTC", market: "spot" }); await a._groups.get("spot:BTC").ready;
     handler({ id: "1", exchange: "binance", symbol: "BTCUSDT", time: clock, side: "buy", price: 100, value: 25000 });
     clock += 3000; const before = a.getBubbles({ asset: "BTC", market: "spot" }).points;
-    await a.close(); clock += 3 * 86400000;
+    await a.close(); clock += 3 * 3600000; // bubbles are kept 24 hours
     const b = createCvdIndicatorService(opts);
     try {
       b.get({ asset: "BTC", market: "spot" }); await b._groups.get("spot:BTC").ready;
