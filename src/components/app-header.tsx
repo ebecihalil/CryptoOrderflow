@@ -4,6 +4,7 @@ import { HomeButton } from '@/components/home-button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AccountButton } from '@/components/account-button';
 import { LanguagePicker } from '@/components/language-picker';
+import { TimeZonePicker } from '@/components/time-zone-picker';
 import { useI18n } from '@/lib/i18n';
 import type { HealthStatus } from '@/types/market';
 import '@/styles/app-header.css';
@@ -51,6 +52,7 @@ export function AppHeader({
             <span>{t(sectionLabel)}</span>
           </span>
           <LanguagePicker />
+          <TimeZonePicker />
           <span className={`app-header-feed${health.isError ? ' api-down' : health.isPending ? ' checking' : ''}`}
             data-testid="status-api-health" role="status" aria-label={feedLabel}
             title={health.isError ? 'API unreachable' : health.isPending ? 'Checking API connection' : 'API connected. Exchange availability is shown below.'}>

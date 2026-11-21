@@ -20,6 +20,7 @@ import { AggressiveBubblesPrimitive, type PlottedAggressiveBubble } from '@/comp
 import { VolumeProfilePrimitive } from '@/components/volume-profile-primitive';
 import type { SessionProfile, VolumeProfileSettings } from '@/lib/volume-profile';
 import type { MarketDriverBar, MarketDriverLabel, MarketDriverSettings } from '@/lib/market-driver';
+import { chartTimeFormatters, offsetLabel, useTimeZone } from '@/lib/time-zone';
 import { readChartPreference, writeChartPreference, validChartView, shiftedChartRange } from '@/lib/chart-preferences.js';
 
 type FundingPlot = { points: FundingIndicatorPoint[]; method: FundingIndicatorMethod; threshold: number };
@@ -152,6 +153,17 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const [hover, setHover] = useState<Candle | null>(null);
   // Top offset of every pane, for the TradingView-style legends.
   const [paneLayout, setPaneLayout] = useState<Array<{ key: string; top: number; height: number }>>([]);
+  // Chart times are shown in the chosen time zone (header menu); candles stay exchange (UTC) candles.
+  const [timeZone] = useTimeZone();
+  const timeZoneRef = useRef(timeZone);
+  timeZoneRef.current = timeZone;
+  useEffect(() => {
+    const formatters = chartTimeFormatters(timeZone);
+    bundleRef.current?.chart.applyOptions({
+      localization: { locale: 'en-US', timeFormatter: (time: Time) => formatters.timeFormatter(Number(time)) },
+      timeScale: { tickMarkFormatter: (time: Time, type: number) => formatters.tickMarkFormatter(Number(time), type) },
+    });
+  }, [timeZone]);
   const measurePanes = useCallback(() => {
     const chart = bundleRef.current?.chart;
     if (!chart) return;
@@ -245,8 +257,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       rightPriceScale: { borderColor: palette.border, scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: palette.border, timeVisible: true, secondsVisible: false, rightOffset: 5 },
       crosshair: { vertLine: { color: palette.accent }, horzLine: { color: palette.accent } },
-      localization: { locale: 'en-US' },
+      localization: { locale: 'en-US', timeFormatter: (time: Time) => chartTimeFormatters(timeZoneRef.current).timeFormatter(Number(time)) },
     });
+    chart.applyOptions({ timeScale: { tickMarkFormatter: (time: Time, type: number) => chartTimeFormatters(timeZoneRef.current).tickMarkFormatter(Number(time), type) } });
     const candleSeries = chart.addSeries(CandlestickSeries, {
       priceFormat: priceFormat(candles),
       upColor: palette.positive, downColor: CHART_COLORS.down, borderVisible: false,
@@ -874,7 +887,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   return (
     <div className="native-chart-wrap">
       <div className="native-chart-readout" aria-live="polite">
-        <span>{TIMEFRAME_LABELS[timeframe] ?? timeframe} · UTC</span>
+        <span>{TIMEFRAME_LABELS[timeframe] ?? timeframe} · {offsetLabel(timeZone)}</span>
         {hover ? <><b>O {hover.open.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>H {hover.high.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <b>L {hover.low.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b><b>C {hover.close.toLocaleString(undefined, { maximumSignificantDigits: 8 })}</b>
           <span>V {volumeByTime.has(hover.time) ? volumeByTime.get(hover.time)!.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span></> : <span>OHLC · move pointer over a candle</span>}
