@@ -18,13 +18,14 @@ import '@/styles/super-charts.css';
 import { useCoinMemory } from '@/hooks/use-coin-memory';
 
 type MenuId = 'technical' | 'orderflow' | null;
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'volume-profile' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
 const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'liquidity', label: 'Liquidity Zones' },
   { id: 'funding', label: 'Aggregated Funding Rate' },
   { id: 'perpetual-cvd', label: 'Aggregated Perpetual CVD' },
   { id: 'spot-cvd', label: 'Aggregated Spot CVD' },
   { id: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles' },
+  { id: 'volume-profile', label: 'Session Volume Profile' },
   { id: 'oi-driver', label: 'Aggregated Open Interest' },
   { id: 'leverage', label: 'Perp Leverage Estimation' },
   { id: 'global-lsar', label: 'Global Long Short Account Ratio' },

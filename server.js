@@ -168,6 +168,12 @@ app.get("/api/market/open-interest", (req, res) => {
 });
 
 // Aggregated Open Interest pane: total OI of every USDT/USDC perpetual, as chart candles (coins).
+// Session Volume Profile: real aggressive buy/sell volume at price per UTC day, from recorded trades.
+app.get("/api/indicators/volume-profile", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { res.json(cvdIndicatorService.getVolumeProfile(req.query)); }
+  catch (error) { res.status(error.status === 400 ? 400 : 503).json({ error: error.status === 400 ? error.message : "Volume profile is currently unavailable." }); }
+});
 app.get("/api/indicators/aggregated-oi", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try { res.json(await aggregatedOiService.get(req.query)); }

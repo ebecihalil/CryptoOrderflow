@@ -362,3 +362,26 @@ test("liquidations and liquidation-feed coverage survive a restart (7-day histor
   assert.ok(span[0] <= T + 1000 && span[1] >= T + 61_000 && span[1] < clock);
   await b.close(); await rm(dir, { recursive: true });
 });
+
+test("session volume profile: recorded taker buys and sells per price level per UTC day", async () => {
+  let clock = T, onTrade;
+  const svc = createCvdIndicatorService({ now: () => clock, storageDir: null, timers: false,
+    resolver: { resolve: async e => e === "binance" ? { exchange: e, market: "perpetual", symbol: "BTCUSDT", contractSize: 1 } : null },
+    streams: { start: async (_i, trade) => { onTrade = trade; return { stop() {} }; } } });
+  svc.get({ asset: "BTC", market: "perpetual" }); await svc._groups.get("perpetual:BTC").ready;
+  clock += 1000;
+  onTrade({ id: "1", exchange: "binance", symbol: "BTCUSDT", time: clock, side: "buy", value: 300, price: 100 });
+  onTrade({ id: "2", exchange: "binance", symbol: "BTCUSDT", time: clock + 1, side: "sell", value: 100, price: 100 });
+  onTrade({ id: "3", exchange: "binance", symbol: "BTCUSDT", time: clock + 2, side: "sell", value: 50, price: 110 });
+  clock += 10_000;
+  const profile = svc.getVolumeProfile({ asset: "BTC", market: "perpetual" });
+  assert.equal(profile.sessions.length, 1);
+  assert.equal(profile.sessions[0].time % 86400, 0);
+  const levels = profile.sessions[0].levels;
+  assert.equal(levels.length, 2);
+  assert.deepEqual([levels[0].buy, levels[0].sell], [300, 100]);
+  assert.ok(Math.abs(levels[0].price - 100) < 0.1);
+  assert.deepEqual([levels[1].buy, levels[1].sell], [0, 50]);
+  assert.throws(() => svc.getVolumeProfile({ asset: "BTC", market: "futures" }), /market/);
+  await svc.close();
+});

@@ -1,13 +1,15 @@
 export type ExtraPoint = { time: number; value: number | null; color?: string };
 export type ExtraSeries = {
   key: string; label: string; color: string; type: 'line' | 'histogram' | 'dots';
-  width?: number; dashed?: boolean; step?: boolean; data: ExtraPoint[];
+  width?: number; dashed?: boolean; step?: boolean; hidden?: boolean; data: ExtraPoint[];
 };
 export type ExtraResult = {
   series: ExtraSeries[];
   fills?: Array<{ upper: string; lower: string; up: string; down: string }>;
   levels?: Array<{ value: number; label?: string }>;
   range?: [number, number];
+  /** Short legend text instead of per-series values. */
+  summary?: string;
 };
 export type ExtraParam = { key: string; label: string; default: number; min: number; max: number; step: number };
 export type ExtraIndicatorId = string;

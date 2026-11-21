@@ -15,6 +15,8 @@ import { PERP_LEVERAGE_FRAMES, usePerpLeverage } from '@/hooks/use-perp-leverage
 import { LSAR_CHART_FRAMES, useLsarChart } from '@/hooks/use-lsar-chart';
 import { useAggressiveBubbles, type AggressiveBubblesMarket, type BubbleMinimum } from '@/hooks/use-aggressive-bubbles';
 import { useAggregatedOi } from '@/hooks/use-aggregated-oi';
+import { useVolumeProfile } from '@/hooks/use-volume-profile';
+import { buildProfiles, VOLUME_PROFILE_DEFAULTS, type VolumeProfileSettings } from '@/lib/volume-profile';
 import { calculateLiquidityZones, type Candle, type LiquiditySettings } from '@/lib/liquidity-zones';
 import type { MarketContract } from '@/hooks/use-market-contracts';
 import type { ChartStudyId } from '@/lib/supercharts';
@@ -23,7 +25,7 @@ import { useChartSetting } from '@/hooks/use-chart-setting';
 import { chartViewKey } from '@/lib/chart-preferences.js';
 import '@/styles/native-super-chart.css';
 
-type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
+type OrderflowId = 'liquidity' | 'funding' | 'perpetual-cvd' | 'spot-cvd' | 'aggressive-bubbles' | 'volume-profile' | 'oi-driver' | 'leverage' | 'global-lsar' | 'top-lsar';
 
 type Props = { contract: MarketContract | null; studies: ChartStudyId[]; indicators: OrderflowId[]; onRemoveLayer?: (key: string) => void;
   /** Page parts shown in the single chart toolbar: symbol search and the indicator menus. */
@@ -139,6 +141,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   // Ratio / leverage data comes every 5 minutes: below 5m it is shown as steps on each candle.
   const leverageFrame = belowFiveMinutes ? '5m' : PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
+  const hasVolumeProfile = indicators.includes('volume-profile');
+  const [volumeProfileSettings, setVolumeProfileSettings] = useChartSetting<VolumeProfileSettings>('volumeProfileSettings', VOLUME_PROFILE_DEFAULTS as VolumeProfileSettings,
+    value => !!value && typeof value === 'object' && ['both', 'spot', 'perpetual'].includes((value as VolumeProfileSettings).market));
   const lsarFrame = belowFiveMinutes ? '5m' : LSAR_CHART_FRAMES.includes(timeframe) ? timeframe : null;
   const hasGlobalLsar = indicators.includes('global-lsar') && !!lsarFrame;
   const hasTopLsar = indicators.includes('top-lsar') && !!lsarFrame;
@@ -231,6 +236,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         factory: { window: '7d', method: 'mean', mode: 'settled', threshold: 0.08 } };
       case 'perpetual-cvd': return { read: () => perpetualAnchor, apply: setPerpetualAnchor, factory: '1w' };
       case 'spot-cvd': return { read: () => spotAnchor, apply: setSpotAnchor, factory: '1w' };
+      case 'volume-profile': return { read: () => volumeProfileSettings, apply: setVolumeProfileSettings, factory: VOLUME_PROFILE_DEFAULTS as VolumeProfileSettings };
       case 'aggressive-bubbles': return { read: () => ({ market: bubbleMarket, minimum: bubbleMinValue, multiplier: bubbleMultiplier }),
         apply: (value) => { setBubbleMarket(value.market); setBubbleMinValue(value.minimum); setBubbleMultiplier(value.multiplier);
           setBubbleMinDraft(null); setBubbleMultDraft(null); setBubbleMinError(null); },
@@ -273,6 +279,10 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     aggressiveBubbles.payload.minValue === bubbleMinValue
     ? aggressiveBubbles.payload : null;
   const aggregatedOi = useAggregatedOi(canonicalAsset, timeframe, hasOiDriver);
+  const volumeProfile = useVolumeProfile(canonicalAsset, volumeProfileSettings.market, hasVolumeProfile);
+  const volumeProfiles = useMemo(() => hasVolumeProfile && volumeProfile.data?.asset === canonicalAsset
+    ? buildProfiles(volumeProfile.data, volumeProfileSettings, contract.priceDivisor || 1) : null,
+  [hasVolumeProfile, volumeProfile.data, canonicalAsset, volumeProfileSettings, contract.priceDivisor]);
   const oiPayload = aggregatedOi.data?.asset === canonicalAsset && aggregatedOi.data.timeframe === timeframe ? aggregatedOi.data : null;
   const leverage = usePerpLeverage(canonicalAsset, leverageFrame ?? '1h', exchange, nativeSymbol, hasLeverage);
   const globalLsar = useLsarChart(canonicalAsset, lsarFrame ?? '1h', 'global', hasGlobalLsar);
@@ -461,6 +471,28 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
       funding: fundingControls ?? undefined,
       'perpetual-cvd': cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd) || undefined,
       'spot-cvd': cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd) || undefined,
+      'volume-profile': hasVolumeProfile ? <section className="native-bubble-controls" aria-label="Session Volume Profile controls">
+        <div className="native-cvd-heading">
+          <div><span className="module-kicker">REAL AGGRESSIVE BUY / SELL VOLUME AT PRICE · UTC SESSIONS</span><h2>Session Volume Profile</h2></div>
+          <span className="native-cvd-source-total">{volumeProfiles ? `${volumeProfiles.length} session${volumeProfiles.length === 1 ? '' : 's'}` : 'Loading…'}</span>
+        </div>
+        <div className="native-cvd-control-row native-bubble-control-row">
+          {([['Market', 'market', [['both', 'Spot + Perp'], ['perpetual', 'Perpetual'], ['spot', 'Spot']]], ['Volume', 'mode', [['updown', 'Buy / Sell'], ['total', 'Total']]],
+            ['Placement', 'placement', [['left', 'Left'], ['right', 'Right']]]] as const).map(([label, key, options]) => (
+            <label key={key} className="super-chart-control"><span>{label}</span>
+              <select value={String(volumeProfileSettings[key])} onChange={(event) => setVolumeProfileSettings({ ...volumeProfileSettings, [key]: event.target.value })}>
+                {options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+              </select></label>))}
+          {([['Sessions to keep', 'sessions', 1, 7], ['Rows', 'rows', 8, 120], ['Value area %', 'valueArea', 1, 100], ['Width %', 'width', 5, 100]] as const).map(([label, key, min, max]) => (
+            <label key={key} className="super-chart-control"><span>{label}</span>
+              <input type="number" min={min} max={max} value={volumeProfileSettings[key]}
+                onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) setVolumeProfileSettings({ ...volumeProfileSettings, [key]: Math.min(max, Math.max(min, Math.round(value))) }); }} /></label>))}
+          {([['POC', 'showPoc'], ['VAH / VAL', 'showVa'], ['Developing session', 'developing']] as const).map(([label, key]) => (
+            <label key={key} className="super-chart-control native-check"><input type="checkbox" checked={volumeProfileSettings[key]}
+              onChange={(event) => setVolumeProfileSettings({ ...volumeProfileSettings, [key]: event.target.checked })} /> <span>{label}</span></label>))}
+        </div>
+        <p className="native-cvd-status" role="status">Built from every recorded executed trade on all exchanges: taker buys (teal) and taker sells (red) at each price, per UTC day. History starts when the server began recording this coin (kept 7 days).</p>
+      </section> : undefined,
       'aggressive-bubbles': hasAggressiveBubbles ? <section className="native-bubble-controls" aria-label="Aggressive Volume Bubbles controls">
         <div className="native-cvd-heading">
           <div><span className="module-kicker">EXECUTED TRADE ACTIVITY / USD-EQUIVALENT</span><h2>Aggressive Volume Bubbles</h2></div>
@@ -597,6 +629,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            layerSettings={layerSettings} layerActions={layerActions} liquidityEnabled={hasLiquidity}
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
+           volumeProfiles={volumeProfiles} volumeProfileSettings={hasVolumeProfile ? volumeProfileSettings : null}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}
