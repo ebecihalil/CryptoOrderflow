@@ -146,3 +146,13 @@
 :root:not(.dark) .pane-divider { border-top-color:rgba(40,56,59,.45); }
 .pane-note { position:absolute;left:0;right:64px;z-index:2;display:grid;place-items:center;pointer-events:none; }
 .pane-note span { padding:6px 12px;border:1px solid var(--lsar-border);border-radius:4px;background:color-mix(in srgb,var(--lsar-surface) 92%,transparent);color:var(--lsar-strong);font:11px var(--app-font-mono);text-align:center; }
+
+/* Market Driver details: box at the bottom right of its pane (left of the price scale). */
+.md-box { position:absolute;right:74px;z-index:4;transform:translateY(-100%);max-width:min(340px,calc(100% - 120px));padding:7px 9px;border:1px solid var(--lsar-border);border-radius:6px;background:color-mix(in srgb,var(--lsar-surface) 92%,transparent);box-shadow:0 6px 18px rgba(0,0,0,.25);font:11px var(--app-font-mono);line-height:1.45;pointer-events:none; }
+.md-box-state { font-weight:700; }
+.md-box-note { opacity:.9; }
+.md-box-row { display:flex;gap:10px; }
+.md-box-row .is-buy { color:#22c55e; } .md-box-row .is-sell { color:#ef4444; }
+.md-box-row.is-pullback { color:#facc15; }
+.md-box-totals { display:grid;grid-template-columns:auto auto;gap:1px 12px;margin:5px 0 0;padding-top:5px;border-top:1px solid var(--lsar-border);color:var(--lsar-muted); }
+.md-box-totals dt { margin:0; } .md-box-totals dd { margin:0;color:var(--lsar-ink);text-align:right; }

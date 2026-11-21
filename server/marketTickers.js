@@ -4,6 +4,7 @@
 // the list open, through the same per-exchange request gates as everything else.
 import { requestJson, requestGates } from "./exchangeRequests.js";
 import { CHART_VENUES } from "./marketContracts.js";
+import { createDailyOpenService } from "./dailyOpens.js";
 
 const URLS = {
   binance: "https://fapi.binance.com/fapi/v1/ticker/24hr",
@@ -49,18 +50,19 @@ export function parseTickers(exchange, body) {
   if (["okx", "bitget", "bingx"].includes(exchange) && Number(body.code) !== 0) throw new Error(`${exchange} tickers rejected.`);
   const out = [];
   for (const row of rows) {
-    let symbol, last, change, volume;
+    let symbol, last, change, volume, dayOpen = null;
     switch (exchange) {
       case "binance": symbol = row.symbol; last = num(row.lastPrice); change = num(row.priceChangePercent); volume = num(row.quoteVolume); break;
       case "bybit": symbol = row.symbol; last = num(row.lastPrice);
         change = num(row.price24hPcnt) !== null ? num(row.price24hPcnt) * 100 : pct(last, num(row.prevPrice24h)); volume = num(row.turnover24h); break;
       case "okx": symbol = row.instId; last = num(row.last); change = pct(last, num(row.open24h));
-        volume = num(row.volCcy24h) !== null && last ? num(row.volCcy24h) * last : null; break;
+        volume = num(row.volCcy24h) !== null && last ? num(row.volCcy24h) * last : null; dayOpen = num(row.sodUtc0); break;
       case "gate": symbol = row.contract; last = num(row.last); change = num(row.change_percentage); volume = num(row.volume_24h_quote); break;
       case "mexc": symbol = row.symbol; last = num(row.lastPrice);
         change = num(row.riseFallRate) !== null ? num(row.riseFallRate) * 100 : null; volume = num(row.amount24); break;
       case "bitget": symbol = row.symbol; last = num(row.lastPr);
-        change = num(row.change24h) !== null ? num(row.change24h) * 100 : pct(last, num(row.open24h)); volume = num(row.usdtVolume ?? row.quoteVolume); break;
+        change = num(row.change24h) !== null ? num(row.change24h) * 100 : pct(last, num(row.open24h)); volume = num(row.usdtVolume ?? row.quoteVolume);
+        dayOpen = num(row.openUtc); break;
       case "bingx": symbol = row.symbol; last = num(row.lastPrice); change = num(row.priceChangePercent); volume = num(row.quoteVolume); break;
       case "aster": symbol = row.symbol; last = num(row.lastPrice); change = num(row.priceChangePercent); volume = num(row.quoteVolume); break;
       case "kucoin": symbol = row.symbol; last = num(row.lastTradePrice);
@@ -69,12 +71,13 @@ export function parseTickers(exchange, body) {
       default: throw new Error("Unsupported ticker exchange.");
     }
     if (typeof symbol !== "string" || !(last > 0)) continue;
-    out.push([symbol, last, change === null ? null : Math.round(change * 1000) / 1000, volume]);
+    out.push(dayOpen > 0 ? [symbol, last, change === null ? null : Math.round(change * 1000) / 1000, volume, dayOpen]
+      : [symbol, last, change === null ? null : Math.round(change * 1000) / 1000, volume]);
   }
   return out;
 }
 
-export function createMarketTickerService({ request = requestJson, gates = requestGates, now = Date.now } = {}) {
+export function createMarketTickerService({ request = requestJson, gates = requestGates, now = Date.now, dailyOpens = createDailyOpenService({ request, now }) } = {}) {
   const states = new Map(Object.keys(CHART_VENUES).map(exchange =>
     [exchange, { rows: [], status: "loading", updatedAt: null, nextAttempt: 0, pending: null }]));
   let lastViewed = 0;
@@ -95,15 +98,22 @@ export function createMarketTickerService({ request = requestJson, gates = reque
     })().finally(() => { state.pending = null; });
   }
 
-  /** Compact payload: per exchange, rows of [symbol, last, change%, volumeUsd]. */
+  /** Change since today's 00:00 UTC daily open (TradingView's watchlist basis), or null until known. */
+  const sinceUtcOpen = (exchange, row) => {
+    if (row[4] > 0) dailyOpens.set(exchange, row[0], row[4]);
+    const open = row[4] > 0 ? row[4] : dailyOpens.get(exchange, row[0]);
+    return open > 0 ? Math.round((row[1] / open - 1) * 100_000) / 1000 : null;
+  };
+  /** Compact payload: per exchange, rows of [symbol, last, change% (rolling 24h), volumeUsd, change% since 00:00 UTC]. */
   function get() {
     lastViewed = now();
     for (const exchange of states.keys()) collect(exchange);
     return {
       exchanges: Object.fromEntries([...states].map(([exchange, state]) => [exchange, {
-        status: state.status, updatedAt: state.updatedAt ? new Date(state.updatedAt).toISOString() : null, rows: state.rows,
+        status: state.status, updatedAt: state.updatedAt ? new Date(state.updatedAt).toISOString() : null,
+        rows: state.rows.map(row => [row[0], row[1], row[2], row[3], sinceUtcOpen(exchange, row)]),
       }])),
-      fields: ["symbol", "last", "changePercent", "volumeUsd"],
+      fields: ["symbol", "last", "changePercent", "volumeUsd", "changePercentUtc"],
       generatedAt: new Date(now()).toISOString(),
     };
   }

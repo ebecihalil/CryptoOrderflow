@@ -211,6 +211,14 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       return [{ ...bar, open, close, high: Math.max(open, close, bar.high * price), low: Math.min(open, close, bar.low * price) }];
     });
   }, [oiDriver, candles]);
+  const marketDriverBox = useMemo(() => {
+    if (!marketDriverEnabled || !marketDriver) return null;
+    const bars = marketDriver.bars.filter((bar): bar is MarketDriverBar => !!bar);
+    const time = hover?.time ?? candles.at(-1)?.time ?? null;
+    const bar = bars.find((item) => item.time === time) ?? bars.at(-1);
+    if (!bar) return null;
+    return { bar, totals: marketDriver.settings.showTotals ? marketDriver.totals : null };
+  }, [marketDriverEnabled, marketDriver, hover, candles]);
   candleDataRef.current = candles;
   const volumeByTime = useMemo(() => new Map(volumeCandles.map((bar) => [bar.time, bar.volume])), [volumeCandles]);
   const studyData = useMemo(() => calculateTechnicalIndicators(candles, technicalSettings), [candles, technicalSettings]);
@@ -842,20 +850,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         return [{ key: 'liquidations', label: 'Aggregated Liquidations', params: 'USD · % of OI', color: '#26a69a', values }];
       }
       if (key === 'market-driver') {
-        const bars = (marketDriver?.bars ?? []).filter((bar): bar is MarketDriverBar => !!bar);
-        const bar = bars.find((item) => item.time === legendTime) ?? bars.at(-1);
-        const totals = marketDriver?.totals, show = marketDriver?.settings.showTotals;
-        const values = bar ? [
-          { text: bar.driverTop, color: bar.stateColor },
-          ...(bar.driverBottom ? [{ text: `· ${bar.driverBottom}`, color: bar.stateColor }] : []),
-          ...(bar.buyPct !== null ? [{ text: `Buy ${bar.buyPct.toFixed(1)}%`, color: '#22c55e' }, { text: `Sell ${(bar.sellPct ?? 0).toFixed(1)}%`, color: '#ef4444' }] : []),
-          ...(bar.pullback2 ? [{ text: 'Pullback 20%', color: '#facc15' }] : bar.pullback1 ? [{ text: 'Pullback 10%', color: '#facc15' }] : []),
-          ...(show && totals ? [
-            { text: `OI ${totals.oiCoin ? compactCvd(totals.oiCoin) : '-'}` }, { text: `OI $${totals.oiUsd ? compactCvd(totals.oiUsd) : '-'}` },
-            { text: `Daily vol $${totals.dailyVolumeUsd ? compactCvd(totals.dailyVolumeUsd) : '-'}` },
-            { text: `20D avg $${totals.average20dVolumeUsd ? compactCvd(totals.average20dVolumeUsd) : '-'}` }] : []),
-        ] : paneNotes['market-driver'] ? undefined : [{ text: 'Collecting data...' }];
-        return [{ key: 'market-driver', label: 'Market Driver', params: 'Agg OI · Top L/S', color: '#3b82f6', values }];
+        const hasBars = (marketDriver?.bars ?? []).some((bar) => !!bar);
+        return [{ key: 'market-driver', label: 'Market Driver', params: 'Agg OI · Top L/S', color: '#3b82f6',
+          values: hasBars ? [] : paneNotes['market-driver'] ? undefined : [{ text: 'Collecting data...' }] }];
       }
       if (key === 'oi-driver') {
         const bar = oiUsdBars.find((item) => item.time === legendTime) ?? oiUsdBars.at(-1);
@@ -903,6 +900,23 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         <div className="native-chart-canvas" ref={mountRef} role="img" aria-label="Native exchange-fed candlestick chart with synchronized indicator panes" />
         {/* Clear frames between panes (the chart's own separator stays draggable underneath). */}
         {paneLayout.slice(1).map((pane) => <div key={pane.key} className="pane-divider" style={{ top: pane.top }} aria-hidden="true" />)}
+        {marketDriverBox && paneLayout.filter((pane) => pane.key === 'market-driver').map((pane) => {
+          const { bar, totals } = marketDriverBox;
+          return (
+            <div key="md-box" className="md-box" style={{ top: pane.top + pane.height - 6 }} data-testid="market-driver-box">
+              <div className="md-box-state" style={{ color: bar.stateColor }}>{bar.driverTop}</div>
+              {bar.driverBottom && <div className="md-box-note" style={{ color: bar.stateColor }}>{bar.driverBottom}</div>}
+              {bar.buyPct !== null && <div className="md-box-row"><span className="is-buy">Buy {bar.buyPct.toFixed(1)}%</span><span className="is-sell">Sell {(bar.sellPct ?? 0).toFixed(1)}%</span></div>}
+              {(bar.pullback1 || bar.pullback2) && <div className="md-box-row is-pullback">Pullback {bar.pullback2 ? '20%' : '10%'}</div>}
+              {totals && <dl className="md-box-totals">
+                <dt>Total OI</dt><dd>{totals.oiCoin ? compactCvd(totals.oiCoin) : '-'}</dd>
+                <dt>OI value</dt><dd>{totals.oiUsd ? `$${compactCvd(totals.oiUsd)}` : '-'}</dd>
+                <dt>Daily vol</dt><dd>{totals.dailyVolumeUsd ? `$${compactCvd(totals.dailyVolumeUsd)}` : '-'}</dd>
+                <dt>20D avg vol</dt><dd>{totals.average20dVolumeUsd ? `$${compactCvd(totals.average20dVolumeUsd)}` : '-'}</dd>
+              </dl>}
+            </div>
+          );
+        })}
         {paneLayout.filter((pane) => paneNotes[pane.key]).map((pane) => (
           <div key={`note-${pane.key}`} className="pane-note" style={{ top: pane.top, height: pane.height }} role="status">
             <span>{paneNotes[pane.key]}</span></div>

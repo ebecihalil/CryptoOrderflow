@@ -16,7 +16,7 @@ import '@/styles/market-list.css';
  * rows you don't need (Reset brings everything back). Saved in this browser.
  */
 
-type TickerRow = [symbol: string, last: number, changePercent: number | null, volumeUsd: number | null];
+type TickerRow = [symbol: string, last: number, changePercent: number | null, volumeUsd: number | null, changePercentUtc?: number | null];
 type TickersPayload = {
   exchanges: Record<string, { status: 'ok' | 'stale' | 'loading' | 'unavailable'; updatedAt: string | null; rows: TickerRow[] }>;
   generatedAt: string;
@@ -29,6 +29,8 @@ type Prefs = {
   /** Ten priority slots (exchange id or empty); first = preferred. */
   slots: Array<string | null>; oneRow: boolean;
   sort: { key: SortKey; dir: 1 | -1 }; move: Move; minMove: number;
+  /** Change basis: since today's 00:00 UTC daily open (like TradingView) or the exchanges' rolling 24 hours. */
+  changeBasis?: 'utc' | 'rolling';
   /** Colour sort: coloured rows first, grouped in palette order; the column sort applies inside each group. */
   colorSort: boolean;
 };
@@ -50,7 +52,7 @@ const COLOR_VALUE = Object.fromEntries(HIGHLIGHT_COLORS.map((color) => [color.id
 const KEY = 'cof:v1:market-list';
 const DEFAULTS: Prefs = {
   hidden: [], colors: {}, slots: DEFAULT_SLOTS, oneRow: true,
-  sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorSort: false,
+  sort: { key: 'volume', dir: -1 }, move: 'all', minMove: 0, colorSort: false, changeBasis: 'utc',
 };
 const ROW_HEIGHT = 38;
 
@@ -185,7 +187,8 @@ export function MarketList({ contracts, current, onSelect }: {
       const key = `${contract.exchange.toLowerCase()}:${contract.symbol}`;
       const ticker = prices.get(key);
       const last = ticker?.[1] ?? null;
-      const changePercent = ticker?.[2] ?? null;
+      // Since 00:00 UTC (TradingView's basis) when known, else the rolling 24h change.
+      const changePercent = prefs.changeBasis !== 'rolling' && typeof ticker?.[4] === 'number' ? ticker[4] : ticker?.[2] ?? null;
       const change = last !== null && changePercent !== null ? last - last / (1 + changePercent / 100) : null;
       return { key, contract, last, change, changePercent, volume: ticker?.[3] ?? null, color: prefs.colors[key], others, secondary };
     };
@@ -365,6 +368,13 @@ export function MarketList({ contracts, current, onSelect }: {
                 onClick={() => update({ move })} data-testid={`market-move-${move}`}>{move === 'all' ? 'All' : move === 'gainers' ? 'Gainers' : 'Losers'}</button>
             ))}
           </div>
+          <label className="market-list-min" title="Change since today's daily open at 00:00 UTC (like TradingView), or over the last 24 hours">
+            <span>Change</span>
+            <select value={prefs.changeBasis ?? 'utc'} onChange={(event) => update({ changeBasis: event.target.value as 'utc' | 'rolling' })}
+              aria-label="Change basis" data-testid="market-change-basis">
+              <option value="utc">Since 00:00 UTC</option><option value="rolling">Rolling 24h</option>
+            </select>
+          </label>
           <label className="market-list-min" title="Only coins that moved at least this much in 24h (up or down)">
             <span>Move ≥</span>
             <input type="number" min="0" max="1000" step="1" value={prefs.minMove || ''} placeholder="0"

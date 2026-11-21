@@ -47,3 +47,7 @@
 .pane-legend-eye:hover { color:var(--lsar-ink);background:color-mix(in srgb,var(--lsar-ink) 10%,transparent); }
 .pane-legend-row.is-hidden .pane-legend-name, .pane-legend-row.is-hidden .pane-legend-params, .pane-legend-row.is-hidden .pane-legend-swatch { opacity:.45; }
 .pane-legend-row.is-hidden .pane-legend-eye { color:var(--lsar-ink); }
+
+/* Legend lines never run past the chart into the market list. */
+.pane-legend { max-width:calc(100% - 90px); }
+.pane-legend-row { flex-wrap:wrap; }
