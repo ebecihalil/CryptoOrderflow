@@ -227,7 +227,12 @@ export function createTradingService({ client, config }) {
  * /api/trading/*: REAL trading, only the owner account (TRADING_OWNER_EMAIL) can see or use it.
  * /api/paper/*: paper trading (simulated money, live Bybit prices) for every signed-in user.
  */
-export function createTradingRouter({ accounts, config = bybitConfig(), service = null, paper = null }) {
+/** Admin accounts (may use real trading): TRADING_OWNER_EMAIL, plus ADMIN_EMAILS (comma separated). */
+export function adminEmails(env = process.env) {
+  return new Set([env.TRADING_OWNER_EMAIL, ...(env.ADMIN_EMAILS ?? "").split(",")].map(email => email?.trim().toLowerCase()).filter(Boolean));
+}
+
+export function createTradingRouter({ accounts, config = bybitConfig(), service = null, paper = null, admins = adminEmails() }) {
   const router = express.Router();
   const trading = config ? service ?? createTradingService({ client: createBybitClient({ config }), config }) : null;
   const userOf = req => accounts.userForToken(readCookie(req.headers.cookie, SESSION_COOKIE));
@@ -236,12 +241,13 @@ export function createTradingRouter({ accounts, config = bybitConfig(), service 
     const user = userOf(req);
     return !!user && user.email.toLowerCase() === config.owner;
   };
-  // Real trading is never mentioned to anyone but the owner.
+  // Real trading is never mentioned to anyone but an admin.
   router.get("/trading/status", (req, res) => {
     res.set("Cache-Control", "no-store");
     const user = userOf(req);
-    res.json(owner(req) ? { enabled: true, exchange: "bybit", testnet: config.testnet, paper: !!paper }
-      : { enabled: false, paper: !!paper && !!user });
+    const admin = !!user && admins.has(user.email.toLowerCase());
+    if (owner(req)) return res.json({ enabled: true, exchange: "bybit", testnet: config.testnet, paper: !!paper, admin: true, bybit: "ready" });
+    res.json(admin ? { enabled: false, paper: !!paper, admin: true, bybit: "not-set-up" } : { enabled: false, paper: !!paper && !!user });
   });
   const guarded = (allowed, handler) => async (req, res) => {
     res.set("Cache-Control", "no-store");

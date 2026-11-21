@@ -17,6 +17,18 @@ const savedConnection = read('trade-connection');
 export const EMPTY_DRAFT: Draft = { side: 'Buy', type: 'limit', price: '', trigger: '', qty: '', unit: (read('trade-unit') as Draft['unit']) || 'coin',
   tpOn: false, tp: '', slOn: false, sl: '' };
 
+function flipped(draft: Draft, side: 'Buy' | 'Sell', entry?: number | null): Draft {
+  if (draft.side === side) return draft;
+  const mirror = (value: string) => {
+    const v = Number(value);
+    if (!entry || !value || !Number.isFinite(v)) return value;
+    const decimals = value.includes('.') ? value.split('.')[1].length : 0;
+    const next = 2 * entry - v;
+    return next > 0 ? next.toFixed(decimals) : '';
+  };
+  return { ...draft, side, tp: mirror(draft.tp), sl: mirror(draft.sl), tpOn: draft.tpOn && !!mirror(draft.tp), slOn: draft.slOn && !!mirror(draft.sl) };
+}
+
 let state: State = {
   connection: savedConnection === 'paper' || savedConnection === 'real' ? savedConnection : 'none',
   ticketOpen: read('trade-ticket-open') === '1', connectOpen: false, draft: EMPTY_DRAFT, target: null,
@@ -45,8 +57,11 @@ export const tradeStore = {
     if (patch.unit) write('trade-unit', patch.unit);
     set({ draft: { ...state.draft, ...patch } });
   },
+  /** Change side; TP / SL already set are mirrored around the entry price to the other side. */
+  setSide: (side: 'Buy' | 'Sell', entry?: number | null) => set({ draft: flipped(state.draft, side, entry) }),
   /** Buy / Sell buttons on the chart: open the ticket on that side. */
-  openTicket: (side?: 'Buy' | 'Sell') => set({ ticketOpen: true, ...(side ? { draft: { ...state.draft, side, price: '' } } : {}) }),
+  openTicket: (side?: 'Buy' | 'Sell', entry?: number | null) =>
+    set({ ticketOpen: true, ...(side ? { draft: { ...flipped(state.draft, side, entry), price: '' } } : {}) }),
 };
 
 export function useTradeStore<T>(select: (value: State) => T): T {

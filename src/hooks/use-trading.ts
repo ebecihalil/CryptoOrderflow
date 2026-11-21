@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 /** enabled = REAL trading (owner only); paper = paper trading (any signed-in user). */
-export type TradingStatus = { enabled: boolean; paper?: boolean; exchange?: 'bybit'; testnet?: boolean };
+export type TradingStatus = { enabled: boolean; paper?: boolean; exchange?: 'bybit'; testnet?: boolean; admin?: boolean; bybit?: 'ready' | 'not-set-up' };
 export type TradingMode = 'real' | 'paper';
 const api = (mode: TradingMode) => (mode === 'real' ? '/api/trading' : '/api/paper');
 /** The contract an order goes to: paper trades the chart's own exchange; real always Bybit. */

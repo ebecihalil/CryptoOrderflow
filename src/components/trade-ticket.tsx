@@ -107,9 +107,9 @@ export function TradeTicket({ mode, testnet, account, onClose }: {
       </header>
       {market.error && <p className="trade-msg is-error">{(market.error as Error).message}</p>}
       <div className="trade-sides" role="radiogroup" aria-label="Side">
-        <button type="button" className={`trade-side is-sell${side === 'Sell' ? ' is-on' : ''}`} onClick={() => set({ side: 'Sell' })} aria-pressed={side === 'Sell'}>
+        <button type="button" className={`trade-side is-sell${side === 'Sell' ? ' is-on' : ''}`} onClick={() => tradeStore.setSide('Sell', refPrice)} aria-pressed={side === 'Sell'}>
           <small>Sell</small><b>{info?.bid ?? '—'}</b></button>
-        <button type="button" className={`trade-side is-buy${side === 'Buy' ? ' is-on' : ''}`} onClick={() => set({ side: 'Buy' })} aria-pressed={side === 'Buy'}>
+        <button type="button" className={`trade-side is-buy${side === 'Buy' ? ' is-on' : ''}`} onClick={() => tradeStore.setSide('Buy', refPrice)} aria-pressed={side === 'Buy'}>
           <small>Buy</small><b>{info?.ask ?? '—'}</b></button>
         {info?.bid && info?.ask && <span className="trade-spread">{Math.max(0, Number(info.ask) - Number(info.bid)).toFixed(stepDecimals(tick))}</span>}
       </div>
