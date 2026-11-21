@@ -23,7 +23,8 @@ import { secondCandleService } from "./server/secondCandleService.js";
 import { isSecondTimeframe } from "./server/timeframes.js";
 import { createAccountRouter } from "./server/accountRoutes.js";
 import { createTradingRouter } from "./server/bybitTrading.js";
-import { createPaperTrading } from "./server/paperTrading.js";
+import { createPaperTrading, createLiveQuotes } from "./server/paperTrading.js";
+import { requestJson } from "./server/exchangeRequests.js";
 import { getLsarChart } from "./server/lsarChart.js";
 import { createPerpLeverageService } from "./server/perpLeverage.js";
 import { aggregatedOiService } from "./server/aggregatedOi.js";
@@ -61,7 +62,7 @@ app.use(express.json({ limit: "20kb" }));
 // Free accounts: sign up / sign in, per-account watchlist.
 const accounts = createAccountService();
 app.use("/api", createAccountRouter({ accounts }));
-app.use("/api", createTradingRouter({ accounts, paper: createPaperTrading({ directory: fileURLToPath(new URL("./.cache/paper/", import.meta.url)) }) }));
+app.use("/api", createTradingRouter({ accounts, paper: createPaperTrading({ data: createLiveQuotes({ request: requestJson }), directory: fileURLToPath(new URL("./.cache/paper/", import.meta.url)) }) }));
 // Contact Us: saved on the server and emailed to the owner (Reply-To = visitor).
 const contact = createContactService();
 const contactLimiter = createAttemptLimiter({ limit: 5, windowMs: 60 * 60_000 });

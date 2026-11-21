@@ -1,82 +1,134 @@
 // Paper trading for every signed-in user: a simulated USDT-perpetual account per user,
-// priced and matched against LIVE Bybit market data (public endpoints, no keys).
-// Same request/response shapes as the real Bybit routes, so the UI is shared.
+// priced and matched against LIVE exchange prices (public endpoints, no keys) of
+// whichever exchange the chart shows. Same request/response shapes as the real Bybit
+// routes (plus `exchange`), so the UI is shared.
 //
-// Model (simplified Bybit one-way, cross margin):
+// Model (simplified one-way, cross margin):
 // - wallet: USDT; each position {side, size, entry, leverage, tp, sl}; margin = size*entry/leverage
 // - equity = wallet + unrealised PnL; available = equity - position margin - open-order margin
-// - fills: market at bid/ask (taker fee 0.055%), limit when the last price reaches it (maker 0.02%),
+// - fills: market at bid/ask (market fee), limit when the last price reaches it (limit fee),
 //   stop / stop-limit trigger on the last price, TP/SL close at market, liquidation when the mark
 //   crosses entry * (1 ∓ 1/leverage ± 0.5%) (isolated-style: the position's margin is lost)
+// - settings per user: starting balance (USDT), commission on/off, market and limit fee %
 // Accounts are saved as JSON per user in .cache/paper/ and checked every 2 s while anything is open.
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { TradingError, toStep } from "./bybitTrading.js";
 
-export const PAPER_START_BALANCE = 10_000;
-const TAKER = 0.00055, MAKER = 0.0002, MMR = 0.005;
-const SYMBOL = /^[A-Z0-9]{2,30}$/;
+export const PAPER_DEFAULTS = { startBalance: 10_000, commission: true, marketFeePct: 0.05, limitFeePct: 0.02 };
+export const PAPER_START_BALANCE = PAPER_DEFAULTS.startBalance;
+const MMR = 0.005, MAX_LEVERAGE = 100;
+const SYMBOL = /^[A-Za-z0-9_.:/-]{2,40}$/, EXCHANGE = /^[a-z0-9]{2,20}$/, ASSET = /^[A-Z0-9]{1,30}$/;
 const num = value => { const n = Number(value); return Number.isFinite(n) ? n : null; };
 const positive = value => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : null; };
 const round = (value, digits = 8) => Math.round(value * 10 ** digits) / 10 ** digits;
+const keyOf = (exchange, symbol) => `${exchange}:${symbol}`;
 
 export function liquidationPrice(position) {
   const dir = position.side === "Buy" ? 1 : -1;
   return position.entry * (1 - dir / position.leverage + dir * MMR);
 }
 
-/** Public Bybit data (shared by all users): tickers cached ~1.5 s, instruments 1 h. */
-export function createBybitPublicData({ fetchImpl = fetch, base = "https://api.bybit.com", now = Date.now } = {}) {
-  let tickers = { at: 0, map: new Map(), pending: null };
+/** Lot and tick sizes for venues whose contract rules are not loaded: ~6 significant price digits, ~$1 lots. */
+export function genericRules(price) {
+  const p = positive(price) ?? 1;
+  const tickExp = Math.floor(Math.log10(p)) - 5, qtyExp = Math.floor(Math.log10(1 / p));
+  const fmt = exp => exp >= 0 ? String(10 ** exp) : (10 ** exp).toFixed(-exp);
+  return { tickSize: fmt(tickExp), qtyStep: fmt(qtyExp), minQty: fmt(qtyExp), maxQty: "1000000000", maxLeverage: MAX_LEVERAGE };
+}
+
+// Bulk "every contract" quote endpoints: one request per exchange, shared by every user.
+const QUOTE_SOURCES = {
+  bybit: { url: "https://api.bybit.com/v5/market/tickers?category=linear", rows: b => b?.result?.list,
+    row: r => [r.symbol, r.lastPrice, r.bid1Price, r.ask1Price, r.markPrice] },
+  binance: { url: "https://fapi.binance.com/fapi/v1/ticker/bookTicker", rows: b => b,
+    row: r => [r.symbol, (Number(r.bidPrice) + Number(r.askPrice)) / 2, r.bidPrice, r.askPrice] },
+  okx: { url: "https://www.okx.com/api/v5/market/tickers?instType=SWAP", rows: b => b?.data, row: r => [r.instId, r.last, r.bidPx, r.askPx] },
+  bitget: { url: "https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES", rows: b => b?.data,
+    row: r => [r.symbol, r.lastPr, r.bidPr, r.askPr, r.markPrice] },
+  gate: { url: "https://api.gateio.ws/api/v4/futures/usdt/tickers", rows: b => b, row: r => [r.contract, r.last, r.highest_bid, r.lowest_ask, r.mark_price] },
+  mexc: { url: "https://contract.mexc.com/api/v1/contract/ticker", rows: b => b?.data, row: r => [r.symbol, r.lastPrice, r.bid1, r.ask1, r.fairPrice] },
+};
+export const PAPER_LIVE_EXCHANGES = Object.keys(QUOTE_SOURCES);
+
+/**
+ * Live quotes: {last, bid, ask, mark} for (exchange, symbol). Exchanges without a bulk source
+ * here use the same coin's Bybit USDT contract. Bulk lists are cached ~1.5 s.
+ */
+export function createLiveQuotes({ request = async url => (await fetch(url, { signal: AbortSignal.timeout(10_000) })).json(), now = Date.now } = {}) {
+  const lists = new Map(); // exchange -> {at, map, pending}
   const instruments = new Map();
-  const get = async path => {
-    const response = await fetchImpl(`${base}${path}`, { signal: AbortSignal.timeout(10_000) });
-    const data = await response.json();
-    if (data?.retCode !== 0) throw new TradingError(502, `Bybit: ${data?.retMsg ?? "no data"}`);
-    return data.result;
-  };
-  async function allTickers() {
-    if (now() - tickers.at < 1500) return tickers.map;
-    if (!tickers.pending) tickers.pending = get("/v5/market/tickers?category=linear").then(result => {
-      tickers = { at: now(), map: new Map((result?.list ?? []).map(row => [row.symbol, row])), pending: null };
-      return tickers.map;
-    }).catch(error => { tickers.pending = null; throw error; });
-    return tickers.pending;
+  async function list(exchange) {
+    const source = QUOTE_SOURCES[exchange];
+    let state = lists.get(exchange);
+    if (state && now() - state.at < 1500) return state.map;
+    if (state?.pending) return state.pending;
+    const pending = request(source.url).then(body => {
+      const map = new Map();
+      for (const raw of source.rows(body) ?? []) {
+        const [symbol, last, bid, ask, mark] = source.row(raw);
+        const l = positive(last), b = positive(bid) ?? l, a = positive(ask) ?? l;
+        if (symbol && l) map.set(symbol, { last: l, bid: b, ask: a, mark: positive(mark) ?? l });
+      }
+      lists.set(exchange, { at: now(), map, pending: null });
+      return map;
+    }).catch(error => { lists.set(exchange, { ...(lists.get(exchange) ?? { at: 0, map: new Map() }), pending: null }); throw error; });
+    lists.set(exchange, { at: state?.at ?? 0, map: state?.map ?? new Map(), pending });
+    return pending;
   }
-  async function instrument(symbol) {
-    if (!SYMBOL.test(symbol)) throw new TradingError(400, "Unknown contract.");
+  async function quote(exchange, symbol, asset) {
+    if (QUOTE_SOURCES[exchange]) {
+      const found = (await list(exchange).catch(() => new Map())).get(symbol);
+      if (found) return { ...found, source: exchange };
+    }
+    if (asset) {
+      const found = (await list("bybit").catch(() => new Map())).get(`${asset}USDT`);
+      if (found) return { ...found, source: "bybit" };
+    }
+    return null;
+  }
+  async function bybitRules(symbol) {
     const cached = instruments.get(symbol);
     if (cached && now() - cached.at < 3600_000) return cached.info;
-    const result = await get(`/v5/market/instruments-info?category=linear&symbol=${symbol}`);
-    const row = result?.list?.[0];
-    if (!row || row.status !== "Trading") throw new TradingError(404, `${symbol} is not trading on Bybit.`);
-    const info = { symbol, tickSize: row.priceFilter.tickSize, qtyStep: row.lotSizeFilter.qtyStep, minQty: row.lotSizeFilter.minOrderQty,
-      maxQty: row.lotSizeFilter.maxOrderQty, maxLeverage: Number(row.leverageFilter.maxLeverage), base: row.baseCoin };
+    let info = null;
+    try {
+      const body = await request(`https://api.bybit.com/v5/market/instruments-info?category=linear&symbol=${encodeURIComponent(symbol)}`);
+      const row = body?.result?.list?.[0];
+      if (row?.status === "Trading") info = { tickSize: row.priceFilter.tickSize, qtyStep: row.lotSizeFilter.qtyStep, minQty: row.lotSizeFilter.minOrderQty,
+        maxQty: row.lotSizeFilter.maxOrderQty, maxLeverage: Number(row.leverageFilter.maxLeverage) };
+    } catch { info = null; }
     instruments.set(symbol, { at: now(), info });
     return info;
   }
-  return { allTickers, instrument };
+  /** Contract rules: Bybit's own for Bybit contracts, otherwise generic from the price. */
+  async function instrument(exchange, symbol, asset) {
+    const q = await quote(exchange, symbol, asset);
+    if (!q) throw new TradingError(404, "No live price for this contract right now.");
+    const rules = (exchange === "bybit" && await bybitRules(symbol)) || genericRules(q.last);
+    return { symbol, exchange, base: asset || symbol.replace(/[-_]?USDT.*$/i, ""), ...rules };
+  }
+  return { quote, instrument };
 }
 
-export function createPaperTrading({ data = createBybitPublicData(), directory = null, now = Date.now, timers = true } = {}) {
+export function createPaperTrading({ data = createLiveQuotes(), directory = null, now = Date.now, timers = true } = {}) {
   const accounts = new Map(); // userId -> account
   const dirty = new Set();
-  const fresh = () => ({ wallet: PAPER_START_BALANCE, positions: {}, orders: [], history: [], leverage: {}, createdAt: now() });
+  const fresh = (settings = PAPER_DEFAULTS) => ({ wallet: settings.startBalance, settings: { ...settings }, positions: {}, orders: [], history: [], leverage: {}, createdAt: now() });
   const file = userId => join(directory, `${userId}.json`);
   function load(userId) {
     if (accounts.has(userId)) return accounts.get(userId);
     let account = fresh();
-    if (directory) { try { account = { ...fresh(), ...JSON.parse(readFileSync(file(userId), "utf8")) }; } catch { /* new account */ } }
+    if (directory) { try { const saved = JSON.parse(readFileSync(file(userId), "utf8")); account = { ...fresh(), ...saved, settings: { ...PAPER_DEFAULTS, ...saved.settings } }; } catch { /* new */ } }
     accounts.set(userId, account);
     return account;
   }
-  function save(userId) { dirty.add(userId); }
+  const save = userId => dirty.add(userId);
   function flush() {
     if (!directory) { dirty.clear(); return; }
     try { mkdirSync(directory, { recursive: true }); } catch { return; }
     for (const userId of dirty) {
-      try { writeFileSync(`${file(userId)}.tmp`, JSON.stringify(accounts.get(userId))); renameSync(`${file(userId)}.tmp`, file(userId)); } catch { /* retry next flush */ }
+      try { writeFileSync(`${file(userId)}.tmp`, JSON.stringify(accounts.get(userId))); renameSync(`${file(userId)}.tmp`, file(userId)); } catch { /* next flush */ }
     }
     dirty.clear();
   }
@@ -84,15 +136,17 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
   if (directory) {
     try { for (const name of readdirSync(directory)) if (/^\d+\.json$/.test(name)) load(Number(name.slice(0, -5))); } catch { /* none yet */ }
   }
+  const fee = (account, kind) => account.settings.commission ? (kind === "market" ? account.settings.marketFeePct : account.settings.limitFeePct) / 100 : 0;
 
-  const historyEntry = (fields) => ({ orderId: randomUUID(), createdTime: now(), updatedTime: now(), reduceOnly: false, ...fields });
+  const historyEntry = fields => ({ orderId: randomUUID(), createdTime: now(), updatedTime: now(), reduceOnly: false, ...fields });
   const record = (account, entry) => { account.history.unshift(entry); account.history.length = Math.min(account.history.length, 200); };
 
-  /** Fill qty at price on the account; returns realised PnL. */
-  function fill(account, { symbol, side, qty, price, fee, leverage, reduceOnly, takeProfit, stopLoss }) {
-    let position = account.positions[symbol];
+  /** Fill qty at price; returns realised PnL. */
+  function fill(account, { exchange, symbol, asset, side, qty, price, feeRate, leverage, reduceOnly, takeProfit, stopLoss }) {
+    const key = keyOf(exchange, symbol);
+    let position = account.positions[key];
     let realised = 0;
-    account.wallet -= qty * price * fee;
+    account.wallet -= qty * price * feeRate;
     if (position && position.side !== side) {
       const closing = Math.min(qty, position.size), dir = position.side === "Buy" ? 1 : -1;
       realised = (price - position.entry) * closing * dir;
@@ -100,7 +154,7 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
       position.size = round(position.size - closing);
       position.realised = (position.realised ?? 0) + realised;
       qty = round(qty - closing);
-      if (position.size <= 0) { delete account.positions[symbol]; position = null; }
+      if (position.size <= 0) { delete account.positions[key]; position = null; }
       if (reduceOnly) qty = 0;
     }
     if (qty > 0 && !reduceOnly) {
@@ -108,7 +162,7 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
         position.entry = (position.entry * position.size + price * qty) / (position.size + qty);
         position.size = round(position.size + qty);
       } else {
-        position = account.positions[symbol] = { symbol, side, size: qty, entry: price, leverage: leverage ?? account.leverage[symbol] ?? 10,
+        position = account.positions[key] = { exchange, symbol, asset, side, size: qty, entry: price, leverage: leverage ?? account.leverage[key] ?? 10,
           takeProfit: null, stopLoss: null, realised: 0, createdTime: now() };
       }
       if (takeProfit) position.takeProfit = takeProfit;
@@ -117,14 +171,18 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
     return realised;
   }
 
-  function marks(tickers, symbol) {
-    const t = tickers.get(symbol);
-    return t ? { last: num(t.lastPrice), mark: num(t.markPrice) ?? num(t.lastPrice), bid: num(t.bid1Price) ?? num(t.lastPrice), ask: num(t.ask1Price) ?? num(t.lastPrice) } : null;
+  /** Quotes for every contract the account touches. */
+  async function quotesFor(account, extra = []) {
+    const wanted = new Map();
+    for (const item of [...Object.values(account.positions), ...account.orders, ...extra]) wanted.set(keyOf(item.exchange, item.symbol), item);
+    const out = new Map();
+    await Promise.all([...wanted].map(async ([key, item]) => { const q = await data.quote(item.exchange, item.symbol, item.asset).catch(() => null); if (q) out.set(key, q); }));
+    return out;
   }
-  function summary(account, tickers) {
+  function summary(account, quotes) {
     let unrealised = 0, margin = 0;
-    for (const p of Object.values(account.positions)) {
-      const m = marks(tickers, p.symbol)?.mark ?? p.entry;
+    for (const [key, p] of Object.entries(account.positions)) {
+      const m = quotes.get(key)?.mark ?? p.entry;
       unrealised += (m - p.entry) * p.size * (p.side === "Buy" ? 1 : -1);
       margin += p.size * p.entry / p.leverage;
     }
@@ -133,11 +191,11 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
     return { unrealised, margin, orderMargin, equity, available: Math.max(0, equity - margin - orderMargin) };
   }
 
-  /** Run the matching engine for one account against current tickers. */
-  function match(account, tickers) {
+  /** Matching engine for one account. */
+  function match(account, quotes) {
     let changed = false;
     for (const order of [...account.orders]) {
-      const m = marks(tickers, order.symbol);
+      const m = quotes.get(keyOf(order.exchange, order.symbol));
       if (!m?.last) continue;
       if (order.triggerPrice && !order.triggered) {
         const hit = order.triggerDirection === 1 ? m.last >= order.triggerPrice : m.last <= order.triggerPrice;
@@ -145,7 +203,7 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
         order.triggered = true; changed = true;
         if (order.orderType === "Market") {
           const price = order.side === "Buy" ? m.ask : m.bid;
-          const realised = fill(account, { ...order, price, fee: TAKER });
+          const realised = fill(account, { ...order, price, feeRate: fee(account, "market") });
           account.orders = account.orders.filter(o => o !== order);
           record(account, historyEntry({ ...publicOrder(order), price: String(price), filled: String(order.qty), status: "Filled", realised }));
           continue;
@@ -154,14 +212,14 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
       if (order.orderType === "Limit" && (!order.triggerPrice || order.triggered)) {
         const reached = order.side === "Buy" ? m.last <= order.price : m.last >= order.price;
         if (!reached) continue;
-        const realised = fill(account, { ...order, price: order.price, fee: MAKER });
+        const realised = fill(account, { ...order, price: order.price, feeRate: fee(account, "limit") });
         account.orders = account.orders.filter(o => o !== order);
         record(account, historyEntry({ ...publicOrder(order), price: String(order.price), filled: String(order.qty), status: "Filled", realised }));
         changed = true;
       }
     }
-    for (const position of Object.values(account.positions)) {
-      const m = marks(tickers, position.symbol);
+    for (const [key, position] of Object.entries(account.positions)) {
+      const m = quotes.get(key);
       if (!m?.last) continue;
       const long = position.side === "Buy", closeSide = long ? "Sell" : "Buy";
       const liq = liquidationPrice(position);
@@ -171,9 +229,9 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
       else if (position.stopLoss && (long ? m.last <= position.stopLoss : m.last >= position.stopLoss)) { reason = "StopLoss"; price = long ? m.bid : m.ask; }
       if (!reason) continue;
       const qty = position.size;
-      const realised = fill(account, { symbol: position.symbol, side: closeSide, qty, price, fee: TAKER, reduceOnly: true });
-      account.orders = account.orders.filter(o => !(o.symbol === position.symbol && o.reduceOnly));
-      record(account, historyEntry({ symbol: position.symbol, side: closeSide, orderType: "Market", stopOrderType: reason, qty: String(qty),
+      const realised = fill(account, { ...position, side: closeSide, qty, price, feeRate: fee(account, "market"), reduceOnly: true });
+      account.orders = account.orders.filter(o => !(keyOf(o.exchange, o.symbol) === key && o.reduceOnly));
+      record(account, historyEntry({ exchange: position.exchange, symbol: position.symbol, side: closeSide, orderType: "Market", stopOrderType: reason, qty: String(qty),
         price: String(price), filled: String(qty), status: reason === "Liquidated" ? "Liquidated" : "Filled", reduceOnly: true, realised }));
       changed = true;
     }
@@ -181,49 +239,57 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
     return changed;
   }
 
-  const publicOrder = o => ({ orderId: o.orderId, symbol: o.symbol, side: o.side, orderType: o.orderType, price: o.price ? String(o.price) : null,
+  const publicOrder = o => ({ orderId: o.orderId, exchange: o.exchange, symbol: o.symbol, side: o.side, orderType: o.orderType, price: o.price ? String(o.price) : null,
     triggerPrice: o.triggerPrice ? String(o.triggerPrice) : null, qty: String(o.qty), filled: "0", status: o.triggerPrice && !o.triggered ? "Untriggered" : "New",
     reduceOnly: !!o.reduceOnly, stopOrderType: o.triggerPrice ? "Stop" : null, takeProfit: o.takeProfit ? String(o.takeProfit) : null,
     stopLoss: o.stopLoss ? String(o.stopLoss) : null, timeInForce: o.timeInForce ?? null, createdTime: o.createdTime });
 
   async function tick() {
     const active = [...accounts].filter(([, account]) => account.orders.length || Object.keys(account.positions).length);
-    if (!active.length) return;
-    let tickers;
-    try { tickers = await data.allTickers(); } catch { return; }
-    for (const [userId, account] of active) if (match(account, tickers)) save(userId);
+    for (const [userId, account] of active) {
+      const quotes = await quotesFor(account);
+      if (match(account, quotes)) save(userId);
+    }
     flush();
   }
   let timer = null;
   if (timers) { timer = setInterval(() => { tick().catch(() => {}); }, 2000); timer.unref?.(); }
 
-  async function withAccount(userId) {
+  async function withAccount(userId, extra = []) {
     const account = load(userId);
-    const tickers = await data.allTickers();
-    if (match(account, tickers)) { save(userId); flush(); }
-    return { account, tickers };
+    const quotes = await quotesFor(account, extra);
+    if (match(account, quotes)) { save(userId); flush(); }
+    return { account, quotes };
   }
+  const contract = input => {
+    const exchange = String(input?.exchange ?? "bybit").toLowerCase(), symbol = String(input?.symbol ?? ""), asset = String(input?.asset ?? "").toUpperCase();
+    if (!EXCHANGE.test(exchange) || !SYMBOL.test(symbol) || (asset && !ASSET.test(asset))) throw new TradingError(400, "Unknown contract.");
+    return { exchange, symbol, asset: asset || null };
+  };
 
-  return {
+  const service = {
     tick,
     stop: () => { if (timer) clearInterval(timer); timer = null; flush(); },
-    async market(userId, symbol) {
-      const info = await data.instrument(symbol);
-      const { account, tickers } = await withAccount(userId);
-      const t = tickers.get(symbol) ?? {};
-      return { ...info, bid: t.bid1Price ?? null, ask: t.ask1Price ?? null, last: t.lastPrice ?? null, mark: t.markPrice ?? null,
-        leverage: account.positions[symbol]?.leverage ?? account.leverage[symbol] ?? 10 };
+    async market(userId, query) {
+      const c = contract(query);
+      const info = await data.instrument(c.exchange, c.symbol, c.asset);
+      const { account, quotes } = await withAccount(userId, [c]);
+      const q = quotes.get(keyOf(c.exchange, c.symbol)) ?? {};
+      const key = keyOf(c.exchange, c.symbol);
+      return { ...info, bid: q.bid != null ? String(q.bid) : null, ask: q.ask != null ? String(q.ask) : null, last: q.last != null ? String(q.last) : null,
+        mark: q.mark != null ? String(q.mark) : null, priceSource: q.source ?? null,
+        leverage: account.positions[key]?.leverage ?? account.leverage[key] ?? 10 };
     },
     async account(userId) {
-      const { account, tickers } = await withAccount(userId);
-      const s = summary(account, tickers);
+      const { account, quotes } = await withAccount(userId);
+      const s = summary(account, quotes);
       return {
-        testnet: false, paper: true, startBalance: PAPER_START_BALANCE,
+        testnet: false, paper: true, settings: account.settings, startBalance: account.settings.startBalance,
         balance: { equity: String(round(s.equity, 4)), marginBalance: String(round(s.equity, 4)), available: String(round(s.available, 4)),
           walletUsdt: String(round(account.wallet, 4)), unrealisedPnl: String(round(s.unrealised, 4)) },
-        positions: Object.values(account.positions).map(p => {
-          const m = marks(tickers, p.symbol)?.mark ?? p.entry, dir = p.side === "Buy" ? 1 : -1;
-          return { symbol: p.symbol, side: p.side, size: String(p.size), entryPrice: String(round(p.entry)), markPrice: String(m),
+        positions: Object.entries(account.positions).map(([key, p]) => {
+          const m = quotes.get(key)?.mark ?? p.entry, dir = p.side === "Buy" ? 1 : -1;
+          return { exchange: p.exchange, asset: p.asset, symbol: p.symbol, side: p.side, size: String(p.size), entryPrice: String(round(p.entry)), markPrice: String(m),
             liqPrice: String(round(liquidationPrice(p))), leverage: String(p.leverage), positionValue: String(round(p.size * m, 4)),
             unrealisedPnl: String(round((m - p.entry) * p.size * dir, 4)), realisedPnl: String(round(p.realised ?? 0, 4)),
             takeProfit: p.takeProfit ? String(p.takeProfit) : null, stopLoss: p.stopLoss ? String(p.stopLoss) : null,
@@ -233,37 +299,26 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
       };
     },
     async history(userId) {
-      const account = load(userId);
-      return { orders: account.history.slice(0, 50).map(({ realised, ...entry }) => entry) };
-    },
-    async setLeverage(userId, symbol, leverage) {
-      const info = await data.instrument(symbol);
-      const value = positive(leverage);
-      if (!value || value > info.maxLeverage) throw new TradingError(400, `Leverage must be between 1 and ${info.maxLeverage}x.`);
-      const account = load(userId);
-      if (account.positions[symbol] && account.positions[symbol].leverage !== value)
-        throw new TradingError(400, "Close the open position before changing its leverage.");
-      account.leverage[symbol] = value; save(userId); flush();
-      return { leverage: value };
+      return { orders: load(userId).history.slice(0, 50).map(({ realised, ...entry }) => entry) };
     },
     async placeOrder(userId, input = {}) {
-      const symbol = String(input.symbol ?? "");
-      const info = await data.instrument(symbol);
+      const c = contract(input), key = keyOf(c.exchange, c.symbol);
+      const info = await data.instrument(c.exchange, c.symbol, c.asset);
       const side = input.side === "Buy" || input.side === "Sell" ? input.side : null;
       const type = ["market", "limit", "stop", "stopLimit"].includes(input.type) ? input.type : null;
       if (!side || !type) throw new TradingError(400, "Choose Buy or Sell and an order type.");
       const qty = num(toStep(input.qty, info.qtyStep));
       if (!qty || qty < Number(info.minQty)) throw new TradingError(400, `Minimum amount is ${info.minQty} ${info.base}.`);
       if (qty > Number(info.maxQty)) throw new TradingError(400, `Maximum amount per order is ${info.maxQty} ${info.base}.`);
-      const { account, tickers } = await withAccount(userId);
-      const m = marks(tickers, symbol);
+      const { account, quotes } = await withAccount(userId, [c]);
+      const m = quotes.get(key);
       if (!m?.last) throw new TradingError(503, "No live price for this contract right now.");
-      const existing = account.positions[symbol];
-      let leverage = positive(input.leverage) ?? existing?.leverage ?? account.leverage[symbol] ?? 10;
+      const existing = account.positions[key];
+      let leverage = positive(input.leverage) ?? existing?.leverage ?? account.leverage[key] ?? 10;
       if (leverage > info.maxLeverage) throw new TradingError(400, `Leverage must be between 1 and ${info.maxLeverage}x.`);
       if (existing && existing.leverage !== leverage) leverage = existing.leverage; // one leverage per open position
-      account.leverage[symbol] = leverage;
-      const order = { orderId: randomUUID(), symbol, side, qty, leverage, createdTime: now(), reduceOnly: !!input.reduceOnly,
+      account.leverage[key] = leverage;
+      const order = { orderId: randomUUID(), ...c, side, qty, leverage, createdTime: now(), reduceOnly: !!input.reduceOnly,
         orderType: type === "limit" || type === "stopLimit" ? "Limit" : "Market" };
       if (order.orderType === "Limit") {
         order.price = num(toStep(input.price, info.tickSize, "round"));
@@ -278,18 +333,17 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
       if (positive(input.takeProfit)) order.takeProfit = num(toStep(input.takeProfit, info.tickSize, "round"));
       if (positive(input.stopLoss)) order.stopLoss = num(toStep(input.stopLoss, info.tickSize, "round"));
       if (order.reduceOnly && (!existing || existing.side === side)) throw new TradingError(400, "Reduce-only needs an open position on the other side.");
-      // Margin check for anything that opens or adds exposure.
       const opening = order.reduceOnly ? 0 : existing && existing.side !== side ? Math.max(0, qty - existing.size) : qty;
       const refPrice = order.price ?? order.triggerPrice ?? (side === "Buy" ? m.ask : m.bid);
-      const s = summary(account, tickers);
-      const needed = opening * refPrice / leverage + opening * refPrice * TAKER;
+      const s = summary(account, quotes);
+      const needed = opening * refPrice / leverage + opening * refPrice * fee(account, "market");
       if (needed > s.available + 1e-9) throw new TradingError(400, `Not enough available balance (needs ${needed.toFixed(2)} USDT, available ${s.available.toFixed(2)}).`);
       if (order.orderType === "Limit" && order.timeInForce === "PostOnly" && !order.triggerPrice &&
         (side === "Buy" ? order.price >= m.ask : order.price <= m.bid)) throw new TradingError(400, "Post-only order would take liquidity; it was cancelled.");
       const marketable = order.orderType === "Limit" && !order.triggerPrice && (side === "Buy" ? order.price >= m.ask : order.price <= m.bid);
       if ((order.orderType === "Market" && !order.triggerPrice) || marketable) {
         const price = order.orderType === "Market" ? (side === "Buy" ? m.ask : m.bid) : (side === "Buy" ? Math.min(order.price, m.ask) : Math.max(order.price, m.bid));
-        const realised = fill(account, { ...order, price, fee: TAKER });
+        const realised = fill(account, { ...order, price, feeRate: fee(account, "market") });
         record(account, historyEntry({ ...publicOrder(order), price: String(price), filled: String(qty), status: "Filled", realised }));
       } else if (order.orderType === "Limit" && !order.triggerPrice && ["IOC", "FOK"].includes(order.timeInForce)) {
         record(account, historyEntry({ ...publicOrder(order), status: "Cancelled" }));
@@ -315,23 +369,42 @@ export function createPaperTrading({ data = createBybitPublicData(), directory =
       save(userId); flush();
       return { ok: true };
     },
-    async closePosition(userId, { symbol, qty, price } = {}) {
-      const account = load(userId);
-      const position = account.positions[String(symbol)];
+    async closePosition(userId, input = {}) {
+      const c = contract(input);
+      const position = load(userId).positions[keyOf(c.exchange, c.symbol)];
       if (!position) throw new TradingError(404, "No open position.");
-      return this.placeOrder(userId, { symbol: position.symbol, side: position.side === "Buy" ? "Sell" : "Buy", qty: positive(qty) ? Math.min(qty, position.size) : position.size,
-        type: positive(price) ? "limit" : "market", price, reduceOnly: true });
+      return service.placeOrder(userId, { ...c, asset: position.asset ?? c.asset, side: position.side === "Buy" ? "Sell" : "Buy",
+        qty: positive(input.qty) ? Math.min(input.qty, position.size) : position.size, type: positive(input.price) ? "limit" : "market", price: input.price, reduceOnly: true });
     },
-    async setTradingStop(userId, { symbol, takeProfit, stopLoss } = {}) {
-      const info = await data.instrument(String(symbol ?? ""));
-      const account = load(userId);
-      const position = account.positions[info.symbol];
+    async setTradingStop(userId, input = {}) {
+      const c = contract(input);
+      const info = await data.instrument(c.exchange, c.symbol, c.asset);
+      const position = load(userId).positions[keyOf(c.exchange, c.symbol)];
       if (!position) throw new TradingError(404, "No open position.");
-      if (takeProfit !== undefined) position.takeProfit = positive(takeProfit) ? num(toStep(takeProfit, info.tickSize, "round")) : null;
-      if (stopLoss !== undefined) position.stopLoss = positive(stopLoss) ? num(toStep(stopLoss, info.tickSize, "round")) : null;
+      if (input.takeProfit !== undefined) position.takeProfit = positive(input.takeProfit) ? num(toStep(input.takeProfit, info.tickSize, "round")) : null;
+      if (input.stopLoss !== undefined) position.stopLoss = positive(input.stopLoss) ? num(toStep(input.stopLoss, info.tickSize, "round")) : null;
       save(userId); flush();
       return { ok: true };
     },
-    reset(userId) { accounts.set(userId, fresh()); save(userId); flush(); return { ok: true }; },
+    /** Commission settings apply at once; a new starting balance resets the account. */
+    settings(userId, input = {}) {
+      const account = load(userId), next = { ...account.settings };
+      if (input.commission !== undefined) next.commission = !!input.commission;
+      for (const field of ["marketFeePct", "limitFeePct"]) if (input[field] !== undefined) {
+        const value = num(input[field]);
+        if (value === null || value < 0 || value > 1) throw new TradingError(400, "Fees must be between 0% and 1%.");
+        next[field] = value;
+      }
+      if (input.startBalance !== undefined && Number(input.startBalance) !== account.settings.startBalance) {
+        const balance = num(input.startBalance);
+        if (!balance || balance < 10 || balance > 100_000_000) throw new TradingError(400, "Starting balance must be between 10 and 100,000,000 USDT.");
+        next.startBalance = balance;
+        accounts.set(userId, fresh(next));
+      } else account.settings = next;
+      save(userId); flush();
+      return { settings: next };
+    },
+    reset(userId) { accounts.set(userId, fresh(load(userId).settings)); save(userId); flush(); return { ok: true }; },
   };
+  return service;
 }

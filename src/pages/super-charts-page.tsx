@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, RotateCw } from 'lucide-react';
 import { Link } from 'wouter';
 import { AppHeader } from '@/components/app-header';
-import { MarketList } from '@/components/market-list';
+import { EXCHANGE_NAMES, MarketList } from '@/components/market-list';
 import { DEFAULT_LAYOUT_SYNC, LayoutPicker, type LayoutSync } from '@/components/layout-picker';
 import { CELL_AREAS, CHART_LAYOUTS, gridStyle, layoutById } from '@/lib/chart-layouts';
 import { MarketAutocomplete, type AutocompleteOption } from '@/components/market-autocomplete';
@@ -11,6 +11,8 @@ import { useMarketContracts, type MarketContract } from '@/hooks/use-market-cont
 import { useTradingAccount, useTradingStatus, type TradingMode } from '@/hooks/use-trading';
 import { TradeTicket } from '@/components/trade-ticket';
 import { TradeAccountPanel } from '@/components/trade-account-panel';
+import { TradeConnect } from '@/components/trade-connect';
+import { tradeStore, useTradeStore } from '@/lib/trade-store';
 import { CHART_STUDIES, CHART_STUDY_GROUPS, type ChartStudyId } from '@/lib/supercharts';
 import { useChartSetting } from '@/hooks/use-chart-setting';
 import { useChartSettingsSync } from '@/hooks/use-chart-settings-sync';
@@ -179,28 +181,34 @@ function SuperChartsWorkspace() {
     setCellLayers((current) => ({ ...current, [index]: { studies: current[index]?.studies ?? studies, indicators: toggled(current[index]?.indicators ?? indicators, id) } }));
   };
 
-  // Owner-only Bybit trading: order ticket on the right, account panel under the charts.
+  // Trading: paper (every signed-in user, any exchange on the chart) or real Bybit (owner only).
   const tradingStatus = useTradingStatus();
-  // Real money only for the owner; paper trading for every signed-in user.
   const canReal = !!tradingStatus.data?.enabled;
-  const tradingOn = canReal || !!tradingStatus.data?.paper;
-  const [savedMode, setSavedMode] = useState<TradingMode>(() => { try { return localStorage.getItem('trade-mode') === 'real' ? 'real' : 'paper'; } catch { return 'paper'; } });
-  const tradeMode: TradingMode = canReal ? savedMode : 'paper';
-  const setTradeMode = (mode: TradingMode) => { setSavedMode(mode); try { localStorage.setItem('trade-mode', mode); } catch { /* */ } };
+  const signedIn = canReal || !!tradingStatus.data?.paper;
+  const connection = useTradeStore((state) => state.connection);
+  const ticketOpen = useTradeStore((state) => state.ticketOpen);
+  const connectOpen = useTradeStore((state) => state.connectOpen);
+  const tradeMode: TradingMode = connection === 'real' && canReal ? 'real' : 'paper';
+  const tradingOn = signedIn && (connection === 'paper' || (connection === 'real' && canReal));
   const tradingAccount = useTradingAccount(tradeMode, tradingOn);
-  const [ticketOpen, setTicketOpen] = useState(() => { try { return localStorage.getItem('trade-ticket-open') === '1'; } catch { return false; } });
   const [panelCollapsed, setPanelCollapsed] = useState(() => { try { return localStorage.getItem('trade-panel-collapsed') === '1'; } catch { return false; } });
-  const toggleTicket = () => setTicketOpen((open) => { try { localStorage.setItem('trade-ticket-open', open ? '0' : '1'); } catch { /* */ } return !open; });
   const togglePanel = () => setPanelCollapsed((value) => { try { localStorage.setItem('trade-panel-collapsed', value ? '0' : '1'); } catch { /* */ } return !value; });
+  // Trade button: not connected → connect window; connected → order ticket.
+  const onTradeButton = () => tradingOn ? tradeStore.setTicketOpen(!ticketOpen) : tradeStore.setConnectOpen(true);
   const activeContract = cellContract(activeCell);
-  const tradeSymbol = useMemo(() => {
-    if (!activeContract) return null;
-    if (activeContract.exchange.toLowerCase() === 'bybit') return activeContract.symbol;
-    const bybit = contracts.find((contract) => contract.exchange.toLowerCase() === 'bybit' && contract.asset === activeContract.asset && contract.symbol.endsWith('USDT'));
-    return bybit?.symbol ?? `${activeContract.asset}USDT`;
-  }, [activeContract, contracts]);
-  const openTradeSymbol = (symbol: string) => {
-    const contract = contracts.find((item) => item.exchange.toLowerCase() === 'bybit' && item.symbol === symbol);
+  // Order target: the active chart's own contract (paper) or the coin's Bybit contract (real).
+  useEffect(() => {
+    if (!activeContract) { tradeStore.setTarget(null); return; }
+    const exchange = activeContract.exchange.toLowerCase();
+    if (tradeMode === 'paper') {
+      tradeStore.setTarget({ exchange, symbol: activeContract.symbol, asset: activeContract.asset, label: EXCHANGE_NAMES[exchange] ?? activeContract.exchange });
+      return;
+    }
+    const bybit = exchange === 'bybit' ? activeContract : contracts.find((contract) => contract.exchange.toLowerCase() === 'bybit' && contract.asset === activeContract.asset && contract.symbol.endsWith('USDT'));
+    tradeStore.setTarget({ exchange: 'bybit', symbol: bybit?.symbol ?? `${activeContract.asset}USDT`, asset: activeContract.asset, label: 'Bybit' });
+  }, [activeContract, contracts, tradeMode]);
+  const openTradeContract = (exchange: string, symbol: string) => {
+    const contract = contracts.find((item) => item.exchange.toLowerCase() === exchange && item.symbol === symbol);
     if (contract) selectWatchlistContract(contract);
   };
 
@@ -245,8 +253,6 @@ function SuperChartsWorkspace() {
                     autoCapitalize="characters" disabled={catalogue.loading && !catalogue.data} />
                   <LayoutPicker value={layout.id} onChange={(id) => { setLayoutId(id); if (activeCell >= layoutById(id).count) setActiveCell(0); }}
                   sync={layoutSync} onSyncChange={setLayoutSync} />
-                  {tradingOn && index === activeCell && <button type="button" className={`sc-trade-toggle${ticketOpen ? ' is-on' : ''}`}
-                    onClick={toggleTicket} aria-pressed={ticketOpen} title="Bybit order ticket" data-testid="trade-toggle">Trade</button>}
                 </div>}
                 toolbarMenus={
             <div className="super-chart-menu-bar" ref={index === activeCell ? menuRef : undefined}>
@@ -298,13 +304,16 @@ function SuperChartsWorkspace() {
             ))}
           </div>
           {tradingOn && <TradeAccountPanel mode={tradeMode} account={tradingAccount.data} error={tradingAccount.error as Error | null} testnet={!!tradingStatus.data?.testnet}
-            collapsed={panelCollapsed} onToggle={togglePanel} onSymbol={openTradeSymbol} />}
+            collapsed={panelCollapsed} onToggle={togglePanel} onSymbol={openTradeContract} onExit={() => tradeStore.disconnect()} />}
           </div>
-          {tradingOn && ticketOpen && <TradeTicket mode={tradeMode} canReal={canReal} onMode={setTradeMode} symbol={tradeSymbol} account={tradingAccount.data} testnet={!!tradingStatus.data?.testnet} onClose={toggleTicket} />}
+          {tradingOn && ticketOpen && <TradeTicket mode={tradeMode} account={tradingAccount.data} testnet={!!tradingStatus.data?.testnet} onClose={() => tradeStore.setTicketOpen(false)} />}
           {/* Exchange-style list of every contract. */}
-          <MarketList contracts={contracts} current={cellContract(activeCell)} onSelect={selectWatchlistContract} />
+          <MarketList contracts={contracts} current={cellContract(activeCell)} onSelect={selectWatchlistContract}
+            headerAction={<button type="button" className={`sc-trade-toggle${tradingOn && ticketOpen ? ' is-on' : ''}`} onClick={onTradeButton}
+              aria-pressed={tradingOn && ticketOpen} title={tradingOn ? 'Order ticket' : 'Start trading'} data-testid="trade-toggle">Trade</button>} />
         </div>
       </main>
+      {connectOpen && <TradeConnect signedIn={signedIn} canReal={canReal} testnet={!!tradingStatus.data?.testnet} />}
     </div>
   );
 }

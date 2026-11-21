@@ -1,20 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
-import { createPaperTrading, liquidationPrice, PAPER_START_BALANCE } from "./paperTrading.js";
+import { createPaperTrading, createLiveQuotes, genericRules, liquidationPrice, PAPER_START_BALANCE } from "./paperTrading.js";
 import { createTradingRouter } from "./bybitTrading.js";
 
 function market(price) {
   const state = { last: price, bid: price, ask: price };
-  const data = {
+  return {
     state,
-    allTickers: async () => new Map([["SKYUSDT", { lastPrice: String(state.last), markPrice: String(state.last), bid1Price: String(state.bid), ask1Price: String(state.ask) }]]),
-    instrument: async symbol => {
+    quote: async (exchange, symbol) => symbol === "SKYUSDT" ? { last: state.last, mark: state.last, bid: state.bid, ask: state.ask } : null,
+    instrument: async (exchange, symbol) => {
       if (symbol !== "SKYUSDT") throw Object.assign(new Error("not trading"), { status: 404 });
-      return { symbol, tickSize: "0.0001", qtyStep: "1", minQty: "10", maxQty: "1000000", maxLeverage: 25, base: "SKY" };
+      return { symbol, exchange, tickSize: "0.0001", qtyStep: "1", minQty: "10", maxQty: "1000000", maxLeverage: 25, base: "SKY" };
     },
   };
-  return data;
 }
 const move = (data, price) => Object.assign(data.state, { last: price, bid: price, ask: price });
 
@@ -32,7 +31,7 @@ test("market buy opens a long; PnL follows the price; closing realises it minus 
   await paper.closePosition(1, { symbol: "SKYUSDT" });
   account = await paper.account(1);
   assert.equal(account.positions.length, 0);
-  const fees = 1000 * 1 * 0.00055 + 1000 * 1.1 * 0.00055;
+  const fees = 1000 * 1 * 0.0005 + 1000 * 1.1 * 0.0005;
   assert.ok(Math.abs(Number(account.balance.walletUsdt) - (PAPER_START_BALANCE + 100 - fees)) < 1e-6);
   assert.equal((await paper.history(1)).orders.length, 2);
 });
@@ -96,4 +95,36 @@ test("paper routes: any signed-in user, each with their own account; never the r
     assert.equal((await (await call("/api/paper/account", "user-a-token-xxxxxxxxxxx")).json()).positions.length, 1);
     assert.equal((await (await call("/api/paper/account", "user-b-token-xxxxxxxxxxx")).json()).positions.length, 0);
   } finally { server.close(); }
+});
+
+test("commission settings: fees off, custom fees, new starting balance resets", async () => {
+  const data = market(1);
+  const paper = createPaperTrading({ data, timers: false });
+  paper.settings(7, { commission: false });
+  await paper.placeOrder(7, { symbol: "SKYUSDT", side: "Buy", type: "market", qty: 1000 });
+  await paper.closePosition(7, { symbol: "SKYUSDT" });
+  assert.equal(Number((await paper.account(7)).balance.walletUsdt), PAPER_START_BALANCE);
+  paper.settings(7, { commission: true, marketFeePct: 0.1 });
+  await paper.placeOrder(7, { symbol: "SKYUSDT", side: "Buy", type: "market", qty: 1000 });
+  assert.ok(Math.abs(Number((await paper.account(7)).balance.walletUsdt) - (PAPER_START_BALANCE - 1)) < 1e-9);
+  paper.settings(7, { startBalance: 500 });
+  const account = await paper.account(7);
+  assert.equal(Number(account.balance.walletUsdt), 500);
+  assert.equal(account.positions.length, 0);
+  assert.equal(account.settings.marketFeePct, 0.1);
+  assert.throws(() => paper.settings(7, { marketFeePct: 5 }), /between 0% and 1%/);
+});
+
+test("live quotes: the chart's exchange, else the coin's Bybit price; generic contract rules", async () => {
+  const bodies = {
+    "https://contract.mexc.com/api/v1/contract/ticker": { data: [{ symbol: "PARTI_USDT", lastPrice: 0.0378, bid1: 0.0377, ask1: 0.0379, fairPrice: 0.0378 }] },
+    "https://api.bybit.com/v5/market/tickers?category=linear": { result: { list: [{ symbol: "PARTIUSDT", lastPrice: "0.0380", bid1Price: "0.0379", ask1Price: "0.0381", markPrice: "0.038" }] } },
+  };
+  const quotes = createLiveQuotes({ request: async url => bodies[url] ?? {} });
+  assert.deepEqual(await quotes.quote("mexc", "PARTI_USDT", "PARTI"), { last: 0.0378, bid: 0.0377, ask: 0.0379, mark: 0.0378, source: "mexc" });
+  assert.equal((await quotes.quote("kucoin", "PARTIUSDTM", "PARTI")).source, "bybit");
+  assert.equal(await quotes.quote("kucoin", "NOPEUSDTM", "NOPE"), null);
+  assert.deepEqual(genericRules(58000), { tickSize: "0.1", qtyStep: "0.00001", minQty: "0.00001", maxQty: "1000000000", maxLeverage: 100 });
+  assert.equal(genericRules(0.0378).qtyStep, "10");
+  assert.equal(genericRules(0.0378).tickSize, "0.0000001");
 });
