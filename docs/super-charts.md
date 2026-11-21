@@ -321,11 +321,11 @@ Set as environment variables in the systemd drop-in (`server/retention.js`):
 
 | Setting | Default | Controls |
 |---|---|---|
-| `RECORD_DAYS` | 30 | CVD (1-minute for 14 days, then 5-minute), liquidations (events 2 days, then 5-minute totals), per-exchange OI (5-minute), long/short ratio history, funding live quotes and settled history |
-| `BUBBLE_HOURS` | 24 | Aggressive Volume Bubbles (5-minute × 0.05%; beyond 7 days older cells become hourly × 0.25%) |
+| `RECORD_DAYS` | 120 | CVD (1-minute for 14 days, then 5-minute), liquidations (events 2 days, then 5-minute totals), per-exchange OI (5-minute), long/short ratio history, funding live quotes and settled history |
+| `BUBBLE_HOURS` | 720 (30 days) | Aggressive Volume Bubbles (5-minute × 0.05%; beyond 7 days older cells become hourly × 0.25%) |
 | `PROFILE_DAYS` | `RECORD_DAYS` | Session Volume Profile (hourly × 0.25% cells) |
-| `ALWAYS_RECORD` | empty | Coins recorded 24/7 (max 10), e.g. `BTC,ETH,SOL,XRP,DOGE` |
+| `ALWAYS_RECORD` | `BTC,ETH,SOL,XRP,DOGE` | Coins recorded 24/7 (max 10); empty = off |
 
-Small 1 GB server: keep the defaults. Ampere 4 OCPU / 24 GB: e.g. `RECORD_DAYS=120`,
-`BUBBLE_HOURS=720`, `ALWAYS_RECORD=BTC,ETH,SOL,XRP,DOGE`. Other coins are recorded
+Defaults are for the Ampere 4 OCPU / 24 GB server. A 1 GB server needs
+`RECORD_DAYS=30`, `BUBBLE_HOURS=24`, `ALWAYS_RECORD=` (empty). Other coins are recorded
 while viewed (30 minutes for trades, 2 hours for OI). Recordings save every 5 minutes.

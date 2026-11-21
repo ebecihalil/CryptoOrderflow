@@ -4,6 +4,7 @@ import { compactCvdMinutes, newCvdMinute, addCvdTrade, buildCvdCandles } from ".
 import { createAggressiveBubbleLedger } from "./aggressiveBubbles.js";
 import { createOiLongHistory, exchangeSteps } from "./oiLongHistory.js";
 import { thinObservations } from "./fundingIndicator.js";
+import { RECORD_DAYS } from "./retention.js";
 
 test("CVD: minutes older than the detail window become exact 5-minute steps", () => {
   const minutes = new Map();
@@ -56,12 +57,12 @@ test("open interest: 5-minute exchange totals only when every contract has a fre
   assert.deepEqual(history.tracked(), ["BTC"], "viewed coins stop after 2 hours; top coins stay");
 });
 
-test("funding live quotes: minute detail for 7 days, hourly after, 30 days in total", () => {
+test("funding live quotes: minute detail for 7 days, hourly after, RECORD_DAYS in total", () => {
   const now = 200 * 86400;
   const points = [];
-  for (let t = now - 40 * 86400; t <= now; t += 600) points.push({ time: t });
+  for (let t = now - (RECORD_DAYS + 10) * 86400; t <= now; t += 600) points.push({ time: t });
   const thinned = thinObservations(points, now);
-  assert.ok(thinned[0].time >= now - 30 * 86400);
+  assert.ok(thinned[0].time >= now - RECORD_DAYS * 86400);
   assert.equal(thinned.filter(p => p.time >= now - 7 * 86400).length, points.filter(p => p.time >= now - 7 * 86400).length);
-  assert.ok(thinned.filter(p => p.time < now - 7 * 86400).length <= 23 * 24 + 1);
+  assert.ok(thinned.filter(p => p.time < now - 7 * 86400).length <= (RECORD_DAYS - 7) * 24 + 1);
 });
