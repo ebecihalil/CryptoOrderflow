@@ -209,11 +209,15 @@ export function createCvdIndicatorService({
         }
       }, event => {
         if (!group.active || event.time < group.subscribedSince || event.time > now() + 5000) return;
-        if (!group.liquidations.some(item => item.exchange === event.exchange && item.symbol === event.symbol &&
-          item.side === event.side && item.time === event.time && item.usd === event.usd)) {
-          group.liquidations.push(event);
-          group.liquidations.sort((a, b) => a.time - b.time);
-          trimLiquidations(group);
+        // Duplicates only arrive close together: check the recent tail, append in time order,
+        // and compact/trim at most once a minute (cheap on busy coins).
+        const list = group.liquidations;
+        const duplicate = list.slice(-200).some(item => item.exchange === event.exchange && item.symbol === event.symbol &&
+          item.side === event.side && item.time === event.time && item.usd === event.usd);
+        if (!duplicate) {
+          if (!list.length || list.at(-1).time <= event.time) list.push(event);
+          else { list.push(event); list.sort((a, b) => a.time - b.time); }
+          if (!(now() - (group.liqTrimmedAt ?? 0) < 60_000)) { group.liqTrimmedAt = now(); trimLiquidations(group); }
           group.dirty = true;
         }
       });
@@ -307,7 +311,8 @@ export function createCvdIndicatorService({
       if (group.active && !pinned.has(group.asset) && now() - group.lastUsed > IDLE_MS) stopGroup(group);
       else if (group.active) {
         flush(group);
-        if (!group.lastSaveAttempt || now() - group.lastSaveAttempt >= 60_000) {
+        // Large recordings: save every 5 minutes (and on shutdown).
+        if (!group.lastSaveAttempt || now() - group.lastSaveAttempt >= 300_000) {
           group.lastSaveAttempt = now(); void save(group);
         }
       }

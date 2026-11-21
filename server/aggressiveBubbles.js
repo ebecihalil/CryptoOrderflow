@@ -88,13 +88,14 @@ export function createAggressiveBubbleLedger({
   if (![60, 300].includes(bucketSeconds)) throw new Error("Invalid bubble recording bucket.");
   const cells = new Map();
   let startedAt = now();
-  let truncated = false, lastPrunedAt = -Infinity;
+  let truncated = false, lastPrunedAt = -Infinity, lastArchivedAt = -Infinity;
   function prune(force = false) {
     if (!force && now() - lastPrunedAt < 5000 && cells.size <= maxCells) return;
     lastPrunedAt = now();
     const cutoff = now() / 1000 - retentionSeconds;
     for (const [key, cell] of cells) if (cell.minute + (cell.archived ? archiveBucketSeconds : bucketSeconds) <= cutoff) cells.delete(key);
-    if (archiveAfterSeconds) {
+    if (archiveAfterSeconds && !(now() - lastArchivedAt < 600_000)) {
+      lastArchivedAt = now();
       const archiveBefore = now() / 1000 - archiveAfterSeconds;
       for (const [key, cell] of cells) {
         if (cell.archived || cell.minute + bucketSeconds > archiveBefore) continue;

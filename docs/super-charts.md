@@ -327,7 +327,7 @@ vertical volume bars.
 | Funding | settled history 122 days; live quotes per minute 7 days | hourly live quotes, 120 days |
 
 Long OI history and order flow are recorded for coins viewed in the last 2 hours
-and, all the time, for the top coins in `ALWAYS_RECORD` (default
-`BTC,ETH,SOL,XRP,DOGE`, max 10; set it as a server environment variable). A
+and, all the time, for the coins in `ALWAYS_RECORD` (default
+empty = off, max 10; set it as a server environment variable, e.g. `BTC,ETH`; needs more CPU than the 1 GB free server has). A
 background job refreshes their ratio and funding history every 10 minutes.
-Recordings are saved every 60 seconds.
+Recordings are saved every 5 minutes.
