@@ -14,8 +14,8 @@ import { AUTO_BUBBLES_PER_CANDLE, bubbleThreshold, createAggressiveBubbleLedger,
 import { secondCandleRecorder } from "./secondCandles.js";
 
 // Two weeks preserve the previous full calendar week plus the current week.
-// History: 120 days; 1-minute detail for the last 14 days, 5-minute steps before that.
-const RETENTION = 120 * 86400, FULL_DETAIL = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
+// History: 30 days; 1-minute detail for the last 14 days, 5-minute steps before that.
+const RETENTION = 30 * 86400, FULL_DETAIL = 14 * 86400, MAX_GROUPS = 4, MAX_QUEUE = 50_000, IDLE_MS = 30 * 60_000;
 const timeOrder = (a, b) => {
   if (a.time !== b.time) return a.time - b.time;
   if (a.exchange !== b.exchange) return a.exchange.localeCompare(b.exchange);
@@ -79,6 +79,7 @@ export function createCvdIndicatorService({
       if (group.gaps.has(time)) row.gap = true;
       addCvdTrade(row, trade);
       group.bubbles.add(trade);
+      group.profile?.add(trade);
       group.fineBubbles?.add(trade);
       group.lastProcessedTime = trade.time;
     }
@@ -92,11 +93,11 @@ export function createCvdIndicatorService({
     for (const t of group.gaps) if (t < earliest) group.gaps.delete(t);
     for (const [id, t] of group.ids) if (t < now() - 180_000) group.ids.delete(id);
   }
-  // Liquidations (and when each liquidation feed was connected) are kept 120 days
+  // Liquidations (and when each liquidation feed was connected) are kept 30 days
   // and saved with the recording: the leverage model needs to know both what was
   // liquidated and when the feeds could see it.
-  // Kept 120 days: individual events for 2 days, then 5-minute totals per exchange and side.
-  const LIQ_RETENTION_MS = 120 * 86400_000, LIQ_DETAIL_MS = 2 * 86400_000;
+  // Kept 30 days: individual events for 2 days, then 5-minute totals per exchange and side.
+  const LIQ_RETENTION_MS = 30 * 86400_000, LIQ_DETAIL_MS = 2 * 86400_000;
   const trimLiquidations = group => {
     const cutoff = now() - LIQ_RETENTION_MS, detail = now() - LIQ_DETAIL_MS;
     let list = group.liquidations.filter(item => item.time >= cutoff);
@@ -137,7 +138,7 @@ export function createCvdIndicatorService({
         lastProcessedTime: group.lastProcessedTime, gaps: [...group.gaps],
         minutes: [...group.minutes.values()].map(r => ({ ...r, sources: [...r.sources],
           ...(r.byExchange ? { byExchange: Object.fromEntries(Object.entries(r.byExchange).map(([k, v]) => [k, [...v]])) } : {}) })),
-        bubbles: group.bubbles.serialize(),
+        bubbles: group.bubbles.serialize(), profile: group.profile.serialize(),
         ...(group.market === "perpetual" ? { liquidations: group.liquidations, liqCoverage: coverageSpans(group) } : {}) };
       await mkdir(storageDir, { recursive: true });
       const temporary = `${file(group)}.tmp`;
@@ -168,7 +169,8 @@ export function createCvdIndicatorService({
       group.startedAt = body.startedAt;
       group.lastProcessedTime = Number.isFinite(body.lastProcessedTime) ? body.lastProcessedTime : 0;
       if (Array.isArray(body.gaps)) body.gaps.filter(Number.isSafeInteger).forEach(t => group.gaps.add(t));
-      if (body.bubbles) group.bubbles.restore(body.bubbles, CVD_EXCHANGES);
+      if (body.bubbles) { try { group.bubbles.restore(body.bubbles, CVD_EXCHANGES); } catch { /* older format: start fresh */ } }
+      if (body.profile) { try { group.profile.restore(body.profile, CVD_EXCHANGES); } catch { /* start fresh */ } }
       if (group.market === "perpetual" && Array.isArray(body.liquidations)) {
         group.liquidations = body.liquidations.filter(item => item && LIQUIDATION_EXCHANGES.includes(item.exchange) &&
           (item.side === "long" || item.side === "short") && Number.isFinite(item.time) && item.time <= now() &&
@@ -266,11 +268,13 @@ export function createCvdIndicatorService({
       group = { asset, market, active: true, startedAt: now(), subscribedSince: now(), lastUsed: now(),
         sources: initialSources(market), minutes: new Map(), gaps: new Set(), ids: new Map(), queue: [],
         handles: [], retries: new Set(), lastProcessedTime: 0, dirty: false, loaded: false, liquidations: [], liqCoverage: new Map() };
-      // 5-minute cells for the last 7 days (5m and every larger chart timeframe are whole
+      // Bubbles: 5-minute cells for the last 24 hours (5m and every larger chart timeframe are whole
       // multiples of 5 minutes, so each bubble lands on the candle it traded in).
-      // Older than 7 days: hourly cells with 0.25% price steps, kept for 30 days.
-      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 30 * 86400,
-        maxCells: 260_000, bucketSeconds: 300, archiveAfterSeconds: 7 * 86400 });
+      group.bubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 86400,
+        maxCells: 60_000, bucketSeconds: 300 });
+      // Session Volume Profile: hourly cells with 0.25% price steps for 30 days (light).
+      group.profile = createAggressiveBubbleLedger({ market, now, retentionSeconds: 30 * 86400,
+        maxCells: 80_000, bucketSeconds: 300, archiveAfterSeconds: 3600 });
       // 1-minute cells for the last 12 hours, for 1m and 3m charts: with 5-minute
       // cells a trade from minute 4 would be drawn on minute 0's candle (off its range).
       group.fineBubbles = createAggressiveBubbleLedger({ market, now, retentionSeconds: 12 * 3600,
@@ -336,7 +340,7 @@ export function createCvdIndicatorService({
     let startedAt = Infinity;
     for (const item of markets) {
       get({ asset, market: item, timeframe: "24h", anchor: "1w" });
-      const ledger = groups.get(`${item}:${asset}`).bubbles.snapshot("24h", 0);
+      const ledger = groups.get(`${item}:${asset}`).profile.snapshot("24h", 0);
       startedAt = Math.min(startedAt, ledger.startedAt);
       for (const point of ledger.points) {
         const band = Number(point.id.split(":")[2]);

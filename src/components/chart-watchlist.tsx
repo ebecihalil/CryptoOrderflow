@@ -76,7 +76,7 @@ export function ChartWatchlist({ currentContract, onSelectContract }: ChartWatch
         {data?.shared
           ? 'Shared across this server, not private to this browser.'
           : 'Server-side collection continues while you view another coin.'}
-        {' '}Spot + perpetual CVD history up to {data?.retentionDays ?? 120} days · bubbles 30 days.
+        {' '}Spot + perpetual CVD history up to {data?.retentionDays ?? 30} days · bubbles 24 hours.
       </p>
 
       <button

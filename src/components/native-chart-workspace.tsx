@@ -152,7 +152,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   if (secondsMode) for (const id of ['funding', 'perpetual-cvd', 'spot-cvd', 'aggressive-bubbles'])
     if (indicators.includes(id as OrderflowId)) paneNotes[id] = fromOneMinute;
   if (longFrame) for (const id of ['global-lsar', 'top-lsar', 'leverage'])
-    if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (history is kept 120 days).';
+    if (indicators.includes(id as OrderflowId)) paneNotes[id] = 'Available up to 1D charts (history is kept 30 days).';
   const exchange = EXCHANGES.has(contract.exchange.toLowerCase() as LiquidityExchange)
     ? contract.exchange.toLowerCase() as LiquidityExchange : 'binance';
   const nativeSymbol = contract.symbol;
@@ -182,7 +182,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const liquidity = useMemo(() => calculateLiquidityZones(liquidityCandles, liquiditySettings), [liquidityCandles, liquiditySettings]);
   const current = candles.at(-1);
   const [fundingWindow, setFundingWindow] = useChartSetting<FundingIndicatorWindow>('fundingWindow', '7d',
-    value => ['1d', '7d', '30d', '90d', '120d'].includes(String(value)));
+    value => ['1d', '7d', '30d'].includes(String(value)));
   const [fundingMethod, setFundingMethod] = useChartSetting<FundingIndicatorMethod>('fundingMethod', 'mean',
     value => ['mean', 'median', 'weighted'].includes(String(value)));
   const [fundingMode, setFundingMode] = useChartSetting<'settled' | 'recordedLive'>('fundingMode', 'settled',
@@ -702,7 +702,7 @@ function FundingEnabledWorkspace(props: FundingProps) {
           <option value="mean">Simple mean</option><option value="median">Median</option><option value="weighted">OI-weighted</option></select></label>
         <label className="super-chart-control"><span>History window</span><select value={props.window}
           onChange={(event) => props.setWindow(event.target.value as FundingIndicatorWindow)} aria-label="Funding history window">
-          <option value="1d">1 day</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="120d">120 days</option></select></label>
+          <option value="1d">1 day</option><option value="7d">7 days</option><option value="30d">30 days</option></select></label>
         <label className="super-chart-control"><span>Funding plot</span><select value={mode} disabled={props.method === 'weighted'}
           onChange={(event) => props.setMode(event.target.value as 'settled' | 'recordedLive')} aria-label="Funding history type">
           <option value="settled">Settled payments</option><option value="recordedLive">Recorded live</option></select></label>

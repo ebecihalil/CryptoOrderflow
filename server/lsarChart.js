@@ -45,9 +45,9 @@ export function buildLsarSeries(readings, timeframe) {
   return { points, sources: series.map(({ exchange, symbol, weight }) => ({ exchange, symbol, oiUsd: weight })) };
 }
 
-// 120-day memory: every computed 5-minute and hourly point is saved (exchanges only
+// 30-day memory: every computed 5-minute and hourly point is saved (exchanges only
 // publish about 12 days), so the chart keeps growing instead of dropping old candles.
-const LONG_MS = 120 * 86400_000;
+const LONG_MS = 30 * 86400_000;
 const longDirectory = process.env.LSAR_HISTORY_DIR ?? fileURLToPath(new URL("../.cache/lsar-long/", import.meta.url));
 const stores = new Map(); // `${asset}:${kind}` -> {"5m": Map(time -> point), "1h": Map}
 function storeFor(asset, kind, directory) {

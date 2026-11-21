@@ -47,7 +47,7 @@ export function createChartWatchlist({
   })();
   function snapshot() {
     return { items: items.map(i => ({ ...i, ...recorder.recordingStatus(i.asset) })),
-      limit: 5, retentionDays: 120, shared: true, storageWarning, storageFailed };
+      limit: 5, retentionDays: 30, shared: true, storageWarning, storageFailed };
   }
   function mutate(work) {
     const task = queue.then(async () => { await ready; if (closed) throw fail("Watchlist is shutting down.", 503); return work(); });

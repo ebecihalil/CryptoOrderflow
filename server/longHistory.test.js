@@ -56,12 +56,12 @@ test("open interest: 5-minute exchange totals only when every contract has a fre
   assert.deepEqual(history.tracked(), ["BTC"], "viewed coins stop after 2 hours; top coins stay");
 });
 
-test("funding live quotes: minute detail for 7 days, hourly after, 120 days in total", () => {
+test("funding live quotes: minute detail for 7 days, hourly after, 30 days in total", () => {
   const now = 200 * 86400;
   const points = [];
-  for (let t = now - 130 * 86400; t <= now; t += 600) points.push({ time: t });
+  for (let t = now - 40 * 86400; t <= now; t += 600) points.push({ time: t });
   const thinned = thinObservations(points, now);
-  assert.ok(thinned[0].time >= now - 120 * 86400);
+  assert.ok(thinned[0].time >= now - 30 * 86400);
   assert.equal(thinned.filter(p => p.time >= now - 7 * 86400).length, points.filter(p => p.time >= now - 7 * 86400).length);
-  assert.ok(thinned.filter(p => p.time < now - 7 * 86400).length <= 113 * 24 + 1);
+  assert.ok(thinned.filter(p => p.time < now - 7 * 86400).length <= 23 * 24 + 1);
 });
