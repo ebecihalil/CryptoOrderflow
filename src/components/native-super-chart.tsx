@@ -86,11 +86,11 @@ type Props = {
   liquidityEnabled?: boolean;
   symbolLabel?: string;
 };
-/** Soft pastel hues that stay clearly visible on the light and dark chart backgrounds. */
+/** Strong TradingView-style green / red, clear on the light and dark chart backgrounds. */
 export const CHART_COLORS = {
-  up: '#5fd4aa', down: '#f0857a',
-  volumeUp: 'rgba(95,212,170,0.55)', volumeDown: 'rgba(240,133,122,0.55)',
-  histUp: 'rgba(95,212,170,0.8)', histDown: 'rgba(240,133,122,0.8)',
+  up: '#089981', down: '#f23645',
+  volumeUp: 'rgba(8,153,129,0.5)', volumeDown: 'rgba(242,54,69,0.5)',
+  histUp: 'rgba(8,153,129,0.9)', histDown: 'rgba(242,54,69,0.9)',
   ema: '#f6c06a', sma: '#6fd6c8', bbBand: '#b8a4ee', bbMid: '#9d86e8',
   rsi: '#7cc8f5', macd: '#f6c06a', signal: '#7cc8f5',
 } as const;
@@ -237,7 +237,13 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     return funding.points
       .filter((point) => point.time >= start && point.time <= end)
       .sort((a, b) => a.time - b.time)
-      .map((point) => ({ time: toTime(point.time), value: point[field] ?? null }));
+      .map((point) => ({ time: toTime(point.time), value: point[field] ?? null }))
+      // A funding rate stays in force until the next one: carry it across gaps so the line reaches the live rate.
+      .map((row, index, rows) => {
+        if (row.value !== null || index === 0) return row;
+        for (let k = index - 1; k >= 0; k--) if (rows[k].value !== null) return { ...row, value: rows[k].value };
+        return row;
+      });
   }, [funding, candles]);
   const insufficientStudies = useMemo(() => {
     const count = candles.length;
@@ -263,7 +269,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       autoSize: true,
       layout: { background: { type: ColorType.Solid, color: palette.surface }, textColor: palette.muted, fontFamily: 'var(--app-font-mono), monospace', attributionLogo: true,
         panes: { separatorColor: palette.border, separatorHoverColor: palette.accent } },
-      grid: { vertLines: { color: palette.border }, horzLines: { color: palette.border } },
+      grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       rightPriceScale: { borderColor: palette.border, scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: palette.border, timeVisible: true, secondsVisible: false, rightOffset: 5 },
       crosshair: { vertLine: { color: palette.accent }, horzLine: { color: palette.accent } },
@@ -272,8 +278,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     chart.applyOptions({ timeScale: { tickMarkFormatter: (time: Time, type: number) => chartTimeFormatters(timeZoneRef.current).tickMarkFormatter(Number(time), type) } });
     const candleSeries = chart.addSeries(CandlestickSeries, {
       priceFormat: priceFormat(candles),
-      upColor: palette.positive, downColor: CHART_COLORS.down, borderVisible: false,
-      wickUpColor: palette.positive, wickDownColor: CHART_COLORS.down, priceLineVisible: false,
+      upColor: CHART_COLORS.up, downColor: CHART_COLORS.down, borderVisible: false,
+      wickUpColor: CHART_COLORS.up, wickDownColor: CHART_COLORS.down, priceLineVisible: false,
     }, 0);
     bundleRef.current = { chart, candleSeries, volumeSeries: null, primitive: null, bubblePrimitive: null, fills: [] };
     const captureView = () => {
@@ -318,11 +324,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       chart.applyOptions({
         layout: { background: { type: ColorType.Solid, color: next.surface }, textColor: next.muted,
           panes: { separatorColor: next.border, separatorHoverColor: next.accent } },
-        grid: { vertLines: { color: next.border }, horzLines: { color: next.border } },
         rightPriceScale: { borderColor: next.border }, timeScale: { borderColor: next.border },
         crosshair: { vertLine: { color: next.accent }, horzLine: { color: next.accent } },
       });
-      candleSeries.applyOptions({ upColor: next.positive, wickUpColor: next.positive });
     });
     observer.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme'] });
     const resize = new ResizeObserver(() => {
@@ -559,7 +563,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       const pane = nextPane();
       const threshold = funding?.threshold ?? 0.08;
       const fundingOptions = {
-        priceFormat: { type: 'price' as const, precision: 4, minMove: 0.0001 }, priceLineVisible: false, lastValueVisible: false,
+        priceFormat: { type: 'price' as const, precision: 4, minMove: 0.0001 }, priceLineVisible: true, priceLineStyle: 2, lastValueVisible: true,
         autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
           const info = original();
           return info ? { ...info, priceRange: {

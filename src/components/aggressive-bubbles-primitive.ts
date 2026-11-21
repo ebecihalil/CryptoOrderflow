@@ -75,16 +75,16 @@ export class AggressiveBubblesPrimitive implements ISeriesPrimitive<Time> {
               const y = series.priceToCoordinate(point.nativePrice);
               if (x === null || y === null) continue;
               const radius = bubbleRadius(point.value, maxValue);
-              const color = point.side === 'buy' ? '#5fd4aa' : '#f0857a';
+              const color = point.side === 'buy' ? '#089981' : '#f23645';
               context.beginPath();
               context.arc(x, y, radius, 0, Math.PI * 2);
               if (point.market === 'spot') {
-                context.fillStyle = point.side === 'buy' ? 'rgba(95,212,170,.24)' : 'rgba(240,133,122,.24)';
+                context.fillStyle = point.side === 'buy' ? 'rgba(8,153,129,.24)' : 'rgba(242,54,69,.24)';
                 context.fill();
                 context.lineWidth = 2;
                 context.strokeStyle = color;
               } else {
-                context.fillStyle = point.side === 'buy' ? 'rgba(95,212,170,.85)' : 'rgba(240,133,122,.85)';
+                context.fillStyle = point.side === 'buy' ? 'rgba(8,153,129,.85)' : 'rgba(242,54,69,.85)';
                 context.fill();
                 context.lineWidth = 1;
                 context.strokeStyle = point.side === 'buy' ? 'rgba(214,250,234,1)' : 'rgba(255,222,216,1)';
