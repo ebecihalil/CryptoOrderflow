@@ -1,4 +1,4 @@
-import type { IPrimitivePaneRenderer, ISeriesApi, ISeriesPrimitive, ITimeScaleApi, Logical, SeriesType, Time } from 'lightweight-charts';
+import type { IPrimitivePaneRenderer, ISeriesApi, ISeriesPrimitive, ITimeScaleApi, SeriesType, Time } from 'lightweight-charts';
 import type { SessionProfile, VolumeProfileSettings } from '@/lib/volume-profile';
 
 type Context = {
@@ -15,16 +15,28 @@ const COLORS = {
   box: 'rgba(9,30,31,0.22)', poc: '#ffffff', developingPoc: '#e5e7eb', va: '#5091ff',
 };
 
-/** Fractional bar index of a time (extrapolated past either end of the data). */
-function logicalOf(times: number[], time: number): number | null {
+/**
+ * Screen x of a time, from the candles' own coordinates (interpolated between candles and
+ * extrapolated past either end). Logical indexes are not used: other panes can add earlier
+ * time points (e.g. long ratio history), which would shift them.
+ */
+function xOfTime(timeScale: ITimeScaleApi<Time>, times: number[], time: number): number | null {
   const n = times.length;
   if (!n) return null;
+  const x = (index: number) => timeScale.timeToCoordinate(times[index] as Time);
+  const spacing = () => {
+    if (n < 2) return timeScale.options().barSpacing;
+    const a = x(n - 2), b = x(n - 1);
+    return a !== null && b !== null && b > a ? b - a : timeScale.options().barSpacing;
+  };
   const step = n > 1 ? times[n - 1] - times[n - 2] : 60;
-  if (time <= times[0]) return (time - times[0]) / (n > 1 ? times[1] - times[0] : step);
-  if (time >= times[n - 1]) return n - 1 + (time - times[n - 1]) / step;
+  if (time <= times[0]) { const x0 = x(0); return x0 === null ? null : x0 - (times[0] - time) / step * spacing(); }
+  if (time >= times[n - 1]) { const xl = x(n - 1); return xl === null ? null : xl + (time - times[n - 1]) / step * spacing(); }
   let lo = 0, hi = n - 1;
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (times[mid] <= time) lo = mid; else hi = mid; }
-  return lo + (time - times[lo]) / (times[hi] - times[lo]);
+  const a = x(lo), b = x(hi);
+  if (a === null || b === null) return a ?? b;
+  return a + (b - a) * (time - times[lo]) / (times[hi] - times[lo]);
 }
 
 /** Session volume profiles drawn behind the candles: one histogram per session, POC/VA lines. */
@@ -41,10 +53,7 @@ export class VolumeProfilePrimitive implements ISeriesPrimitive<Time> {
         draw: (target: Parameters<IPrimitivePaneRenderer['draw']>[0]) => {
           const { series, timeScale, times, profiles, settings } = this.context;
           target.useMediaCoordinateSpace(({ context }) => {
-            const xAt = (time: number) => {
-              const logical = logicalOf(times, time);
-              return logical === null ? null : timeScale.logicalToCoordinate(logical as Logical);
-            };
+            const xAt = (time: number) => xOfTime(timeScale, times, time);
             for (const profile of profiles) {
               const x1 = xAt(profile.start), x2 = xAt(profile.end);
               const yTop = series.priceToCoordinate(profile.high), yBottom = series.priceToCoordinate(profile.low);

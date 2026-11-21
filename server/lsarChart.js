@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { canonicalAsset } from "./assetIdentity.js";
 import { RECORD_DAYS } from "./retention.js";
 import { isCryptoAsset } from "./cryptoAssets.js";
-import { bucketStart } from "./timeframes.js";
+import { bucketStart, nextBucket as nextBucketStart } from "./timeframes.js";
 import { getLsarChartReadings } from "./lsarMarketData.js";
 import { getTopTraderLsarChartReadings } from "./topTraderLsarMarketData.js";
 
@@ -16,28 +16,33 @@ export const LSAR_CHART_FRAMES = ["5m", "15m", "30m", "1h", "4h", "24h"];
 /** Show a candle only when exchanges covering this share of OI have a reading (avoids jumps). */
 const MIN_WEIGHT_SHARE = 0.8;
 
-export function buildLsarSeries(readings, timeframe) {
+export function buildLsarSeries(readings, timeframe, nowSeconds = Date.now() / 1000) {
   if (!LSAR_CHART_FRAMES.includes(timeframe)) throw new Error("Unsupported LSAR timeframe.");
   const hourly = ["1h", "4h", "24h"].includes(timeframe);
+  // Each exchange's latest reading stays valid for this long, so a candle (including the current
+  // one) uses every exchange's most recent value instead of waiting for all of them to publish.
+  const maxAge = hourly ? 2 * 3600 : 30 * 60;
   const series = readings.map(reading => {
     const points = (hourly && reading.longWindowPoints?.length ? reading.longWindowPoints : reading.points) ?? [];
-    const byBucket = new Map();
-    for (const point of [...points].sort((a, b) => a.timestamp - b.timestamp)) {
-      if (!(point.ratio > 0) || !Number.isFinite(point.timestamp)) continue;
-      byBucket.set(bucketStart(timeframe, Math.floor(point.timestamp / 1000)), point.ratio); // last reading in the candle
-    }
-    return { exchange: reading.exchange, symbol: reading.symbol, weight: reading.openInterestUsd > 0 ? reading.openInterestUsd : 0, byBucket };
-  }).filter(item => item.weight > 0 && item.byBucket.size);
+    const timeline = [...points].filter(point => point.ratio > 0 && Number.isFinite(point.timestamp))
+      .map(point => ({ time: Math.floor(point.timestamp / 1000), ratio: point.ratio })).sort((a, b) => a.time - b.time);
+    return { exchange: reading.exchange, symbol: reading.symbol, weight: reading.openInterestUsd > 0 ? reading.openInterestUsd : 0, timeline };
+  }).filter(item => item.weight > 0 && item.timeline.length);
   const total = series.reduce((sum, item) => sum + item.weight, 0);
-  const times = [...new Set(series.flatMap(item => [...item.byBucket.keys()]))].sort((a, b) => a - b);
+  const buckets = new Set(series.flatMap(item => item.timeline.map(point => bucketStart(timeframe, point.time))));
+  if (series.length) buckets.add(bucketStart(timeframe, Math.floor(nowSeconds)));
+  const times = [...buckets].sort((a, b) => a - b);
+  const index = series.map(() => -1);
   const points = [];
   for (const time of times) {
+    const end = Math.min(nextBucketStart(timeframe, time), Math.floor(nowSeconds) + 1);
     let weight = 0, longWeighted = 0, count = 0;
-    for (const item of series) {
-      const ratio = item.byBucket.get(time);
-      if (ratio === undefined) continue;
-      weight += item.weight; longWeighted += item.weight * (ratio / (1 + ratio)); count++;
-    }
+    series.forEach((item, k) => {
+      while (index[k] + 1 < item.timeline.length && item.timeline[index[k] + 1].time < end) index[k]++;
+      const reading = item.timeline[index[k]];
+      if (!reading || end - reading.time > maxAge + (end - time)) return; // too old for this candle
+      weight += item.weight; longWeighted += item.weight * (reading.ratio / (1 + reading.ratio)); count++;
+    });
     if (!weight || weight < total * MIN_WEIGHT_SHARE) continue;
     const longShare = longWeighted / weight;
     points.push({ time, ratio: Math.round(longShare / (1 - longShare) * 10000) / 10000,

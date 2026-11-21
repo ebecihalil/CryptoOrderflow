@@ -85,7 +85,7 @@ export const CHART_COLORS = {
   rsi: '#7cc8f5', macd: '#f6c06a', signal: '#7cc8f5',
 } as const;
 type Theme = { page: string; surface: string; muted: string; border: string; accent: string; positive: string };
-type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null; fills: BandFillPrimitive[] };
+type Bundle = { chart: IChartApi; candleSeries: ISeriesApi<'Candlestick'>; volumeSeries: ISeriesApi<'Histogram'> | null; primitive: LiquidityZonePrimitive | null; bubblePrimitive: AggressiveBubblesPrimitive | null; fills: BandFillPrimitive[]; profilePrimitive?: VolumeProfilePrimitive | null };
 type SavedView = {
   from: number; to: number; anchorTime: number; anchorLogical: number;
   panes: Record<string, { weight: number; autoScale: boolean; range: { from: number; to: number } | null }>;
@@ -407,6 +407,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       [key, chart.panes()[index]?.getStretchFactor()] as const));
     if (bundle.primitive) candleSeries.detachPrimitive(bundle.primitive);
     if (bundle.bubblePrimitive) candleSeries.detachPrimitive(bundle.bubblePrimitive);
+    if (bundle.profilePrimitive) { candleSeries.detachPrimitive(bundle.profilePrimitive); bundle.profilePrimitive = null; }
     for (const fill of bundle.fills) candleSeries.detachPrimitive(fill);
     bundle.fills = [];
     if (!aggressiveBubblesEnabled) setBubbleHover(null);
@@ -652,8 +653,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       bundle.bubblePrimitive = primitive;
     } else bundle.bubblePrimitive = null;
     if (volumeProfiles && volumeProfileSettings && !isHidden('volume-profile')) {
-      candleSeries.attachPrimitive(new VolumeProfilePrimitive({ series: candleSeries, timeScale: chart.timeScale(),
-        times: candles.map((bar) => bar.time), profiles: volumeProfiles, settings: volumeProfileSettings }));
+      const primitive = new VolumeProfilePrimitive({ series: candleSeries, timeScale: chart.timeScale(),
+        times: candles.map((bar) => bar.time), profiles: volumeProfiles, settings: volumeProfileSettings });
+      candleSeries.attachPrimitive(primitive);
+      bundle.profilePrimitive = primitive;
     }
     for (const key of hiddenLayers) for (const series of layerSeries.get(key) ?? []) series.applyOptions({ visible: false });
     chart.applyOptions({ timeScale: { timeVisible: true, secondsVisible: false } });

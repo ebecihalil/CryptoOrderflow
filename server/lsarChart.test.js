@@ -15,12 +15,23 @@ test("OI-weighted aggregate ratio per candle (long shares, not raw ratios, are a
   assert.equal(sources.length, 2);
 });
 
-test("a candle is skipped when exchanges holding most of the OI are missing", () => {
+test("a candle is skipped when exchanges holding most of the OI have no recent reading", () => {
   const { points } = buildLsarSeries([
     { exchange: "binance", openInterestUsd: 900, points: pts([2]) },
-    { exchange: "okx", openInterestUsd: 100, points: pts([1, 1]) },
+    { exchange: "okx", openInterestUsd: 100, points: pts([1, 1], 45 * 60_000) },
   ], "5m");
-  assert.equal(points.length, 1, "second candle has only 10% of OI");
+  assert.equal(points.length, 1, "45 minutes later Binance's reading is too old: only 10% of OI is left");
+});
+
+test("the current candle uses each exchange's latest reading (no lag while exchanges publish)", () => {
+  const start = 1_700_000_100_000;
+  const { points } = buildLsarSeries([
+    { exchange: "binance", openInterestUsd: 900, points: pts([2, 2], 300_000, start) },
+    { exchange: "okx", openInterestUsd: 100, points: pts([1, 1, 1], 300_000, start) }, // okx already has the newest 5 minutes
+  ], "5m", start / 1000 + 11 * 60);
+  const last = points.at(-1);
+  assert.equal(last.time, Math.floor((start / 1000 + 600) / 300) * 300, "newest candle is shown");
+  assert.equal(last.sources, 2, "Binance's previous reading carries into it");
 });
 
 test("larger timeframes use the hourly history and the last reading in each candle", () => {
