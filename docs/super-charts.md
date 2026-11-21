@@ -284,3 +284,33 @@ every chart timeframe (1s – 3M).
   empty buckets are flat, and the series is scaled so the newest candle equals
   the live total of ALL exchanges. Values are coins on the server; the chart
   shows coins × candle close (USD).
+
+## Support and Resistance / Trendlines (technical, owner's scripts)
+
+Ports of the owner's Pine scripts (`src/lib/extra-indicators.js`), in the
+"Support & resistance" group of Technical Indicators.
+
+- **Support and Resistance** (`srzones`): pivots (strength 10) confirmed in the
+  last 300 bars are merged into zones no taller than ATR(14) at the pivot; a
+  zone shows once ≥ 2 pivots align, from its first pivot to the right edge.
+  Colour by the latest close: above = support (green), below = resistance
+  (red), inside = grey.
+- **Trendlines** (`trendlines`): for pivot highs (resistance) and lows
+  (support), every pivot pair is a candidate line; it needs ≥ 3 pivots within
+  0.5 × ATR(14) and no break older than 5 bars. The valid line closest to the
+  current price is drawn as a zone (max/min pivot offsets), extended right.
+
+## Session Volume Profile (orderflow)
+
+Port of the owner's Pine "Session Volume Profile", but built from REAL order
+flow: `GET /api/indicators/volume-profile?asset=&market=both|perpetual|spot`
+returns, per UTC day, recorded aggressive buy and sell USD per 0.05% price band
+from every exchange (the bubble ledger, 7 days). `src/lib/volume-profile.js`
+splits each session into N rows (48), finds the POC (busiest row) and the value
+area (70%, grown from the POC toward the larger neighbour), and
+`volume-profile-primitive.ts` draws each session's histogram (teal = taker buys,
+red = taker sells, brighter inside the value area), POC, optional VAH/VAL and
+the developing session (dashed POC). Settings: market, Buy/Sell or Total,
+sessions to keep (1–7), rows, value area %, width %, left/right placement.
+Sessions are UTC days; the chart's own Volume pane replaces the script's
+vertical volume bars.

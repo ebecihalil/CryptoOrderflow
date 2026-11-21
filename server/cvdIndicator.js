@@ -291,6 +291,36 @@ export function createCvdIndicatorService({
   const BUBBLE_DISPLAY_LIMIT = 1500;
   /** Chart timeframes that need 1-minute bubble cells. */
   const FINE_BUBBLE_FRAMES = ["1m", "3m"];
+  /**
+   * Session (UTC day) volume profile from recorded executed trades: aggressive buy and
+   * sell USD per 0.05% price band, summed over the chosen markets and every exchange.
+   */
+  function getVolumeProfile(query) {
+    const asset = typeof query.asset === "string" ? canonicalAsset(query.asset.trim().toUpperCase()).asset : "";
+    const market = query.market ?? "both";
+    if (!/^[A-Z0-9]{1,30}$/.test(asset) || !["both", "spot", "perpetual"].includes(market))
+      throw Object.assign(new Error("A crypto asset and market (both, spot or perpetual) are required."), { status: 400 });
+    const markets = market === "both" ? ["spot", "perpetual"] : [market];
+    const sessions = new Map();
+    let startedAt = Infinity;
+    for (const item of markets) {
+      get({ asset, market: item, timeframe: "24h", anchor: "1w" });
+      const ledger = groups.get(`${item}:${asset}`).bubbles.snapshot("24h", 0);
+      startedAt = Math.min(startedAt, ledger.startedAt);
+      for (const point of ledger.points) {
+        const band = Number(point.id.split(":")[2]);
+        if (!sessions.has(point.time)) sessions.set(point.time, new Map());
+        const levels = sessions.get(point.time);
+        const level = levels.get(band) ?? { band, buy: 0, sell: 0, weighted: 0, value: 0 };
+        level[point.side] += point.value; level.weighted += point.price * point.value; level.value += point.value;
+        levels.set(band, level);
+      }
+    }
+    return { asset, market, unit: "USD", generatedAt: new Date(now()).toISOString(),
+      recordingStartedAt: Number.isFinite(startedAt) ? new Date(startedAt).toISOString() : null,
+      sessions: [...sessions].sort((a, b) => a[0] - b[0]).slice(-8).map(([time, levels]) => ({ time,
+        levels: [...levels.values()].map(l => ({ price: l.weighted / l.value, buy: l.buy, sell: l.sell })).sort((a, b) => a.price - b.price) })) };
+  }
   function getBubbles(query) {
     const parsed = validateAggressiveBubblesQuery(query);
     parsed.asset = canonicalAsset(parsed.asset).asset;
@@ -396,7 +426,7 @@ export function createCvdIndicatorService({
     const group = groups.get(`${market}:${asset}`);
     return group ? [...group.minutes.values()].filter(minute => minute.byExchange) : [];
   }
-  return { get, getBubbles, flowMinutes, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
+  return { get, getBubbles, getVolumeProfile, flowMinutes, pinAsset, unpinAsset, recordingStatus, liquidationSnapshot, storageDir, async close() {
     clearInterval(tick);
     groups.forEach(stopGroup);
     await Promise.all([...groups.values()].map(async group => {

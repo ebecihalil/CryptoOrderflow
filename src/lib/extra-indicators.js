@@ -680,6 +680,101 @@ export function volumeOscillator(candles, { short, long }) {
 }
 export const netVolume = candles => candles.map((c, i) => !isNum(c.volume) || i === 0 ? null : c.close > candles[i - 1].close ? c.volume : c.close < candles[i - 1].close ? -c.volume : 0);
 
+// ---------- Support & Resistance zones and Trendlines (ported from the owner's Pine scripts) ----------
+/** ta.pivothigh / ta.pivotlow: bar i is a pivot if it beats `strength` bars on each side (confirmed at i + strength). */
+export function pivots(values, strength, isHigh) {
+  const out = [];
+  for (let i = strength; i < values.length - strength; i++) {
+    const v = values[i];
+    if (!isNum(v)) continue;
+    let ok = true;
+    for (let k = 1; k <= strength && ok; k++) {
+      const left = values[i - k], right = values[i + k];
+      if (isHigh ? !(v > left && v >= right) : !(v < left && v <= right)) ok = false;
+    }
+    if (ok) out.push({ index: i, price: v, confirmed: i + strength });
+  }
+  return out;
+}
+/**
+ * Support and Resistance: pivots (last `backBars` bars) are merged into price zones whose height
+ * stays within 1 ATR(14); a zone is drawn once `minTouches` pivots align. Colour by the latest close:
+ * above the zone = support, below = resistance, inside = in-zone.
+ */
+export function supportResistanceZones(candles, { backBars, pivotStrength, minTouches }) {
+  const atr = rmaArr(trueRangeArr(candles), 14), last = candles.length - 1, start = last - backBars;
+  const events = [
+    ...pivots(highs(candles), pivotStrength, true).map(p => ({ ...p, order: 0 })),
+    ...pivots(lows(candles), pivotStrength, false).map(p => ({ ...p, order: 1 })),
+  ].filter(p => p.confirmed >= start && p.confirmed <= last).sort((a, b) => a.confirmed - b.confirmed || a.order - b.order);
+  const clusters = [];
+  for (const pivot of events) {
+    const threshold = atr[pivot.confirmed];
+    if (!isNum(threshold)) continue;
+    const match = clusters.find(c => Math.max(c.top, pivot.price) - Math.min(c.bottom, pivot.price) <= threshold);
+    if (match) { match.top = Math.max(match.top, pivot.price); match.bottom = Math.min(match.bottom, pivot.price); match.count++; }
+    else clusters.push({ left: pivot.index, top: pivot.price, bottom: pivot.price, count: 1 });
+  }
+  const close = candles[last]?.close;
+  return clusters.filter(c => c.count >= minTouches).map(c => ({ ...c,
+    state: close > c.top ? "support" : close < c.bottom ? "resistance" : "inside" }));
+}
+/**
+ * Trendlines: for resistance (pivot highs) and support (pivot lows) separately, every pair of
+ * pivots defines a line; it needs `minTouches` pivots within 0.5 ATR and must not have been broken
+ * (except within the last 5 bars). The valid line closest to the current price is drawn as a zone.
+ */
+export function trendlineZones(candles, { backBars, pivotStrength, minTouches, useClose }) {
+  const last = candles.length - 1;
+  if (last < 0) return [];
+  const atr = rmaArr(trueRangeArr(candles), 14)[last];
+  if (!isNum(atr)) return [];
+  const maxThreshold = atr * 0.5, lookback = last - backBars, stability = last - 5, close = candles[last].close;
+  const find = (list, isResistance) => {
+    let best = null, bestDistance = Infinity;
+    if (list.length < minTouches) return null;
+    for (let i = 0; i < list.length - 1; i++) {
+      const p1 = list[i];
+      if (p1.index < lookback) continue;
+      for (let j = i + 1; j < list.length; j++) {
+        const p2 = list[j], slope = (p2.price - p1.price) / (p2.index - p1.index);
+        let touches = 0, broken = false, up = 0, down = 0;
+        for (const pk of list) {
+          if (pk.index < p1.index) continue;
+          const diff = pk.price - (p1.price + slope * (pk.index - p1.index));
+          if (Math.abs(diff) <= maxThreshold) { touches++; up = Math.max(up, diff); down = Math.min(down, diff); }
+          if (pk.index < stability && (isResistance ? diff > maxThreshold : diff < -maxThreshold)) { broken = true; break; }
+        }
+        if (touches < minTouches || broken) continue;
+        const distance = Math.abs(p1.price + slope * (last - p1.index) - close);
+        if (distance < bestDistance) { bestDistance = distance; best = { x1: p1.index, y1: p1.price, slope, up, down }; }
+      }
+    }
+    return best;
+  };
+  const hi = useClose ? closes(candles) : highs(candles), lo = useClose ? closes(candles) : lows(candles);
+  // Only pivots confirmed by the latest bar exist (as in the Pine script).
+  const res = find(pivots(hi, pivotStrength, true), true), sup = find(pivots(lo, pivotStrength, false), false);
+  return [res && { ...res, side: "resistance" }, sup && { ...sup, side: "support" }].filter(Boolean);
+}
+/** Series for a zone between two prices from bar `from` to the last bar, extended `extend` bars to the right. */
+function zoneSeries(candles, key, from, upperAt, lowerAt, extend = 10) {
+  const timeOf = futureTimeOf(candles), upper = [], lower = [];
+  for (let i = 0; i < candles.length + extend; i++) {
+    const inside = i >= from;
+    upper.push({ time: timeOf(i), value: inside ? upperAt(i) : null });
+    lower.push({ time: timeOf(i), value: inside ? lowerAt(i) : null });
+  }
+  return [
+    { key: `${key}u`, label: key, color: "#888888", type: "line", width: 1, hidden: true, data: upper },
+    { key: `${key}l`, label: key, color: "#888888", type: "line", width: 1, hidden: true, data: lower },
+  ];
+}
+const alpha = (hex, transparency) => {
+  const value = hex.replace("#", ""), n = parseInt(value.length === 3 ? value.split("").map(c => c + c).join("") : value, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, 1 - transparency / 100)).toFixed(2)})`;
+};
+
 // ---------- registry ----------
 const P = (key, label, def, min, max, step = 1) => ({ key, label, default: def, min, max, step });
 const line = (key, label, color, data, extra = {}) => ({ key, label, color, type: "line", width: 1, data, ...extra });
@@ -957,6 +1052,37 @@ export const EXTRA_INDICATORS = [
     compute: (c, p) => ({ series: [line("vo", "VO %", "#2196f3", pts(c, volumeOscillator(c, p)), { width: 2 })], levels: [{ value: 0 }] }) },
   { id: "netvolume", label: "Net Volume", group: "Volume", placement: "pane", paneHeight: 100, params: [],
     compute: c => ({ series: [{ key: "nv", label: "Net Volume", color: "#26a69a", type: "histogram", data: pts(c, netVolume(c)) }], levels: [{ value: 0 }] }) },
+  // ---- Owner's scripts ----
+  { id: "srzones", label: "Support and Resistance", group: "Support & resistance", placement: "overlay",
+    params: [P("backBars", "Bars to apply", 300, 50, 1500), P("pivotStrength", "Pivot strength", 10, 1, 50), P("minTouches", "Min pivot confirmation", 2, 2, 10),
+      P("transparency", "Fill transparency", 35, 0, 100)],
+    compute: (c, p) => {
+      const zones = supportResistanceZones(c, p);
+      const colors = { support: "#22c55e", resistance: "#ef4444", inside: "#9ca3af" };
+      const series = [], fills = [];
+      zones.forEach((zone, k) => {
+        series.push(...zoneSeries(c, `z${k}`, zone.left, () => zone.top, () => zone.bottom));
+        const fill = alpha(colors[zone.state], p.transparency);
+        fills.push({ upper: `z${k}u`, lower: `z${k}l`, up: fill, down: fill });
+      });
+      return { series, fills, summary: `${zones.length} zone${zones.length === 1 ? "" : "s"}` };
+    } },
+  { id: "trendlines", label: "Trendlines", group: "Support & resistance", placement: "overlay",
+    params: [P("backBars", "Bars to apply", 300, 50, 1500), P("pivotStrength", "Pivot strength", 10, 5, 15), P("minTouches", "Min pivot confirmation", 3, 2, 8),
+      P("useClose", "Pivot source: close (1) or high/low (0)", 0, 0, 1), P("transparency", "Zone transparency", 50, 0, 100)],
+    compute: (c, p) => {
+      const zones = trendlineZones(c, { ...p, useClose: p.useClose === 1 });
+      const series = [], fills = [];
+      for (const zone of zones) {
+        const color = zone.side === "resistance" ? "#ef4444" : "#22c55e", key = zone.side === "resistance" ? "r" : "s";
+        const at = i => zone.y1 + zone.slope * (i - zone.x1);
+        const [top, bottom] = zoneSeries(c, key, zone.x1, i => at(i) + zone.up, i => at(i) + zone.down);
+        series.push({ ...top, label: zone.side === "resistance" ? "Resistance" : "Support", color: alpha(color, 50), hidden: false },
+          { ...bottom, label: zone.side === "resistance" ? "Resistance low" : "Support low", color: alpha(color, 50), hidden: false });
+        fills.push({ upper: `${key}u`, lower: `${key}l`, up: alpha(color, p.transparency), down: alpha(color, p.transparency) });
+      }
+      return { series, fills, summary: zones.map(z => z.side).join(" + ") || "no valid line" };
+    } },
 ];
 export const EXTRA_INDICATOR_IDS = EXTRA_INDICATORS.map(def => def.id);
 const BY_ID = new Map(EXTRA_INDICATORS.map(def => [def.id, def]));

@@ -156,6 +156,15 @@ export const INDICATOR_HELP: Record<string, IndicatorHelp> = {
   klinger: { summary: "Klinger Oscillator: long-term money flow from volume and price direction.", signals: ["KVO crossing its signal line gives buy/sell signals; divergences warn of turns."] },
   volosc: { summary: "Volume Oscillator: fast vs slow volume average, in percent.", signals: ["Above 0 = volume increasing (confirms moves); below 0 = volume drying up."] },
   netvolume: { summary: "Net Volume: bar volume counted positive on up-closes and negative on down-closes.", signals: ["Mostly positive bars = buying dominance."] },
+  srzones: { summary: 'Support and Resistance: swing highs and lows (pivots) from the last bars are grouped into price zones no taller than 1 ATR. A zone appears once at least the set number of pivots line up in it, and extends to the right.',
+    lines: [['Green zone', 'Price is above it: acting as support.'], ['Red zone', 'Price is below it: acting as resistance.'], ['Grey zone', 'Price is inside the zone.']],
+    signals: ['Zones with more touches are stronger.', 'A close through a zone (green → red or red → green) is a break; a retest from the other side often follows.'] },
+  trendlines: { summary: 'Trendlines: from swing highs (resistance) and swing lows (support), finds the line through at least the set number of pivots (within 0.5 ATR) that has not been broken, and draws the one closest to the current price as a zone.',
+    lines: [['Red zone', 'Resistance trendline.'], ['Green zone', 'Support trendline.']],
+    signals: ['A close outside the zone is a breakout; touches of the zone are watched for bounces.', 'Pivot strength 5–15 and confirmation 2–8, as in the original script.'] },
+  'volume-profile': { summary: 'Session Volume Profile: for each UTC day, how much was traded at every price, built from every recorded executed trade on all exchanges (spot and/or perpetual). Unlike a candle-based profile, teal is REAL aggressive buying (taker buys) and red is real aggressive selling at that price.',
+    lines: [['Teal / red bars', 'Taker buy / sell volume at that price; brighter = inside the value area.'], ['White line (POC)', 'Point of control: the price with the most volume (dashed = developing today).'], ['Blue lines (VAH / VAL)', 'Value area high / low: where the chosen % of the volume traded.']],
+    signals: ['Price tends to return to the POC and to stay inside the value area in balanced markets.', 'Acceptance outside the value area (closes beyond VAH/VAL) often starts a move to the next high-volume area.', 'Thin areas with little volume are crossed quickly; heavy nodes act as support/resistance.', 'More red than teal at a level = aggressive selling there (and the opposite).'] },
 };
 
 export const helpFor = (key: string): IndicatorHelp | null => INDICATOR_HELP[key] ?? null;
