@@ -32,3 +32,16 @@ test("keeps the chosen number of completed sessions plus the developing one", ()
   assert.equal(profiles.at(-1).developing, true);
   assert.equal(profiles.at(-1).end, today + 3600);
 });
+
+test("levels outside the chart's own price range for the day are ignored (same ticker, different token)", () => {
+  const day = 86400 * 100;
+  const payload = { sessions: [{ time: day, levels: [
+    { price: 1.35, buy: 100, sell: 50 }, { price: 1.38, buy: 80, sell: 20 }, { price: 6.64, buy: 5000, sell: 5000 },
+  ] }] };
+  const candles = [{ time: day, low: 1.34, high: 1.40 }, { time: day + 3600, low: 1.33, high: 1.39 }];
+  const [profile] = buildProfiles(payload, { ...VOLUME_PROFILE_DEFAULTS, rows: 4 }, 1, day + 86400 * 2, candles);
+  assert.ok(profile.high < 1.5, "the 6.64 level is dropped");
+  assert.ok(profile.poc > 1.3 && profile.poc < 1.4);
+  // A day with no chart candles is not drawn.
+  assert.equal(buildProfiles(payload, VOLUME_PROFILE_DEFAULTS, 1, day + 86400 * 2, []).length, 0);
+});

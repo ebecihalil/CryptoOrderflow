@@ -43,3 +43,7 @@
 .pane-legend-default { border:1px solid var(--lsar-control-border);background:var(--lsar-page);color:var(--lsar-strong); }
 .pane-legend-default:hover:not(:disabled) { border-color:var(--lsar-accent);color:var(--lsar-accent); }
 .pane-legend-default:disabled { opacity:.45;cursor:default; }
+.pane-legend-eye { display:inline-grid;place-items:center;width:20px;height:20px;padding:0;border:0;border-radius:4px;background:transparent;color:var(--lsar-muted);cursor:pointer; }
+.pane-legend-eye:hover { color:var(--lsar-ink);background:color-mix(in srgb,var(--lsar-ink) 10%,transparent); }
+.pane-legend-row.is-hidden .pane-legend-name, .pane-legend-row.is-hidden .pane-legend-params, .pane-legend-row.is-hidden .pane-legend-swatch { opacity:.45; }
+.pane-legend-row.is-hidden .pane-legend-eye { color:var(--lsar-ink); }

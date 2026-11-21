@@ -142,6 +142,13 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const leverageFrame = belowFiveMinutes ? '5m' : PERP_LEVERAGE_FRAMES.includes(timeframe) ? timeframe : null;
   const hasLeverage = indicators.includes('leverage') && !!leverageFrame;
   const hasVolumeProfile = indicators.includes('volume-profile');
+  // Eye button: indicators hidden in THIS chart window (still selected, not drawn).
+  const [hiddenLayers, setHiddenLayers] = useChartSetting<string[]>(`hiddenLayers:${syncId}`, [],
+    value => Array.isArray(value) && value.every(item => typeof item === 'string'));
+  const toggleLayer = (key: string) => setHiddenLayers((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  // Plot style for line indicators that can also be drawn as columns (line is the default).
+  const [layerStyles, setLayerStyles] = useChartSetting<Record<string, 'line' | 'columns'>>('layerStyles', {},
+    value => !!value && typeof value === 'object' && !Array.isArray(value));
   const [volumeProfileSettings, setVolumeProfileSettings] = useChartSetting<VolumeProfileSettings>('volumeProfileSettings', VOLUME_PROFILE_DEFAULTS as VolumeProfileSettings,
     value => !!value && typeof value === 'object' && ['both', 'spot', 'perpetual'].includes((value as VolumeProfileSettings).market));
   const lsarFrame = belowFiveMinutes ? '5m' : LSAR_CHART_FRAMES.includes(timeframe) ? timeframe : null;
@@ -281,8 +288,8 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
   const aggregatedOi = useAggregatedOi(canonicalAsset, timeframe, hasOiDriver);
   const volumeProfile = useVolumeProfile(canonicalAsset, volumeProfileSettings.market, hasVolumeProfile);
   const volumeProfiles = useMemo(() => hasVolumeProfile && volumeProfile.data?.asset === canonicalAsset
-    ? buildProfiles(volumeProfile.data, volumeProfileSettings, contract.priceDivisor || 1) : null,
-  [hasVolumeProfile, volumeProfile.data, canonicalAsset, volumeProfileSettings, contract.priceDivisor]);
+    ? buildProfiles(volumeProfile.data, volumeProfileSettings, contract.priceDivisor || 1, Date.now() / 1000, candles) : null,
+  [hasVolumeProfile, volumeProfile.data, canonicalAsset, volumeProfileSettings, contract.priceDivisor, candles]);
   const oiPayload = aggregatedOi.data?.asset === canonicalAsset && aggregatedOi.data.timeframe === timeframe ? aggregatedOi.data : null;
   const leverage = usePerpLeverage(canonicalAsset, leverageFrame ?? '1h', exchange, nativeSymbol, hasLeverage);
   const globalLsar = useLsarChart(canonicalAsset, lsarFrame ?? '1h', 'global', hasGlobalLsar);
@@ -454,6 +461,12 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
     )])),
   };
 
+  const plotStyle = (key: string) => (
+    <label className="super-chart-control"><span>Plot style</span>
+      <select value={layerStyles[key] ?? 'line'} onChange={(event) => setLayerStyles({ ...layerStyles, [key]: event.target.value as 'line' | 'columns' })}
+        aria-label="Plot style" data-testid={`plot-style-${key}`}>
+        <option value="line">Line</option><option value="columns">Columns</option>
+      </select></label>);
   const chartAndDetails = (funding: FundingPlotData | null, fundingControls: ReactNode) => {
     // Settings for each chart layer, opened from the ⚙ next to its name on the chart.
     const layerSettings: Record<string, ReactNode | undefined> = {
@@ -468,7 +481,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
           {!liquidity.signals.length && <li className="native-no-signals">No zone signals in the available history.</li>}</ul>
       </section>}</> : undefined,
       ...technicalLayerSettings,
-      funding: fundingControls ?? undefined,
+      funding: <>{plotStyle('funding')}{fundingControls}</>,
+      'global-lsar': plotStyle('global-lsar'),
+      'top-lsar': plotStyle('top-lsar'),
       'perpetual-cvd': cvdControls('perpetual', hasPerpetualCvd, perpetualAnchor, setPerpetualAnchor, perpetualCvd) || undefined,
       'spot-cvd': cvdControls('spot', hasSpotCvd, spotAnchor, setSpotAnchor, spotCvd) || undefined,
       'volume-profile': hasVolumeProfile ? <section className="native-bubble-controls" aria-label="Session Volume Profile controls">
@@ -630,6 +645,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
            volumeProfiles={volumeProfiles} volumeProfileSettings={hasVolumeProfile ? volumeProfileSettings : null}
+           hiddenLayers={hiddenLayers} onToggleLayer={toggleLayer} layerStyles={layerStyles}
            perpetualCvd={hasPerpetualCvd ? perpetualCvd.payload : null} spotCvd={hasSpotCvd ? spotCvd.payload : null}
             perpetualCvdEnabled={indicators.includes('perpetual-cvd')} spotCvdEnabled={indicators.includes('spot-cvd')}
              aggressiveBubbles={hasAggressiveBubbles ? bubblePayload : null} aggressiveBubblesEnabled={indicators.includes('aggressive-bubbles')}

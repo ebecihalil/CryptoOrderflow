@@ -65,6 +65,11 @@ type Props = {
   /** Session Volume Profile (real aggressive buy/sell volume at price). */
   volumeProfiles?: SessionProfile[] | null;
   volumeProfileSettings?: VolumeProfileSettings | null;
+  /** Indicators kept on the chart but not drawn (eye button). */
+  hiddenLayers?: string[];
+  onToggleLayer?: (key: string) => void;
+  /** Plot style for line indicators that can also be columns (funding, L/S ratios). */
+  layerStyles?: Record<string, 'line' | 'columns'>;
   /** Save / Default buttons per layer key. */
   layerActions?: Record<string, LayerActions>;
   onRemoveLayer?: (key: string) => void;
@@ -116,7 +121,9 @@ function compactCvd(value: number) {
   return `${value < 0 ? '−' : ''}${(magnitude / divisor).toLocaleString(undefined, { maximumFractionDigits: unit ? 2 : 1 })}${unit}`;
 }
 
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel, volumeProfiles = null, volumeProfileSettings = null }: Props) {
+const NO_HIDDEN: string[] = [];
+const NO_STYLES: Record<string, 'line' | 'columns'> = {};
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel, volumeProfiles = null, volumeProfileSettings = null, hiddenLayers = NO_HIDDEN, onToggleLayer, layerStyles = NO_STYLES }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
@@ -139,10 +146,16 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
   const measurePanes = useCallback(() => {
     const chart = bundleRef.current?.chart;
     if (!chart) return;
+    // Measure where each pane really is on screen: right after a redraw the library can
+    // report 0 height for recreated panes while they are already drawn.
+    const origin = mountRef.current?.getBoundingClientRect().top ?? 0;
     let top = 0;
     const next = chart.panes().map((pane, index) => {
-      const item = { key: paneKeysRef.current[index] ?? `pane-${index}`, top, height: pane.getHeight() };
-      top += pane.getHeight() + 1; // 1px pane separator
+      const rect = pane.getHTMLElement?.()?.getBoundingClientRect();
+      const height = rect && rect.height > 0 ? rect.height : pane.getHeight();
+      const at = rect && rect.height > 0 ? Math.round(rect.top - origin) : top;
+      const item = { key: paneKeysRef.current[index] ?? `pane-${index}`, top: at, height: Math.round(height) };
+      top = at + height + 1; // 1px pane separator
       return item;
     });
     setPaneLayout((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
@@ -402,8 +415,17 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     seriesRef.current = [];
     candleSeries.applyOptions({ priceFormat: priceFormat(candles), visible: candles.length > 0 });
     candleSeries.setData(candles.map((bar) => ({ time: toTime(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close })));
-    const pushSeries = (series: ISeriesApi<any>) => { seriesRef.current.push(series); return series; };
+    // Every series is tagged with its indicator so hidden ones can be switched off.
+    let layer = '';
+    const layerSeries = new Map<string, ISeriesApi<any>[]>();
+    const isHidden = (key: string) => hiddenLayers.includes(key);
+    const pushSeries = (series: ISeriesApi<any>) => {
+      seriesRef.current.push(series);
+      if (layer) layerSeries.set(layer, [...(layerSeries.get(layer) ?? []), series]);
+      return series;
+    };
     const volumePane = showVolume ? 1 : null;
+    layer = 'volume';
     if (showVolume) {
       const volumeSeries = pushSeries(chart.addSeries(HistogramSeries, {
         priceFormat: { type: 'volume' }, priceScaleId: '', lastValueVisible: false, priceLineVisible: false,
@@ -417,12 +439,14 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
 
     const priceOverlay = (id: ChartStudyId, data: Array<{ time: number; value: number | null }>, color: string, width: number) => {
       if (!studies.includes(id) || !data.length) return;
+      layer = id;
       const line = pushSeries(chart.addSeries(LineSeries, { color, lineWidth: width as 1 | 2 | 3 | 4, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }, 0));
       line.setData(data.filter((point): point is { time: number; value: number } => point.value !== null && Number.isFinite(point.value))
         .map((point) => ({ time: toTime(point.time), value: point.value })));
     };
     priceOverlay('ema', studyData.ema, CHART_COLORS.ema, 2);
     priceOverlay('sma', studyData.sma, CHART_COLORS.sma, 2);
+    layer = 'bb';
     if (studies.includes('bb') && studyData.bb.middle.length) {
       for (const [data, color] of [[studyData.bb.upper, CHART_COLORS.bbBand], [studyData.bb.middle, CHART_COLORS.bbMid], [studyData.bb.lower, CHART_COLORS.bbBand]] as const) {
         const line = pushSeries(chart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }, 0));
@@ -452,7 +476,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       for (const level of result.levels ?? []) {
         first?.createPriceLine({ price: level.value, color: '#89928a88', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: level.label ?? String(level.value) });
       }
-      if (pane === 0) {
+      if (pane === 0 && !isHidden(layer)) {
         for (const fill of result.fills ?? []) {
           const upper = result.series.find((item) => item.key === fill.upper);
           const lower = new Map(result.series.find((item) => item.key === fill.lower)?.data.map((point) => [point.time, point.value]) ?? []);
@@ -464,10 +488,11 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         }
       }
     };
-    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'overlay') drawExtra(result, 0);
+    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'overlay') { layer = id; drawExtra(result, 0); }
 
     paneCountRef.current = 0;
     const nextPane = () => (volumePane === null ? 1 : 2) + paneCountRef.current++;
+    layer = 'rsi';
     if (studies.includes('rsi') && studyData.rsi.length) {
       const pane = nextPane();
       const rsi = pushSeries(chart.addSeries(LineSeries, {
@@ -478,6 +503,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       rsi.createPriceLine({ price: 70, color: CHART_COLORS.volumeDown, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '70' });
       rsi.createPriceLine({ price: 30, color: CHART_COLORS.volumeUp, lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '30' });
     }
+    layer = 'macd';
     if (studies.includes('macd') && studyData.macd.histogram.length) {
       const pane = nextPane();
       const macdPriceFormat = priceFormat(candles);
@@ -491,29 +517,37 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       const signal = pushSeries(chart.addSeries(LineSeries, { color: CHART_COLORS.signal, lineWidth: 1, priceFormat: macdPriceFormat, priceLineVisible: false, lastValueVisible: false }, pane));
       signal.setData(studyData.macd.signal.filter((point) => point.value !== null).map((point) => ({ time: toTime(point.time), value: point.value! })));
     }
-    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'pane') drawExtra(result, nextPane());
+    for (const [id, result] of extraData) if (extraIndicator(id)?.placement === 'pane') { layer = id; drawExtra(result, nextPane()); }
+    layer = 'funding';
     if (funding || fundingEnabled) {
       const pane = nextPane();
       const threshold = funding?.threshold ?? 0.08;
-      const fund = pushSeries(chart.addSeries(HistogramSeries, {
-        priceFormat: { type: 'price', precision: 4, minMove: 0.0001 }, priceLineVisible: false, lastValueVisible: false,
-        autoscaleInfoProvider: (original) => {
+      const fundingOptions = {
+        priceFormat: { type: 'price' as const, precision: 4, minMove: 0.0001 }, priceLineVisible: false, lastValueVisible: false,
+        autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
           const info = original();
           return info ? { ...info, priceRange: {
             minValue: Math.min(info.priceRange.minValue, -threshold),
             maxValue: Math.max(info.priceRange.maxValue, threshold),
           } } : null;
         },
-      }, pane));
+      };
+      // Line by default; columns (positive red / negative green) as a setting.
+      const asColumns = layerStyles.funding === 'columns';
+      const fund = asColumns
+        ? pushSeries(chart.addSeries(HistogramSeries, fundingOptions, pane))
+        : pushSeries(chart.addSeries(LineSeries, { ...fundingOptions, color: CHART_COLORS.histDown, lineWidth: 2 }, pane));
       fund.setData(fundingRows.map((point) => point.value === null
         ? { time: point.time }
-        : { ...point, color: point.value >= 0 ? CHART_COLORS.histDown : CHART_COLORS.histUp }));
+        : asColumns ? { ...point, color: point.value >= 0 ? CHART_COLORS.histDown : CHART_COLORS.histUp }
+          : { time: point.time, value: point.value, color: point.value >= 0 ? CHART_COLORS.histDown : CHART_COLORS.histUp }));
       fund.createPriceLine({ price: threshold, color: '#c76b6180', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '+' });
       fund.createPriceLine({ price: -threshold, color: '#4e9c6880', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '−' });
       fund.createPriceLine({ price: 0, color: '#89928a70', lineWidth: 1, lineStyle: 0, axisLabelVisible: false });
     }
     const addCvdPane = (payload: CvdPayload | null, enabled: boolean, key: string) => {
       if (!enabled) return;
+      layer = key;
       const pane = nextPane();
       const series = pushSeries(chart.addSeries(CandlestickSeries, {
         priceFormat: { type: 'custom', formatter: compactCvd, minMove: 0.01 },
@@ -531,6 +565,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
     };
     addCvdPane(perpetualCvd, perpetualCvdEnabled, 'perpetual-cvd');
     addCvdPane(spotCvd, spotCvdEnabled, 'spot-cvd');
+    layer = 'oi-driver';
     if (oiDriverEnabled) {
       const pane = nextPane();
       const oiSeries = pushSeries(chart.addSeries(CandlestickSeries, {
@@ -545,6 +580,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       })));
     }
     // The pane stays on the chart even before data arrives (empty, with its label).
+    layer = 'leverage';
     if (leverageEnabled) {
       const pane = nextPane();
       const lineFor = (field: 'avg' | 'long' | 'short', color: string, width: 1 | 2 | 3) => {
@@ -564,12 +600,16 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       avg.createPriceLine({ price: 25, color: '#89928a60', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '25×' });
     }
     for (const lsar of lsarPanes) {
+      layer = lsar.key;
       const pane = nextPane();
-      const line = pushSeries(chart.addSeries(LineSeries, {
-        color: lsar.color, lineWidth: 2, priceLineVisible: false,
-        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-      }, pane));
-      line.setData(lsar.points.map((point) => ({ time: toTime(point.time), value: point.ratio })));
+      const lsarOptions = { color: lsar.color, priceLineVisible: false, priceFormat: { type: 'price' as const, precision: 2, minMove: 0.01 } };
+      // Line by default; columns measured from 1.0 (more longs above, more shorts below) as a setting.
+      const asColumns = layerStyles[lsar.key] === 'columns';
+      const line = asColumns
+        ? pushSeries(chart.addSeries(HistogramSeries, { ...lsarOptions, base: 1 }, pane))
+        : pushSeries(chart.addSeries(LineSeries, { ...lsarOptions, lineWidth: 2 }, pane));
+      line.setData(lsar.points.map((point) => ({ time: toTime(point.time), value: point.ratio,
+        ...(asColumns ? { color: point.ratio >= 1 ? '#26a69a' : '#ef5350' } : {}) })));
       // 1.0 = as many long as short accounts.
       line.createPriceLine({ price: 1, color: '#89928a90', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
     }
@@ -598,22 +638,24 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
       pane.setStretchFactor(previous && Number.isFinite(previous) ? previous : allocation.height);
     });
     paneKeysRef.current = allocations.map(pane => pane.key);
-    if (zones.length) {
+    layer = '';
+    if (zones.length && !isHidden('liquidity')) {
       const primitive = new LiquidityZonePrimitive({ series: candleSeries, timeScale: chart.timeScale(), zones, candles, style: zoneColors });
       candleSeries.attachPrimitive(primitive);
       bundle.primitive = primitive;
     } else bundle.primitive = null;
-    if (aggressiveBubblesEnabled) {
+    if (aggressiveBubblesEnabled && !isHidden('aggressive-bubbles')) {
       const primitive = new AggressiveBubblesPrimitive({
         series: candleSeries, timeScale: chart.timeScale(), points: plottedBubbles, enabled: true,
       });
       candleSeries.attachPrimitive(primitive);
       bundle.bubblePrimitive = primitive;
     } else bundle.bubblePrimitive = null;
-    if (volumeProfiles && volumeProfileSettings) {
+    if (volumeProfiles && volumeProfileSettings && !isHidden('volume-profile')) {
       candleSeries.attachPrimitive(new VolumeProfilePrimitive({ series: candleSeries, timeScale: chart.timeScale(),
         times: candles.map((bar) => bar.time), profiles: volumeProfiles, settings: volumeProfileSettings }));
     }
+    for (const key of hiddenLayers) for (const series of layerSeries.get(key) ?? []) series.applyOptions({ visible: false });
     chart.applyOptions({ timeScale: { timeVisible: true, secondsVisible: false } });
     if (candles.length) {
       const shouldFit = resetKeyRef.current !== resetKey || !hasChartDataRef.current;
@@ -665,8 +707,10 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
         animationFrameRef.current = null;
       }
     };
+    // Pane heights settle over a few frames after a redraw: measure again so labels sit on their panes.
     requestAnimationFrame(() => measureRef.current());
-  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiUsdBars, oiDriverEnabled, fundingEnabled, leverageRows, leverageEnabled, lsarPanes, volumeProfiles, volumeProfileSettings]);
+    for (const delay of [60, 200, 600]) window.setTimeout(() => measureRef.current(), delay);
+  }, [candles, volumeCandles, studies, studyData, extraData, zones, zoneColors, funding, fundingRows, showVolume, liquiditySettings, timeframe, resetKey, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubblesEnabled, plottedBubbles, oiDriver, oiUsdBars, oiDriverEnabled, fundingEnabled, leverageRows, leverageEnabled, lsarPanes, volumeProfiles, volumeProfileSettings, hiddenLayers, layerStyles]);
 
   // ---- TradingView-style legends: name, inputs and value at the crosshair ----
   const legendTime = hover?.time ?? candles.at(-1)?.time ?? null;
@@ -772,7 +816,8 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
           <div key={`note-${pane.key}`} className="pane-note" style={{ top: pane.top, height: pane.height }} role="status">
             <span>{paneNotes[pane.key]}</span></div>
         ))}
-        <ChartPaneLegends panes={legendPanes} settings={layerSettings} actions={layerActions} onRemove={onRemoveLayer} />
+        <ChartPaneLegends panes={legendPanes} settings={layerSettings} actions={layerActions} onRemove={onRemoveLayer}
+          hidden={hiddenLayers} onToggleHidden={onToggleLayer} />
       </div>
     </div>
   );
