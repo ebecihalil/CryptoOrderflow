@@ -1,4 +1,4 @@
-// OI Market Driver: port of the owner's Pine script "Multi-Exchange Aggregated
+// Market Driver: port of the owner's Pine script "Multi-Exchange Aggregated
 // Crypto Open Interest" (Market Driver states, flat OI/CVD/price matrices, pinbars,
 // top-trader L/S notes, grey low-volume candles, whale OI spikes with pullbacks and
 // bullish/bearish signal states). Data comes from the site's own aggregation:

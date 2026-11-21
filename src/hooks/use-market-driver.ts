@@ -11,7 +11,7 @@ export type MarketDriverPayload = {
   totals: { oiCoin: number | null; oiUsd: number | null; dailyVolumeUsd: number | null; average20dVolumeUsd: number | null };
 };
 
-/** OI Market Driver inputs per chart candle (aggregated OI, perp CVD, liquidations, top-trader L/S). */
+/** Market Driver inputs per chart candle (aggregated OI, perp CVD, liquidations, top-trader L/S). */
 export function useMarketDriver(asset: string, timeframe: string, exchange: string, symbol: string, enabled: boolean) {
   return useQuery({
     queryKey: ['market-driver', asset, timeframe, exchange, symbol],
@@ -19,7 +19,7 @@ export function useMarketDriver(asset: string, timeframe: string, exchange: stri
     queryFn: async ({ signal }): Promise<MarketDriverPayload> => {
       const response = await fetch(`/api/indicators/market-driver?${new URLSearchParams({ asset, timeframe, exchange, symbol })}`, { signal });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || 'OI Market Driver unavailable.');
+      if (!response.ok) throw new Error(body.error || 'Market Driver unavailable.');
       return body as MarketDriverPayload;
     },
     refetchInterval: 30_000,

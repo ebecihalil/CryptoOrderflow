@@ -27,7 +27,7 @@ const ORDERFLOW_ITEMS: Array<{ id: OrderflowId; label: string }> = [
   { id: 'aggressive-bubbles', label: 'Aggressive Volume Bubbles' },
   { id: 'volume-profile', label: 'Session Volume Profile' },
   { id: 'oi-driver', label: 'Aggregated Open Interest' },
-  { id: 'market-driver', label: 'OI Market Driver' },
+  { id: 'market-driver', label: 'Market Driver' },
   { id: 'liquidations', label: 'Aggregated Liquidations' },
   { id: 'leverage', label: 'Perp Leverage Estimation' },
   { id: 'global-lsar', label: 'Global Long Short Account Ratio' },

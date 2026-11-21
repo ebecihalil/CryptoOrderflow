@@ -514,9 +514,9 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
         </div>
         <p className="native-cvd-status" role="status">Green bars up = long liquidations, red bars down = short liquidations (USD). The % is the share of these exchanges' open interest that was liquidated in the candle.</p>
       </section> : undefined,
-      'market-driver': hasMarketDriver ? <section className="native-bubble-controls" aria-label="OI Market Driver controls">
+      'market-driver': hasMarketDriver ? <section className="native-bubble-controls" aria-label="Market Driver controls">
         <div className="native-cvd-heading">
-          <div><span className="module-kicker">AGGREGATED OI · PERP CVD · LIQUIDATIONS · TOP TRADER L/S</span><h2>OI Market Driver</h2></div>
+          <div><span className="module-kicker">AGGREGATED OI · PERP CVD · LIQUIDATIONS · TOP TRADER L/S</span><h2>Market Driver</h2></div>
         </div>
         <div className="native-cvd-control-row native-bubble-control-row">
           {([['Colour OI candles by Market Driver', 'stateColors'], ['Show totals', 'showTotals'], ['Use top-trader L/S ratio', 'useLsr']] as const).map(([label, key]) => (

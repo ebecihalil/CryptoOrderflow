@@ -71,7 +71,7 @@ type Props = {
   onToggleLayer?: (key: string) => void;
   /** Plot style for line indicators that can also be columns (funding, L/S ratios). */
   layerStyles?: Record<string, 'line' | 'columns'>;
-  /** OI Market Driver (owner's script) computed per candle. */
+  /** Market Driver (owner's script) computed per candle. */
   marketDriver?: { bars: Array<MarketDriverBar | null>; labels: MarketDriverLabel[]; settings: MarketDriverSettings;
     totals: { oiCoin: number | null; oiUsd: number | null; dailyVolumeUsd: number | null; average20dVolumeUsd: number | null } } | null;
   marketDriverEnabled?: boolean;
@@ -842,7 +842,7 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
             { text: `Daily vol $${totals.dailyVolumeUsd ? compactCvd(totals.dailyVolumeUsd) : '-'}` },
             { text: `20D avg $${totals.average20dVolumeUsd ? compactCvd(totals.average20dVolumeUsd) : '-'}` }] : []),
         ] : paneNotes['market-driver'] ? undefined : [{ text: 'Collecting data...' }];
-        return [{ key: 'market-driver', label: 'OI Market Driver', params: 'Agg OI · Top L/S', color: '#3b82f6', values }];
+        return [{ key: 'market-driver', label: 'Market Driver', params: 'Agg OI · Top L/S', color: '#3b82f6', values }];
       }
       if (key === 'oi-driver') {
         const bar = oiUsdBars.find((item) => item.time === legendTime) ?? oiUsdBars.at(-1);

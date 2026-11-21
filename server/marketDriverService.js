@@ -1,4 +1,4 @@
-// Inputs for the OI Market Driver pane, one row per chart candle: the chart's price
+// Inputs for the Market Driver pane, one row per chart candle: the chart's price
 // candle, aggregated OI of every exchange (coins), aggregated perpetual CVD with
 // taker buy/sell volume (USD, every recorded exchange, CVD anchored daily),
 // recorded long/short liquidations (USD) and the Top Trader long/short account ratio.
