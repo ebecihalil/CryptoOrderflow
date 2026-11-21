@@ -28,7 +28,7 @@ before the REJECT rule (`iptables -L INPUT -n --line-numbers`), then `netfilter-
 
 ## Trading (Bybit)
 
-- **Paper trading** works for every signed-in user, with no setup: a simulated 10,000 USDT account on live Bybit prices, saved in `.cache/paper/`.
+- **Paper trading** works for every signed-in user, with no setup: Trade → Paper Trading → Connect. Simulated USDT account (size and commission set in its ⚙), live prices of the chart's own exchange (Bybit, Binance, OKX, Bitget, Gate, MEXC; others use the coin's Bybit price), saved in `.cache/paper/`.
 - **Real trading** is only for the owner account and needs a Bybit API key in a systemd drop-in (never in git):
 
 ```

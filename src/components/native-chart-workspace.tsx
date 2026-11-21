@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { RefreshCw, RotateCw } from 'lucide-react';
 import { NativeSuperChart } from '@/components/native-super-chart';
+import { useChartTrade } from '@/hooks/use-chart-trade';
 import { ALL_TIMEFRAMES, isSecondTimeframe, nextBucket } from '../../server/timeframes.js';
 import { TimeframePicker } from '@/components/timeframe-picker';
 import { extraIndicator, extraParams } from '@/lib/extra-indicators';
@@ -116,6 +117,7 @@ function stableJson(value: unknown): string {
 
 function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, toolbarStart, toolbarMenus, cellId = 0, syncId = 0, sync }: Props & { contract: MarketContract }) {
   const asset = contract.asset.toUpperCase();
+  const trade = useChartTrade(contract);
   const [timeframe, setTimeframe] = useChartSetting<LiquidityTimeframe>(cellId ? `timeframe:${cellId}` : 'timeframe', '1h',
     value => (ALL_TIMEFRAMES as string[]).includes(value as string));
   // 1s–30s candles are built from live trades of the selected contract only.
@@ -692,6 +694,7 @@ function WorkspaceWithContract({ contract, studies, indicators, onRemoveLayer, t
            layerSettings={layerSettings} layerActions={layerActions} liquidityEnabled={hasLiquidity}
            onRemoveLayer={(key) => key === 'volume' ? setShowVolume(false) : onRemoveLayer?.(key)}
            symbolLabel={`${contract.asset} · ${contract.exchange.toUpperCase()}`}
+           tradeOverlay={trade.overlay} tradeLines={trade.lines}
            volumeProfiles={volumeProfiles} volumeProfileSettings={hasVolumeProfile ? volumeProfileSettings : null}
            hiddenLayers={hiddenLayers} onToggleLayer={toggleLayer} layerStyles={layerStyles}
            marketDriver={marketDriver} marketDriverEnabled={indicators.includes('market-driver')}

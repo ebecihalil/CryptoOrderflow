@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { SIGNED_OUT_EVENT, useAuth } from '@/hooks/use-auth';
@@ -39,7 +39,7 @@ type Prefs = {
 export const MARKET_LIST_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx', 'aster', 'hyperliquid', 'kucoin', 'htx'];
 // Defaults: the eight biggest chartable venues, last two slots empty (add Hyperliquid, Aster, HTX… if wanted).
 const DEFAULT_SLOTS: Array<string | null> = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'bingx', 'kucoin', null, null];
-const EXCHANGE_NAMES: Record<string, string> = {
+export const EXCHANGE_NAMES: Record<string, string> = {
   binance: 'Binance', bybit: 'Bybit', okx: 'OKX', gate: 'Gate.io', bitget: 'Bitget', mexc: 'MEXC', bingx: 'BingX',
   kucoin: 'KuCoin', htx: 'HTX', kraken: 'Kraken', hyperliquid: 'Hyperliquid', aster: 'Aster', lighter: 'Lighter',
   paradex: 'Paradex', deribit: 'Deribit', coinex: 'CoinEx', bitmex: 'BitMEX', toobit: 'Toobit',
@@ -95,8 +95,10 @@ type Row = {
   others: MarketContract[]; secondary?: boolean;
 };
 
-export function MarketList({ contracts, current, onSelect }: {
+export function MarketList({ contracts, current, onSelect, headerAction }: {
   contracts: MarketContract[]; current: MarketContract | null; onSelect: (contract: MarketContract) => void;
+  /** Extra control at the top right of the header (the Trade button). */
+  headerAction?: ReactNode;
 }) {
   const [prefs, setPrefs] = useState<Prefs>(readPrefs);
   const [query, setQuery] = useState('');
@@ -277,6 +279,7 @@ export function MarketList({ contracts, current, onSelect }: {
             <div className="market-list-eyebrow">USDT perpetuals · 24h</div>
             <h2>Markets</h2>
           </div>
+          {headerAction}
         </header>
         {authLoading ? <p className="market-list-empty" role="status">Checking your account…</p> : (
           <div className="market-list-gate" data-testid="market-list-locked">
@@ -303,6 +306,7 @@ export function MarketList({ contracts, current, onSelect }: {
           disabled={!filtered && !query} title="Show every coin on every exchange again (keeps your colours and exchange priority)" data-testid="market-reset">
           <RotateCcw size={12} aria-hidden="true" /> Reset
         </button>
+        {headerAction}
       </header>
       <div className="market-list-tools">
         <div className="market-list-searchrow">

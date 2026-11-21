@@ -271,14 +271,14 @@ export function createTradingRouter({ accounts, config = bybitConfig(), service 
   if (paper) {
     const signedIn = req => !!userOf(req);
     const p = handler => guarded(signedIn, handler);
-    router.get("/paper/market", p((req, user) => paper.market(user.id, String(req.query.symbol ?? ""))));
+    router.get("/paper/market", p((req, user) => paper.market(user.id, req.query)));
     router.get("/paper/account", p((_req, user) => paper.account(user.id)));
     router.get("/paper/history", p((_req, user) => paper.history(user.id)));
     router.post("/paper/order", p((req, user) => paper.placeOrder(user.id, req.body)));
     router.post("/paper/cancel", p((req, user) => paper.cancelOrder(user.id, req.body)));
     router.post("/paper/cancel-all", p((req, user) => paper.cancelAll(user.id, req.body)));
     router.post("/paper/close", p((req, user) => paper.closePosition(user.id, req.body)));
-    router.post("/paper/leverage", p((req, user) => paper.setLeverage(user.id, String(req.body?.symbol ?? ""), req.body?.leverage)));
+    router.post("/paper/settings", p((req, user) => paper.settings(user.id, req.body)));
     router.post("/paper/tpsl", p((req, user) => paper.setTradingStop(user.id, req.body)));
     router.post("/paper/reset", p((_req, user) => paper.reset(user.id)));
   }

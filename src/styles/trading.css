@@ -90,3 +90,64 @@
 .trade-mode button.is-on { background:#7c3aed;color:#fff; }
 .trade-mode button.is-real.is-on { background:#f23645; }
 .trade-reset { margin-left:8px; }
+
+/* Trade button in the market list header (top right). */
+.market-list-head .sc-trade-toggle { margin-left:6px;min-height:28px; }
+.trade-venue { color:var(--lsar-muted);font-size:11px; }
+.trade-field-head { display:flex;align-items:center;gap:6px; }
+.trade-field-head select { padding:1px 4px;border:1px solid var(--lsar-border);border-radius:4px;background:var(--lsar-page);color:var(--lsar-ink);font:11px var(--app-font-mono); }
+.trade-section small { color:var(--lsar-muted);font-weight:400; }
+.trade-panel-title { display:inline-flex;align-items:center;gap:6px;color:var(--lsar-ink); }
+.trade-panel-actions { display:inline-flex;align-items:center;gap:6px;margin-left:auto; }
+.trade-panel-actions .trade-icon { margin-left:0; }
+.trade-exit-button { display:inline-flex;align-items:center;gap:5px; }
+.trade-row-venue { display:inline-flex;margin-right:5px;vertical-align:middle; }
+.trade-row-venue img,.trade-row-venue svg { width:14px;height:14px; }
+.trade-settings { display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end;padding:10px;border-bottom:1px solid var(--lsar-border);background:var(--lsar-page); }
+.trade-settings-fees { display:contents; }
+.trade-settings-note { grid-column:1 / -1;margin:0;color:var(--lsar-muted);font-size:11px; }
+.trade-settings-actions { display:flex;gap:6px;justify-content:flex-end;grid-column:1 / -1; }
+.trade-save { display:inline-block;padding:6px 16px;border:0;border-radius:5px;background:#2962ff;color:#fff;font:700 12px var(--app-font-mono);text-decoration:none;cursor:pointer; }
+.trade-save:disabled { opacity:.6; }
+.trade-panel { height:260px; }
+.trade-panel.is-collapsed { height:auto; }
+
+/* Connect window */
+.trade-connect-backdrop { position:fixed;inset:0;z-index:400;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.55); }
+.trade-connect { width:min(460px,100%);padding:16px 18px 20px;border:1px solid var(--lsar-border);border-radius:10px;background:var(--lsar-surface);color:var(--lsar-ink);font:13px var(--app-font-mono);box-shadow:0 20px 60px rgba(0,0,0,.45); }
+.trade-connect header { display:flex;align-items:center;margin-bottom:14px; }
+.trade-connect h2 { margin:0;font:700 17px var(--app-font-sans); }
+.trade-connect-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px; }
+.trade-connect-card { display:flex;flex-direction:column;align-items:center;gap:7px;padding:18px 12px 14px;border:1px solid var(--lsar-border);border-radius:9px;background:var(--lsar-page);color:var(--lsar-ink);font:13px var(--app-font-mono);cursor:pointer; }
+.trade-connect-card:hover { border-color:#2962ff; }
+.trade-connect-card small { color:var(--lsar-muted);font-size:11px;text-align:center; }
+.trade-connect-logo { display:grid;place-items:center;width:58px;height:58px;border-radius:14px;background:#17181c; }
+.trade-connect-logo.is-paper { background:#7c3aed;color:#fff; }
+.trade-connect-logo img,.trade-connect-logo svg { width:34px;height:34px; }
+.trade-connect-cta { margin-top:4px;padding:5px 18px;border-radius:5px;background:#2962ff;color:#fff;font-weight:700; }
+.trade-connect-cta.is-real { background:#f7a600;color:#111; }
+.trade-connect-signin { display:flex;flex-direction:column;align-items:flex-start;gap:12px; }
+.trade-connect-signin p { margin:0;color:var(--lsar-muted); }
+
+/* Order / position lines on the chart */
+.trade-lines { position:absolute;left:0;right:0;z-index:5;pointer-events:none; }
+.trade-line { position:absolute;left:0;height:0; }
+.trade-line-rule { position:absolute;left:0;top:0;border-top-width:1px; }
+.trade-line-group { position:absolute;top:0;display:flex;align-items:center;gap:6px;transform:translateY(-50%);pointer-events:auto; }
+.trade-line-label { display:flex;align-items:center;gap:6px;height:20px;padding:0 6px;border:1px solid;border-radius:3px;background:var(--lsar-surface);color:var(--lsar-ink);font:11px var(--app-font-mono);white-space:nowrap;user-select:none; }
+.trade-line-label.is-draggable { cursor:ns-resize; }
+.trade-line-grip { color:var(--lsar-muted);letter-spacing:-1px; }
+.trade-line.is-ghost .trade-line-label { border-style:solid;opacity:.85;color:var(--lsar-muted); }
+.trade-line-chip { height:20px;padding:0 10px;border-radius:10px;color:#fff;font:700 11px/20px var(--app-font-mono);white-space:nowrap; }
+.trade-line-cancel { display:grid;place-items:center;width:18px;height:18px;padding:0;border:1px solid;border-radius:50%;background:var(--lsar-surface);font:700 13px/1 var(--app-font-mono);cursor:pointer; }
+.trade-line-price { position:absolute;right:0;top:0;transform:translateY(-50%);padding:2px 0;color:#fff;font:11px var(--app-font-mono);text-align:center; }
+
+/* Buy / Sell buttons under the symbol legend */
+.pane-legend-extra { pointer-events:auto;margin:2px 0 4px; }
+.chart-trade-buttons { display:flex;align-items:stretch;gap:3px;font:12px var(--app-font-mono); }
+.chart-trade-buttons button { display:flex;flex-direction:column;align-items:center;min-width:74px;padding:3px 8px;border:0;border-radius:4px;color:#fff;cursor:pointer;line-height:1.2; }
+.chart-trade-buttons button b { font-size:13px; }
+.chart-trade-buttons button small { font-size:10px;opacity:.9; }
+.chart-trade-buttons .is-sell { background:#f23645; } .chart-trade-buttons .is-buy { background:#2962ff; }
+.chart-trade-buttons button:hover { filter:brightness(1.1); }
+.chart-trade-spread { align-self:center;padding:1px 5px;border-radius:3px;background:var(--lsar-surface);color:var(--lsar-muted);font-size:10px; }

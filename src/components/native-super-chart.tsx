@@ -10,6 +10,7 @@ import type { ChartStudyId } from '@/lib/supercharts';
 import { computeExtraIndicator, extraIndicator, type ExtraResult } from '@/lib/extra-indicators';
 import { BandFillPrimitive } from '@/components/band-fill-primitive';
 import { TIMEFRAME_LABELS } from '../../server/timeframes.js';
+import { TradeLines, type TradeLine } from '@/components/trade-lines';
 import { ChartPaneLegends, type LayerActions, type LegendPane, type LegendRow } from '@/components/chart-pane-legends';
 import { extraParams } from '@/lib/extra-indicators';
 import type { FundingIndicatorMethod, FundingIndicatorPoint } from '@/hooks/use-funding-indicator';
@@ -83,10 +84,14 @@ type Props = {
   /** Save / Default buttons per layer key. */
   layerActions?: Record<string, LayerActions>;
   onRemoveLayer?: (key: string) => void;
+  /** Trading: Buy / Sell buttons under the symbol row, and order / position lines on the price pane. */
+  tradeOverlay?: ReactNode;
+  tradeLines?: TradeLine[];
   liquidityEnabled?: boolean;
   symbolLabel?: string;
 };
 /** Strong TradingView-style green / red, clear on the light and dark chart backgrounds. */
+const NO_TRADE_LINES: TradeLine[] = [];
 export const CHART_COLORS = {
   up: '#089981', down: '#f23645',
   volumeUp: 'rgba(8,153,129,0.5)', volumeDown: 'rgba(242,54,69,0.5)',
@@ -133,9 +138,10 @@ function compactCvd(value: number) {
 
 const NO_HIDDEN: string[] = [];
 const NO_STYLES: Record<string, 'line' | 'columns'> = {};
-export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel, volumeProfiles = null, volumeProfileSettings = null, hiddenLayers = NO_HIDDEN, onToggleLayer, layerStyles = NO_STYLES, marketDriver = null, marketDriverEnabled = false, liquidations = null, liquidationsEnabled = false, liquidationLabels = true }: Props) {
+export function NativeSuperChart({ candles, volumeCandles, studies, zones, liquiditySettings, zoneColors, funding, showVolume, timeframe, resetKey, viewKey, technicalSettings, perpetualCvd, spotCvd, perpetualCvdEnabled, spotCvdEnabled, aggressiveBubbles, aggressiveBubblesEnabled, oiDriver, oiDriverEnabled, syncId = 0, sync, fundingEnabled = false, leverageRows = null, leverageEnabled = false, lsarPanes = NO_LSAR_PANES, paneNotes = NO_NOTES, priceDivisor, extraSettings = {}, layerSettings = {}, layerActions = {}, onRemoveLayer, liquidityEnabled = false, symbolLabel, volumeProfiles = null, volumeProfileSettings = null, hiddenLayers = NO_HIDDEN, onToggleLayer, layerStyles = NO_STYLES, marketDriver = null, marketDriverEnabled = false, liquidations = null, liquidationsEnabled = false, liquidationLabels = true, tradeOverlay = null, tradeLines = NO_TRADE_LINES }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const bundleRef = useRef<Bundle | null>(null);
+  const getTradeApi = useCallback(() => bundleRef.current, []);
   const seriesRef = useRef<Array<ISeriesApi<any>>>([]);
   const paneCountRef = useRef(0);
   const paneKeysRef = useRef<string[]>([]);
@@ -934,7 +940,9 @@ export function NativeSuperChart({ candles, volumeCandles, studies, zones, liqui
             <span>{paneNotes[pane.key]}</span></div>
         ))}
         <ChartPaneLegends panes={legendPanes} settings={layerSettings} actions={layerActions} onRemove={onRemoveLayer}
-          hidden={hiddenLayers} onToggleHidden={onToggleLayer} />
+          hidden={hiddenLayers} onToggleHidden={onToggleLayer} priceExtra={tradeOverlay} />
+        {paneLayout[0] && <TradeLines lines={tradeLines} getApi={getTradeApi} paneTop={paneLayout[0].top} paneHeight={paneLayout[0].height}
+          format={(price) => price.toLocaleString(undefined, { maximumSignificantDigits: 8, useGrouping: false })} />}
       </div>
     </div>
   );

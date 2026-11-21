@@ -23,13 +23,15 @@ type Props = {
   /** Layers currently hidden (kept on the chart, not drawn). */
   hidden?: string[];
   onToggleHidden?: (key: string) => void;
+  /** Shown right under the price row (the trading Buy / Sell buttons). */
+  priceExtra?: ReactNode;
 };
 
 /**
  * TradingView-style labels at the top-left of every chart pane: name, inputs
  * and live values, with ⚙ (settings + how to read it) and × (remove).
  */
-export function ChartPaneLegends({ panes, settings, actions = {}, onRemove, hidden = [], onToggleHidden }: Props) {
+export function ChartPaneLegends({ panes, settings, actions = {}, onRemove, hidden = [], onToggleHidden, priceExtra }: Props) {
   const [open, setOpen] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -53,7 +55,7 @@ export function ChartPaneLegends({ panes, settings, actions = {}, onRemove, hidd
             const help = helpFor(row.key);
             const hasPanel = Boolean(settings[row.key] || help);
             const isOpen = open === row.key;
-            return (
+            return [
               <div className={`pane-legend-row${hidden.includes(row.key) ? ' is-hidden' : ''}`} key={row.key} data-testid={`legend-${row.key}`}>
                 {row.color && <i className="pane-legend-swatch" style={{ background: row.color }} aria-hidden="true" />}
                 <span className="pane-legend-name">{row.label}</span>
@@ -106,7 +108,7 @@ export function ChartPaneLegends({ panes, settings, actions = {}, onRemove, hidd
                   </div>
                 )}
               </div>
-            );
+            , row.key === 'price' && priceExtra ? <div key="price-extra" className="pane-legend-extra">{priceExtra}</div> : null];
           })}
         </div>
       ))}
