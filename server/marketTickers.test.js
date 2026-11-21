@@ -29,7 +29,7 @@ test("one bulk request per exchange per refresh window, shared across viewers", 
   let clock = 1_000_000;
   const calls = [];
   const service = createMarketTickerService({
-    now: () => clock, gates: {},
+    now: () => clock, gates: {}, dailyOpens: { get: () => null, set() {} },
     request: async url => { calls.push(url); return url.includes("binance") ? [{ symbol: "BTCUSDT", lastPrice: "1", priceChangePercent: "1" }] : url.includes("gateio") || url.includes("asterdex") ? []
       : url.includes("hyperliquid") ? [{ universe: [] }, []] : { code: 0, data: [], result: { list: [] } }; },
   });
@@ -38,7 +38,7 @@ test("one bulk request per exchange per refresh window, shared across viewers", 
   assert.equal(calls.length, 11);
   const payload = service.get();
   assert.equal(payload.exchanges.binance.status, "ok");
-  assert.deepEqual(payload.exchanges.binance.rows, [["BTCUSDT", 1, 1, null]]);
+  assert.deepEqual(payload.exchanges.binance.rows, [["BTCUSDT", 1, 1, null, null]]);
   clock += 31_000; service.get(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(calls.filter(url => url.includes("binance")).length, 1, "Binance refreshes every 60s");
   assert.equal(calls.length, 21);
@@ -52,4 +52,25 @@ test("market list price decimals follow the price size", async () => {
   const decimals = abs => abs >= 100 ? 2 : Math.min(10, Math.max(2, (abs >= 1 ? 4 : 3) - Math.floor(Math.log10(abs))));
   assert.deepEqual([62782, 5.8716, 47.5, 0.2384, 0.05342, 0.0001234].map(decimals), [2, 4, 3, 4, 5, 7]);
   assert.match(source, /formatPrice\(row\.change, row\.last \?\? row\.change\)/, "change uses the price's decimals");
+});
+
+test("change since 00:00 UTC: exchange-published opens (OKX sodUtc0, Bitget openUtc) and fetched daily candles", async () => {
+  const { parseDailyOpen, createDailyOpenService, dayStartMs } = await import("./dailyOpens.js");
+  assert.deepEqual(parseTickers("okx", { code: "0", data: [{ instId: "X-USDT-SWAP", last: "110", open24h: "80", sodUtc0: "100", volCcy24h: "1" }] }),
+    [["X-USDT-SWAP", 110, 37.5, 110, 100]]);
+  const day = dayStartMs(Date.UTC(2026, 10, 21, 15));
+  assert.equal(parseDailyOpen("binance", [[day, "2.5", "3", "2", "2.8", "10"]], day), 2.5);
+  assert.equal(parseDailyOpen("bybit", { result: { list: [[String(day), "4", "5", "3", "4.5", "1"]] } }, day), 4);
+  assert.equal(parseDailyOpen("binance", [[day - 86_400_000, "2.5"]], day), null, "yesterday's candle is not used");
+  const calls = [];
+  const service = createMarketTickerService({ now: () => day + 3600_000, gates: {},
+    request: async url => { calls.push(url); return url.includes("klines") ? [[day, "1.00", "1", "1", "1", "1"]]
+      : url.includes("binance") ? [{ symbol: "BTCUSDT", lastPrice: "1.25", priceChangePercent: "40" }] : url.includes("gateio") || url.includes("asterdex") ? []
+      : url.includes("hyperliquid") ? [{ universe: [] }, []] : { code: 0, data: [], result: { list: [] } }; } });
+  service.get(); await new Promise(resolve => setImmediate(resolve));
+  service.get(); await new Promise(resolve => setImmediate(resolve));
+  const row = service.get().exchanges.binance.rows[0];
+  assert.equal(row[2], 40, "rolling 24h change kept");
+  assert.equal(row[4], 25, "since 00:00 UTC: 1.25 vs 1.00");
+  assert.equal(calls.filter(url => url.includes("klines")).length, 1, "one daily candle per contract per day");
 });
