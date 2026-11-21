@@ -313,7 +313,7 @@ function SuperChartsWorkspace() {
               aria-pressed={tradingOn && ticketOpen} title={tradingOn ? 'Order ticket' : 'Start trading'} data-testid="trade-toggle">Trade</button>} />
         </div>
       </main>
-      {connectOpen && <TradeConnect signedIn={signedIn} canReal={canReal} testnet={!!tradingStatus.data?.testnet} />}
+      {connectOpen && <TradeConnect signedIn={signedIn} status={tradingStatus.data} />}
     </div>
   );
 }

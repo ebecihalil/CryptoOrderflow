@@ -151,3 +151,11 @@
 .chart-trade-buttons .is-sell { background:#f23645; } .chart-trade-buttons .is-buy { background:#2962ff; }
 .chart-trade-buttons button:hover { filter:brightness(1.1); }
 .chart-trade-spread { align-self:center;padding:1px 5px;border-radius:3px;background:var(--lsar-surface);color:var(--lsar-muted);font-size:10px; }
+/* Trade button: solid blue so it stands out. */
+.market-list-head .sc-trade-toggle,.market-list-head .sc-trade-toggle.is-on { background:#2962ff;border-color:#2962ff;color:#fff; }
+.market-list-head .sc-trade-toggle:hover { background:#1e4fd8;border-color:#1e4fd8; }
+.trade-connect-card.is-soon { opacity:.55;cursor:not-allowed; }
+.trade-connect-cta.is-soon { background:var(--lsar-border);color:var(--lsar-ink); }
+.trade-connect-note { margin:12px 0 0;color:var(--lsar-muted);font-size:11px; }
+.trade-connect-setup { margin-top:12px;padding:10px 12px;border:1px solid #f7a600;border-radius:7px;background:rgba(247,166,0,.08); }
+.trade-connect-setup p { margin:6px 0 0;color:var(--lsar-muted);font-size:12px;line-height:1.5; }

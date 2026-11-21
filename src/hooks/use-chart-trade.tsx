@@ -58,13 +58,13 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
           const v = pnl(tpPrice);
           out.push({ id: 'draft-tp', price: tpPrice, color: TP, dashed: true, text: `TP${v === null ? '' : ` ${signedUsd(v)}`}`, draggable: true,
             onDrag: (p) => tradeStore.setDraft({ tp: fix(p) }), onCancel: () => tradeStore.setDraft({ tpOn: false }) });
-        } else out.push({ id: 'draft-tp', price: entry, ghostOffset: -26, color: TP, text: 'TP', draggable: true,
+        } else out.push({ id: 'draft-tp', price: entry, ghostOffset: side === 'Buy' ? -26 : 26, color: TP, text: 'TP', draggable: true,
           onDrag: (p) => tradeStore.setDraft({ tpOn: true, tp: fix(p) }) });
         if (slOn && slPrice) {
           const v = pnl(slPrice);
           out.push({ id: 'draft-sl', price: slPrice, color: SL, dashed: true, text: `SL${v === null ? '' : ` ${signedUsd(v)}`}`, draggable: true,
             onDrag: (p) => tradeStore.setDraft({ sl: fix(p) }), onCancel: () => tradeStore.setDraft({ slOn: false }) });
-        } else out.push({ id: 'draft-sl', price: entry, ghostOffset: 26, color: SL, text: 'SL', draggable: true,
+        } else out.push({ id: 'draft-sl', price: entry, ghostOffset: side === 'Buy' ? 26 : -26, color: SL, text: 'SL', draggable: true,
           onDrag: (p) => tradeStore.setDraft({ slOn: true, sl: fix(p) }) });
       }
     }
@@ -83,11 +83,11 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
       const tpPrice = num(position.takeProfit), slPrice = num(position.stopLoss);
       if (tpPrice) out.push({ id: `pos-tp-${position.symbol}`, price: tpPrice, color: TP, dashed: true, text: `TP ${signedUsd(exitPnl(tpPrice))}`, draggable: true,
         onDrop: (p) => setTpsl.mutate({ ...ref, takeProfit: fix(p) }), onCancel: () => setTpsl.mutate({ ...ref, takeProfit: 0 }) });
-      else out.push({ id: `pos-tp-${position.symbol}`, price: entry, ghostOffset: -26, color: TP, text: 'TP', draggable: true,
+      else out.push({ id: `pos-tp-${position.symbol}`, price: entry, ghostOffset: long ? -26 : 26, color: TP, text: 'TP', draggable: true,
         onDrop: (p) => setTpsl.mutate({ ...ref, takeProfit: fix(p) }) });
       if (slPrice) out.push({ id: `pos-sl-${position.symbol}`, price: slPrice, color: SL, dashed: true, text: `SL ${signedUsd(exitPnl(slPrice))}`, draggable: true,
         onDrop: (p) => setTpsl.mutate({ ...ref, stopLoss: fix(p) }), onCancel: () => setTpsl.mutate({ ...ref, stopLoss: 0 }) });
-      else out.push({ id: `pos-sl-${position.symbol}`, price: entry, ghostOffset: 26, color: SL, text: 'SL', draggable: true,
+      else out.push({ id: `pos-sl-${position.symbol}`, price: entry, ghostOffset: long ? 26 : -26, color: SL, text: 'SL', draggable: true,
         onDrop: (p) => setTpsl.mutate({ ...ref, stopLoss: fix(p) }) });
     }
     // ---- open orders ----
@@ -104,9 +104,9 @@ export function useChartTrade(contract: { exchange: string; symbol: string; asse
 
   const overlay = connected && quote ? (
     <div className="chart-trade-buttons" data-testid="chart-trade-buttons">
-      <button type="button" className="is-sell" onClick={() => tradeStore.openTicket('Sell')}><b>{quote.bid ?? '—'}</b><small>SELL</small></button>
+      <button type="button" className="is-sell" onClick={() => tradeStore.openTicket('Sell', ticketOpen ? orderPrice(draft.type, draft.side, draft.price, draft.trigger, quote) : null)}><b>{quote.bid ?? '—'}</b><small>SELL</small></button>
       {quote.bid && quote.ask && <span className="chart-trade-spread">{Math.max(0, Number(quote.ask) - Number(quote.bid)).toFixed(decimals)}</span>}
-      <button type="button" className="is-buy" onClick={() => tradeStore.openTicket('Buy')}><b>{quote.ask ?? '—'}</b><small>BUY</small></button>
+      <button type="button" className="is-buy" onClick={() => tradeStore.openTicket('Buy', ticketOpen ? orderPrice(draft.type, draft.side, draft.price, draft.trigger, quote) : null)}><b>{quote.ask ?? '—'}</b><small>BUY</small></button>
     </div>
   ) : null;
   return { overlay, lines };

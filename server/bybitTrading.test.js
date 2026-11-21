@@ -96,12 +96,25 @@ test("router: only the owner sees or uses trading; mutations need this site's or
     assert.deepEqual(await (await get("/api/trading/status")).json(), { enabled: false, paper: false });
     assert.deepEqual(await (await get("/api/trading/status", "other-token-xxxxxxxxxxxx")).json(), { enabled: false, paper: false });
     assert.equal((await get("/api/trading/account", "other-token-xxxxxxxxxxxx")).status, 404);
-    assert.deepEqual(await (await get("/api/trading/status", "owner-token-xxxxxxxxxxxx")).json(), { enabled: true, exchange: "bybit", testnet: true, paper: false });
+    assert.deepEqual(await (await get("/api/trading/status", "owner-token-xxxxxxxxxxxx")).json(), { enabled: true, exchange: "bybit", testnet: true, paper: false, admin: true, bybit: "ready" });
     assert.equal((await get("/api/trading/account", "owner-token-xxxxxxxxxxxx")).status, 200);
     const post = (headers) => fetch(base + "/api/trading/order", { method: "POST", body: JSON.stringify({ symbol: "X" }),
       headers: { "content-type": "application/json", cookie: "cof_session=owner-token-xxxxxxxxxxxx", ...headers } });
     assert.equal((await post({})).status, 403);
     assert.equal((await post({ origin: "https://evil.example" })).status, 403);
     assert.equal((await post({ origin: base })).status, 200);
+  } finally { server.close(); }
+});
+
+test("admins without a Bybit key see that real trading is not set up; others never hear of it", async () => {
+  const accounts = { userForToken: token => token === "admin-token-xxxxxxxxxxxx" ? { id: 1, email: "Boss@Example.com" }
+    : token === "user-token-xxxxxxxxxxxxx" ? { id: 2, email: "user@example.com" } : null };
+  const app = express(); app.use(express.json());
+  app.use("/api", createTradingRouter({ accounts, config: null, admins: new Set(["boss@example.com"]), paper: {} }));
+  const server = app.listen(0); const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const status = async token => (await fetch(base + "/api/trading/status", { headers: { cookie: `cof_session=${token}` } })).json();
+    assert.deepEqual(await status("admin-token-xxxxxxxxxxxx"), { enabled: false, paper: true, admin: true, bybit: "not-set-up" });
+    assert.deepEqual(await status("user-token-xxxxxxxxxxxxx"), { enabled: false, paper: true });
   } finally { server.close(); }
 });
